@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = __dirname;
-const assets = path.join(root, "assets");
+const assets = path.join(root, "public", "assets");
 const out = path.join(root, "Sumi_Web_Proyecto_Visual.html");
 
 function dataUri(file, mime) {
@@ -14,7 +14,7 @@ function svgUri(svg) {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
-const logo = dataUri("sumi-logo.jpg", "image/jpeg");
+const logo = dataUri("sumi-logo.svg", "image/svg+xml");
 const hero = dataUri("sumi-cafe-qr-hero.jpg", "image/jpeg");
 const cafeQrPhoto = dataUri("sumi-photo-cafe-qr.jpg", "image/jpeg");
 const dashboardOwnerPhoto = dataUri("sumi-photo-dashboard-owner.jpg", "image/jpeg");
