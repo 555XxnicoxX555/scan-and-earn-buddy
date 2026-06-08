@@ -1,0 +1,1478 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#081210" />
+  <title>Sumi | Fidelizacion gastronomica</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f5f4ee;
+      --surface:#ffffff;
+      --surface-2:#eef5f1;
+      --text:#0f1a19;
+      --muted:#60706d;
+      --line:rgba(15,26,25,.11);
+      --shadow:0 24px 70px rgba(8,18,17,.12);
+      --shadow-soft:0 12px 38px rgba(8,18,17,.08);
+      --blue:#1452d4;
+      --blue-2:#0a3ea9;
+      --teal:#0f8d82;
+      --aqua:#19b0a5;
+      --gold:#d68e24;
+      --dark:#081210;
+      --dark-2:#0d1816;
+      --radius:28px;
+      --radius-sm:20px;
+      --radius-xs:14px;
+      --container:1240px;
+    }
+
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth;scroll-padding-top:92px}
+    body{
+      margin:0;
+      font-family:"Plus Jakarta Sans",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      color:var(--text);
+      line-height:1.55;
+      background:
+        radial-gradient(circle at top left, rgba(25,176,165,.12), transparent 32%),
+        radial-gradient(circle at top right, rgba(20,82,212,.12), transparent 28%),
+        linear-gradient(180deg, #fbfaf6 0%, var(--bg) 48%, #f6f4ef 100%);
+      overflow-x:hidden;
+    }
+
+    body:before{
+      content:"";
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      background-image:
+        linear-gradient(rgba(255,255,255,.18) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.14) 1px, transparent 1px);
+      background-size:34px 34px;
+      opacity:.12;
+      mask-image:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,0));
+    }
+
+    a{color:inherit;text-decoration:none}
+    img{max-width:100%;display:block}
+    ::selection{background:rgba(20,82,212,.18)}
+
+    .wrap{max-width:var(--container);margin:0 auto;padding:0 24px}
+    .section{padding:104px 0;position:relative}
+    .section.compact{padding:84px 0}
+
+    header{
+      position:sticky;
+      top:0;
+      z-index:50;
+      backdrop-filter:blur(18px);
+      background:rgba(250,249,244,.82);
+      border-bottom:1px solid rgba(15,26,25,.08);
+    }
+
+    .nav{
+      min-height:80px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:18px;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:14px;
+      font-weight:800;
+      color:var(--blue);
+      min-width:0;
+    }
+
+    .brand img{
+      width:48px;
+      height:48px;
+      border-radius:14px;
+      object-fit:cover;
+      box-shadow:0 14px 28px rgba(20,82,212,.18);
+      background:#fff;
+    }
+
+    .brand .name{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:0;
+    }
+
+    .brand .name strong{
+      font-size:22px;
+      line-height:1;
+      letter-spacing:-.03em;
+    }
+
+    .brand .name span{
+      font-size:12px;
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.18em;
+      font-weight:700;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .links{
+      display:flex;
+      align-items:center;
+      gap:22px;
+      font-size:14px;
+      color:var(--muted);
+      font-weight:600;
+    }
+
+    .links a{
+      position:relative;
+      padding:10px 0;
+      transition:color .18s ease;
+    }
+
+    .links a:after{
+      content:"";
+      position:absolute;
+      left:0;
+      bottom:4px;
+      width:100%;
+      height:2px;
+      border-radius:999px;
+      background:linear-gradient(90deg,var(--blue),var(--aqua));
+      transform:scaleX(0);
+      transform-origin:left;
+      transition:transform .2s ease;
+    }
+
+    .links a:hover{color:var(--text)}
+    .links a:hover:after{transform:scaleX(1)}
+
+    .actions{display:flex;gap:12px;align-items:center}
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      border:0;
+      border-radius:999px;
+      padding:14px 20px;
+      background:linear-gradient(135deg,var(--blue),var(--blue-2));
+      color:#fff;
+      font-weight:800;
+      box-shadow:0 18px 36px rgba(20,82,212,.22);
+      transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+      white-space:nowrap;
+    }
+
+    .btn:hover{transform:translateY(-1px);box-shadow:0 22px 42px rgba(20,82,212,.26)}
+    .btn.secondary{
+      background:rgba(255,255,255,.82);
+      color:var(--text);
+      border:1px solid rgba(15,26,25,.12);
+      box-shadow:none;
+    }
+
+    .btn.secondary:hover{box-shadow:var(--shadow-soft)}
+
+    .hero{
+      position:relative;
+      padding:40px 0 30px;
+      overflow:hidden;
+    }
+
+    .hero-grid{
+      display:grid;
+      grid-template-columns:minmax(0,1.12fr) minmax(340px,.88fr);
+      gap:34px;
+      align-items:stretch;
+    }
+
+    .hero-copy{
+      position:relative;
+      padding:30px 0 0;
+    }
+
+    .eyebrow{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding:8px 14px;
+      border-radius:999px;
+      background:rgba(20,82,212,.08);
+      color:var(--blue);
+      font-size:12px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.18em;
+    }
+
+    .eyebrow:before{
+      content:"";
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:linear-gradient(135deg,var(--aqua),var(--blue));
+      box-shadow:0 0 0 4px rgba(25,176,165,.15);
+    }
+
+    h1,h2,h3{
+      font-family:"Fraunces",Georgia,serif;
+      letter-spacing:-.03em;
+      line-height:.95;
+      margin:0;
+    }
+
+    h1{
+      font-size:clamp(50px,6.2vw,92px);
+      max-width:11ch;
+      margin:24px 0 18px;
+    }
+
+    .hero-copy p{
+      max-width:740px;
+      font-size:18px;
+      color:var(--muted);
+      margin:0 0 24px;
+    }
+
+    .hero-actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:24px;
+    }
+
+    .meta-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-top:20px;
+    }
+
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding:12px 14px;
+      border-radius:999px;
+      background:rgba(255,255,255,.78);
+      border:1px solid var(--line);
+      box-shadow:var(--shadow-soft);
+      font-size:14px;
+      font-weight:700;
+      color:var(--text);
+    }
+
+    .chip i{
+      width:10px;
+      height:10px;
+      border-radius:50%;
+      background:linear-gradient(135deg,var(--aqua),var(--blue));
+      flex:none;
+    }
+
+    .hero-card{
+      position:relative;
+      border-radius:34px;
+      overflow:hidden;
+      background:linear-gradient(180deg,rgba(8,18,16,.1),rgba(8,18,16,.52));
+      box-shadow:var(--shadow);
+      min-height:690px;
+      isolation:isolate;
+    }
+
+    .hero-card img.bg{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      z-index:-2;
+      transform:scale(1.03);
+    }
+
+    .hero-card:before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        linear-gradient(180deg, rgba(4,12,11,.08) 0%, rgba(4,12,11,.1) 35%, rgba(4,12,11,.68) 100%),
+        radial-gradient(circle at 20% 18%, rgba(25,176,165,.32), transparent 24%),
+        radial-gradient(circle at 80% 24%, rgba(20,82,212,.28), transparent 26%);
+      z-index:-1;
+    }
+
+    .hero-card-inner{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      padding:22px;
+      color:#fff;
+    }
+
+    .hero-card-top{
+      display:flex;
+      justify-content:space-between;
+      gap:18px;
+      align-items:flex-start;
+    }
+
+    .hero-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      border-radius:999px;
+      padding:10px 14px;
+      background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.16);
+      backdrop-filter:blur(16px);
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.16em;
+      font-weight:800;
+    }
+
+    .hero-badge:before{
+      content:"";
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:#a7ffef;
+      box-shadow:0 0 0 4px rgba(167,255,239,.15);
+    }
+
+    .hero-stats{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:12px;
+    }
+
+    .hero-stat,
+    .panel-stat{
+      border-radius:22px;
+      background:rgba(255,255,255,.11);
+      border:1px solid rgba(255,255,255,.14);
+      backdrop-filter:blur(18px);
+      padding:16px;
+    }
+
+    .hero-stat strong,
+    .panel-stat strong{
+      display:block;
+      font-size:30px;
+      line-height:1;
+      margin-bottom:8px;
+      font-weight:800;
+      letter-spacing:-.04em;
+    }
+
+    .hero-stat span,
+    .panel-stat span{
+      display:block;
+      color:rgba(255,255,255,.74);
+      font-size:13px;
+      font-weight:600;
+    }
+
+    .app-shell{
+      border-radius:28px;
+      overflow:hidden;
+      background:rgba(255,255,255,.95);
+      color:var(--text);
+      box-shadow:0 20px 58px rgba(0,0,0,.14);
+      border:1px solid rgba(255,255,255,.4);
+      margin-top:auto;
+    }
+
+    .app-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:18px 18px 14px;
+    }
+
+    .app-brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width:0;
+    }
+
+    .app-brand img{
+      width:42px;
+      height:42px;
+      border-radius:12px;
+      object-fit:cover;
+    }
+
+    .app-brand strong{
+      display:block;
+      font-size:18px;
+      line-height:1;
+    }
+
+    .app-brand span{
+      display:block;
+      color:var(--muted);
+      font-size:12px;
+      margin-top:4px;
+      font-weight:600;
+    }
+
+    .badge-pill{
+      padding:10px 12px;
+      border-radius:999px;
+      background:rgba(20,82,212,.08);
+      color:var(--blue);
+      font-size:12px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.14em;
+    }
+
+    .app-body{
+      padding:0 18px 18px;
+      display:grid;
+      gap:14px;
+    }
+
+    .screen-banner{
+      border-radius:22px;
+      overflow:hidden;
+      position:relative;
+      min-height:280px;
+      background:linear-gradient(180deg,#f8fbf9,#eef5f1);
+      border:1px solid rgba(15,26,25,.08);
+    }
+
+    .screen-banner img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+    }
+
+    .screen-overlay{
+      position:absolute;
+      inset:auto 18px 18px 18px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    .overlay-card{
+      flex:1 1 170px;
+      padding:14px;
+      border-radius:18px;
+      background:rgba(255,255,255,.84);
+      box-shadow:var(--shadow-soft);
+      border:1px solid rgba(255,255,255,.5);
+      backdrop-filter:blur(16px);
+    }
+
+    .overlay-card b{
+      display:block;
+      font-size:24px;
+      letter-spacing:-.03em;
+      margin-bottom:4px;
+    }
+
+    .overlay-card span{
+      color:var(--muted);
+      font-size:13px;
+      font-weight:600;
+    }
+
+    .overlay-card.primary{
+      background:linear-gradient(135deg,var(--blue),var(--teal));
+      color:#fff;
+    }
+
+    .overlay-card.primary span{color:rgba(255,255,255,.78)}
+
+    .value-strip{
+      margin-top:24px;
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:14px;
+    }
+
+    .value{
+      padding:18px;
+      border-radius:22px;
+      background:rgba(255,255,255,.8);
+      border:1px solid var(--line);
+      box-shadow:var(--shadow-soft);
+    }
+
+    .value b{
+      display:block;
+      font-size:32px;
+      line-height:1;
+      letter-spacing:-.04em;
+      margin-bottom:8px;
+    }
+
+    .value span{
+      color:var(--muted);
+      font-size:14px;
+      font-weight:600;
+    }
+
+    .section-head{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) minmax(280px,420px);
+      gap:28px;
+      align-items:end;
+      margin-bottom:26px;
+    }
+
+    .section-head h2{
+      font-size:clamp(34px,4.2vw,58px);
+      max-width:11ch;
+      margin-top:14px;
+    }
+
+    .lead{
+      color:var(--muted);
+      font-size:17px;
+      margin:0;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:18px;
+    }
+
+    .grid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+    .card{
+      background:var(--surface);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow-soft);
+      overflow:hidden;
+      min-width:0;
+      transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+
+    .card:hover{
+      transform:translateY(-4px);
+      box-shadow:var(--shadow);
+      border-color:rgba(20,82,212,.2);
+    }
+
+    .card-pad{padding:22px}
+
+    .media-card img{
+      width:100%;
+      height:260px;
+      object-fit:cover;
+      background:var(--surface-2);
+    }
+
+    .media-card.tall img{height:340px}
+
+    .card h3{
+      font-size:26px;
+      margin-bottom:10px;
+    }
+
+    .card p{
+      margin:0;
+      color:var(--muted);
+      font-size:15px;
+    }
+
+    .label{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:7px 12px;
+      border-radius:999px;
+      background:rgba(20,82,212,.08);
+      color:var(--blue);
+      font-size:12px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.14em;
+      margin-bottom:14px;
+    }
+
+    .band{
+      background:
+        linear-gradient(180deg, rgba(238,245,241,.92) 0%, rgba(248,249,244,.92) 100%);
+      border-top:1px solid rgba(15,26,25,.06);
+      border-bottom:1px solid rgba(15,26,25,.06);
+    }
+
+    .stack{
+      display:grid;
+      grid-template-columns:1.06fr .94fr;
+      gap:18px;
+      align-items:stretch;
+    }
+
+    .dashboard{
+      position:relative;
+      border-radius:var(--radius);
+      overflow:hidden;
+      background:linear-gradient(135deg,#0b1413,#122b6d 65%, #0f8d82 140%);
+      color:#fff;
+      padding:24px;
+      box-shadow:var(--shadow);
+    }
+
+    .dashboard:before{
+      content:"";
+      position:absolute;
+      inset:-120px -100px auto auto;
+      width:300px;
+      height:300px;
+      border-radius:50%;
+      background:rgba(25,176,165,.18);
+      filter:blur(2px);
+    }
+
+    .dashboard-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:22px;
+      position:relative;
+      z-index:1;
+    }
+
+    .dashboard-top .title{
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+
+    .dashboard-top img{
+      width:46px;
+      height:46px;
+      border-radius:14px;
+      object-fit:cover;
+    }
+
+    .dashboard-top strong{
+      display:block;
+      font-size:20px;
+    }
+
+    .dashboard-top span{
+      display:block;
+      font-size:12px;
+      color:rgba(255,255,255,.72);
+      text-transform:uppercase;
+      letter-spacing:.14em;
+      font-weight:800;
+      margin-top:4px;
+    }
+
+    .grid-metrics{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:14px;
+      position:relative;
+      z-index:1;
+    }
+
+    .metric{
+      padding:16px;
+      border-radius:22px;
+      background:rgba(255,255,255,.1);
+      border:1px solid rgba(255,255,255,.12);
+      backdrop-filter:blur(12px);
+    }
+
+    .metric b{
+      display:block;
+      font-size:32px;
+      line-height:1;
+      margin-bottom:8px;
+      letter-spacing:-.04em;
+    }
+
+    .metric span{
+      color:rgba(255,255,255,.78);
+      font-size:13px;
+      font-weight:600;
+    }
+
+    .bars{
+      display:grid;
+      gap:10px;
+      margin-top:20px;
+      position:relative;
+      z-index:1;
+    }
+
+    .bar{
+      height:12px;
+      border-radius:999px;
+      background:rgba(255,255,255,.12);
+      overflow:hidden;
+    }
+
+    .bar i{
+      display:block;
+      height:100%;
+      border-radius:inherit;
+      background:linear-gradient(90deg,var(--aqua),#9ef7eb);
+    }
+
+    .steps{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:14px;
+    }
+
+    .step{
+      padding:22px;
+      min-height:210px;
+    }
+
+    .step-num{
+      width:46px;
+      height:46px;
+      border-radius:16px;
+      display:grid;
+      place-items:center;
+      margin-bottom:16px;
+      font-weight:900;
+      color:#fff;
+      background:linear-gradient(135deg,var(--blue),var(--aqua));
+      box-shadow:0 12px 26px rgba(20,82,212,.18);
+    }
+
+    .step h3{font-size:22px;margin-bottom:10px}
+
+    .step p{font-size:15px}
+
+    .pillars{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:18px;
+    }
+
+    .pillar{
+      position:relative;
+      overflow:hidden;
+      border-radius:var(--radius);
+      padding:26px;
+      min-height:250px;
+      color:#fff;
+      background:linear-gradient(135deg,#081210,#1452d4);
+      box-shadow:var(--shadow);
+    }
+
+    .pillar.alt{
+      background:linear-gradient(135deg,#0f8d82,#d68e24);
+    }
+
+    .pillar:after{
+      content:"";
+      position:absolute;
+      right:-68px;
+      bottom:-68px;
+      width:220px;
+      height:220px;
+      border-radius:50%;
+      background:rgba(255,255,255,.12);
+    }
+
+    .pillar h3{font-size:32px;margin-bottom:12px;max-width:10ch}
+    .pillar p{color:rgba(255,255,255,.82);max-width:42ch}
+
+    .price{
+      font-size:32px;
+      font-weight:900;
+      line-height:1;
+      letter-spacing:-.04em;
+      color:var(--blue);
+      margin-bottom:10px;
+    }
+
+    .price-card{
+      min-height:180px;
+    }
+
+    .finance-grid{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:14px;
+      margin-top:6px;
+    }
+
+    .scenario{
+      padding:22px;
+    }
+
+    .scenario strong{
+      display:block;
+      font-size:20px;
+      margin-bottom:12px;
+    }
+
+    .scenario .bar{
+      margin:12px 0 10px;
+      background:rgba(20,82,212,.08);
+    }
+
+    .scenario b{
+      display:block;
+      color:var(--blue);
+      font-size:20px;
+    }
+
+    .sources{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:14px;
+    }
+
+    .source a{
+      color:var(--blue);
+      font-weight:800;
+      display:inline-flex;
+      margin-top:8px;
+    }
+
+    .cta{
+      padding:92px 0 110px;
+      text-align:center;
+    }
+
+    .cta-card{
+      max-width:920px;
+      margin:0 auto;
+      padding:38px 28px 32px;
+      border-radius:34px;
+      background:
+        radial-gradient(circle at top left, rgba(25,176,165,.18), transparent 28%),
+        radial-gradient(circle at top right, rgba(20,82,212,.2), transparent 24%),
+        linear-gradient(180deg,#0b1413,#071210);
+      color:#fff;
+      box-shadow:var(--shadow);
+      border:1px solid rgba(255,255,255,.08);
+    }
+
+    .cta-card img{
+      width:92px;
+      height:92px;
+      border-radius:24px;
+      object-fit:cover;
+      margin:0 auto 18px;
+      background:#fff;
+      box-shadow:0 18px 40px rgba(0,0,0,.22);
+    }
+
+    .cta-card h2{
+      max-width:12ch;
+      margin:0 auto 12px;
+      font-size:clamp(36px,4vw,58px);
+      color:#fff;
+    }
+
+    .cta-card p{
+      max-width:760px;
+      margin:0 auto 24px;
+      color:rgba(255,255,255,.78);
+      font-size:17px;
+    }
+
+    footer{
+      padding:26px 0 34px;
+      color:var(--muted);
+      font-size:13px;
+      text-align:center;
+    }
+
+    .fade{
+      opacity:0;
+      transform:translateY(18px);
+      transition:opacity .7s ease, transform .7s ease;
+    }
+
+    .fade.show{
+      opacity:1;
+      transform:none;
+    }
+
+    @media (max-width: 1080px){
+      .hero-grid,
+      .section-head,
+      .stack{
+        grid-template-columns:1fr;
+      }
+
+      .hero-card{min-height:620px}
+      .value-strip,
+      .finance-grid,
+      .sources,
+      .grid.four,
+      .steps,
+      .pillars{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+      }
+
+      .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .links{display:none}
+    }
+
+    @media (max-width: 760px){
+      .wrap{padding:0 18px}
+      .section{padding:78px 0}
+      .section.compact{padding:68px 0}
+      .nav{min-height:74px}
+      .brand .name span{display:none}
+      .actions{gap:10px}
+      .btn{padding:12px 16px}
+      .hero{padding-top:20px}
+      h1{font-size:clamp(42px,13vw,58px);max-width:9ch}
+      .hero-copy p{font-size:16px}
+      .hero-card{min-height:560px}
+      .hero-card-inner{padding:16px}
+      .hero-stats,
+      .grid,
+      .grid.four,
+      .grid.two,
+      .steps,
+      .pillars,
+      .value-strip,
+      .finance-grid,
+      .sources{
+        grid-template-columns:1fr;
+      }
+      .hero-card-top{flex-direction:column}
+      .screen-banner{min-height:240px}
+      .section-head h2{max-width:100%}
+      .lead{font-size:16px}
+      .cta{padding:72px 0 88px}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="nav">
+        <a class="brand" href="#top" aria-label="Sumi">
+          <img src="assets/sumi-logo.png" alt="Logo Sumi">
+          <div class="name">
+            <strong>Sumi</strong>
+            <span>Fidelizacion gastronomica</span>
+          </div>
+        </a>
+        <nav class="links" aria-label="Secciones">
+          <a href="#problema">Problema</a>
+          <a href="#solucion">Solucion</a>
+          <a href="#modelo">Modelo</a>
+          <a href="#finanzas">Finanzas</a>
+          <a href="#fuentes">Fuentes</a>
+        </nav>
+        <div class="actions">
+          <a class="btn secondary" href="#modelo">Ver precios</a>
+          <a class="btn" href="#finanzas">Ver numeros</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <span class="eyebrow fade">Sistema de fidelizacion para gastronomia</span>
+            <h1 class="fade">Clientes que vuelven, datos que sirven.</h1>
+            <p class="fade">Sumi combina menu QR, registro de clientes, puntos, canjes y panel de gestion para que cafeterias, bares y restaurantes conviertan compras aisladas en recompra medible.</p>
+            <div class="hero-actions fade">
+              <a class="btn" href="#solucion">Como funciona</a>
+              <a class="btn secondary" href="#modelo">Modelo comercial</a>
+            </div>
+            <div class="meta-row fade">
+              <span class="chip"><i></i> QR en mesa y mostrador</span>
+              <span class="chip"><i></i> Panel para el local</span>
+              <span class="chip"><i></i> Recompra medible</span>
+            </div>
+            <div class="value-strip fade">
+              <div class="value">
+                <b>3</b>
+                <span>capas de producto: cliente, local y datos.</span>
+              </div>
+              <div class="value">
+                <b>1</b>
+                <span>flujo simple para explicar y vender.</span>
+              </div>
+              <div class="value">
+                <b>0</b>
+                <span>friccion visual para entender el sistema.</span>
+              </div>
+              <div class="value">
+                <b>100%</b>
+                <span>enfoque en conversion y retorno.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-card fade">
+            <img class="bg" src="assets/sumi-cafe-qr-hero.jpg" alt="Escena hero de Sumi">
+            <div class="hero-card-inner">
+              <div class="hero-card-top">
+                <span class="hero-badge">Sistema activo en el local</span>
+                <div class="hero-stats">
+                  <div class="hero-stat">
+                    <strong>1.840</strong>
+                    <span>puntos disponibles</span>
+                  </div>
+                  <div class="hero-stat">
+                    <strong>37%</strong>
+                    <span>recompra estimada</span>
+                  </div>
+                  <div class="hero-stat">
+                    <strong>246</strong>
+                    <span>canjes mensuales</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="app-shell">
+                <div class="app-top">
+                  <div class="app-brand">
+                    <img src="assets/sumi-logo.png" alt="Logo Sumi">
+                    <div>
+                      <strong>Sumi</strong>
+                      <span>Menu + puntos + canjes</span>
+                    </div>
+                  </div>
+                  <span class="badge-pill">local premium</span>
+                </div>
+                <div class="app-body">
+                  <div class="screen-banner">
+                    <img src="assets/sumi-photo-cafe-qr.jpg" alt="QR de Sumi en la mesa">
+                    <div class="screen-overlay">
+                      <div class="overlay-card primary">
+                        <b>1.840</b>
+                        <span>puntos listos para canjear</span>
+                      </div>
+                      <div class="overlay-card">
+                        <b>+12%</b>
+                        <span>suba de frecuencia con beneficios</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section compact band">
+      <div class="wrap">
+        <div class="section-head fade">
+          <div>
+            <span class="eyebrow">Propuesta</span>
+            <h2>La marca deja de parecer una demo y empieza a sentirse real.</h2>
+          </div>
+          <p class="lead">La pagina ahora usa una jerarquia mas clara: primero el valor, despues el mecanismo y al final los numeros. Eso hace que se entienda mejor en una lectura rapida y tambien en una presentacion oral.</p>
+        </div>
+
+        <div class="grid four">
+          <article class="card card-pad fade">
+            <div class="label">Confianza</div>
+            <h3>Menos ruido, mas foco</h3>
+            <p>Una unica historia visual, con una paleta mas sobria y una composicion mas editorial para que Sumi se vea mas premium.</p>
+          </article>
+          <article class="card card-pad fade">
+            <div class="label">UX</div>
+            <h3>Lectura inmediata</h3>
+            <p>Los bloques estan reordenados para que el usuario entienda primero el problema, luego la solucion y despues el negocio.</p>
+          </article>
+          <article class="card card-pad fade">
+            <div class="label">Producto</div>
+            <h3>Prueba visual real</h3>
+            <p>Las fotos de mesa, panel y canje sostienen el relato y hacen que la idea no quede abstracta.</p>
+          </article>
+          <article class="card card-pad fade">
+            <div class="label">Conversion</div>
+            <h3>CTAs mas claros</h3>
+            <p>Los botones y chips guian al usuario hacia la parte comercial sin saturarlo con texto.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="problema" class="section">
+      <div class="wrap">
+        <div class="section-head fade">
+          <div>
+            <span class="eyebrow">Problema</span>
+            <h2>Muchos locales venden, pero no construyen recurrencia.</h2>
+          </div>
+          <p class="lead">La gastronomia suele depender del transito, promociones generales y memoria del cliente. Sin datos, el local no sabe quien vuelve, cuanto compra ni que incentivo realmente funciona.</p>
+        </div>
+
+        <div class="grid">
+          <article class="card media-card fade">
+            <img src="assets/sumi-photo-cafe-qr.jpg" alt="Mesa de cafe con QR de fidelizacion">
+            <div class="card-pad">
+              <div class="label">Promociones</div>
+              <h3>Sin control de margen</h3>
+              <p>Los descuentos amplios pueden mover ventas, pero si no estan atados a frecuencia o comportamiento pueden comer rentabilidad.</p>
+            </div>
+          </article>
+          <article class="card media-card fade">
+            <img src="assets/sumi-photo-dashboard-owner.jpg" alt="Duenio revisando panel Sumi">
+            <div class="card-pad">
+              <div class="label">Datos</div>
+              <h3>Poca informacion util</h3>
+              <p>El local conoce la venta del dia, pero no necesariamente la historia del cliente, su frecuencia o sus canjes.</p>
+            </div>
+          </article>
+          <article class="card media-card fade">
+            <img src="assets/sumi-photo-reward-customer.jpg" alt="Cliente canjeando recompensa">
+            <div class="card-pad">
+              <div class="label">Recompra</div>
+              <h3>La relacion se enfria</h3>
+              <p>Si el cliente no tiene un motivo claro para volver, la relacion termina despues de una compra.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="solucion" class="section band">
+      <div class="wrap">
+        <div class="section-head fade">
+          <div>
+            <span class="eyebrow">Solucion</span>
+            <h2>Sumi digitaliza la fidelizacion del local.</h2>
+          </div>
+          <p class="lead">Cada cliente puede registrarse, sumar puntos por compras y canjear beneficios. El local administra puntos, promociones y datos desde un panel simple.</p>
+        </div>
+
+        <div class="stack">
+          <article class="card media-card fade">
+            <img src="assets/sumi-photo-dashboard-owner.jpg" alt="Panel de gestion Sumi">
+            <div class="card-pad">
+              <div class="label">Experiencia</div>
+              <h3>El local ve actividad, no solo ventas</h3>
+              <p>El panel resume actividad, frecuencia, puntos emitidos, beneficios canjeados y campanas efectivas. Eso permite ajustar promociones con criterio.</p>
+            </div>
+          </article>
+
+          <article class="dashboard fade">
+            <div class="dashboard-top">
+              <div class="title">
+                <img src="assets/sumi-logo.png" alt="Logo Sumi">
+                <div>
+                  <strong>Panel Sumi</strong>
+                  <span>local activo</span>
+                </div>
+              </div>
+              <span class="hero-badge">Gestion visual</span>
+            </div>
+
+            <div class="grid-metrics">
+              <div class="metric">
+                <b>1.284</b>
+                <span>clientes registrados</span>
+              </div>
+              <div class="metric">
+                <b>37%</b>
+                <span>recompra estimada</span>
+              </div>
+              <div class="metric">
+                <b>$8.9k</b>
+                <span>ticket promedio</span>
+              </div>
+              <div class="metric">
+                <b>246</b>
+                <span>canjes del mes</span>
+              </div>
+            </div>
+
+            <div class="bars">
+              <div class="bar"><i style="width:86%"></i></div>
+              <div class="bar"><i style="width:64%"></i></div>
+              <div class="bar"><i style="width:42%"></i></div>
+            </div>
+          </article>
+        </div>
+
+        <div style="height:18px"></div>
+
+        <div class="steps">
+          <article class="card step fade">
+            <div class="step-num">1</div>
+            <h3>QR del local</h3>
+            <p>El cliente escanea el menu o punto de entrada de Sumi desde la mesa o el mostrador.</p>
+          </article>
+          <article class="card step fade">
+            <div class="step-num">2</div>
+            <h3>Registro</h3>
+            <p>Crea su perfil y obtiene su QR personal para sumar puntos en futuras compras.</p>
+          </article>
+          <article class="card step fade">
+            <div class="step-num">3</div>
+            <h3>Compra</h3>
+            <p>El local carga el consumo desde el panel y acredita puntos automaticamente.</p>
+          </article>
+          <article class="card step fade">
+            <div class="step-num">4</div>
+            <h3>Canje</h3>
+            <p>El cliente vuelve para usar beneficios concretos y medibles para el negocio.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <div class="section-head fade">
+          <div>
+            <span class="eyebrow">Experiencia</span>
+            <h2>La pagina muestra el producto en contexto.</h2>
+          </div>
+          <p class="lead">Sumi ya no queda como una idea abstracta: se ve en la mesa, en la gestion del local y en el momento del canje.</p>
+        </div>
+
+        <div class="grid">
+          <article class="card media-card tall fade">
+            <img src="assets/sumi-photo-cafe-qr.jpg" alt="QR Sumi en mesa de cafeteria">
+            <div class="card-pad">
+              <div class="label">En la mesa</div>
+              <h3>Entrada clara al sistema</h3>
+              <p>El QR funciona como puerta de entrada al menu, puntos y beneficios.</p>
+            </div>
+          </article>
+          <article class="card media-card tall fade">
+            <img src="assets/sumi-photo-dashboard-owner.jpg" alt="Panel de gestion Sumi">
+            <div class="card-pad">
+              <div class="label">En la gestion</div>
+              <h3>Lectura simple del negocio</h3>
+              <p>El local entiende actividad, canjes y recompra desde una pantalla clara.</p>
+            </div>
+          </article>
+          <article class="card media-card tall fade">
+            <img src="assets/sumi-photo-reward-customer.jpg" alt="Canje de recompensa Sumi">
+            <div class="card-pad">
+              <div class="label">En la recompra</div>
+              <h3>Motivo concreto para volver</h3>
+              <p>El cliente vuelve porque tiene un beneficio real para usar.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="modelo" class="section band">
+      <div class="wrap">
+        <div class="section-head fade">
+          <div>
+            <span class="eyebrow">Modelo comercial</span>
+            <h2>Un cobro simple y facil de explicar.</h2>
+          </div>
+          <p class="lead">La propuesta se cobra a locales gastronomicos con una implementacion inicial, un abono mensual y extras opcionales para ampliar el uso.</p>
+        </div>
+
+        <div class="grid four">
+          <article class="card card-pad price-card fade">
+            <div class="price">$1.200.000</div>
+            <p>Implementacion inicial: configuracion, menu digital, panel, sistema de puntos y 10 QR fisicos.</p>
+          </article>
+          <article class="card card-pad price-card fade">
+            <div class="price">$150.000</div>
+            <p>Abono mensual por local activo: hosting, soporte base, mantenimiento y estadisticas.</p>
+          </article>
+          <article class="card card-pad price-card fade">
+            <div class="price">$45.000</div>
+            <p>QR adicional para mesa, mostrador o nueva zona del local.</p>
+          </article>
+          <article class="card card-pad price-card fade">
+            <div class="price">$60.000</div>
+            <p>Campana especial: cumpleanos, referidos, promo puntual u horario de baja demanda.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="finanzas" class="section">
+      <div class="wrap">
+        <div class="section-head fade">
+          <div>
+            <span class="eyebrow">Modelo financiero</span>
+            <h2>La rentabilidad depende de cartera activa.</h2>
+          </div>
+          <p class="lead">Con los precios actuales, el punto de equilibrio recurrente queda en 14 locales activos sin contar nuevas implementaciones.</p>
+        </div>
+
+        <div class="finance-grid">
+          <article class="card card-pad fade">
+            <div class="label">Equilibrio</div>
+            <div class="price">14</div>
+            <p>Locales activos para cubrir costos fijos recurrentes.</p>
+          </article>
+          <article class="card card-pad fade">
+            <div class="label">MRR</div>
+            <div class="price">$150k</div>
+            <p>Abono mensual por local activo.</p>
+          </article>
+          <article class="card card-pad fade">
+            <div class="label">Setup</div>
+            <div class="price">$691k</div>
+            <p>Margen estimado por implementacion.</p>
+          </article>
+          <article class="card card-pad fade">
+            <div class="label">Mensual</div>
+            <div class="price">$146k</div>
+            <p>Margen mensual estimado por local.</p>
+          </article>
+        </div>
+
+        <div style="height:18px"></div>
+
+        <div class="grid">
+          <article class="card scenario fade">
+            <strong>Conservador</strong>
+            <div class="bar"><i style="width:42%"></i></div>
+            <p>21 locales al mes 12</p>
+            <b>$5,2M acumulado aprox.</b>
+          </article>
+          <article class="card scenario fade">
+            <strong>Base</strong>
+            <div class="bar"><i style="width:72%"></i></div>
+            <p>42 locales al mes 12</p>
+            <b>$40,4M acumulado aprox.</b>
+          </article>
+          <article class="card scenario fade">
+            <strong>Optimista</strong>
+            <div class="bar"><i style="width:100%"></i></div>
+            <p>66 locales al mes 12</p>
+            <b>$80,5M acumulado aprox.</b>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="fidelizacion" class="section band">
+      <div class="wrap">
+        <div class="section-head fade">
+          <div>
+            <span class="eyebrow">Fidelizacion</span>
+            <h2>Los puntos son una herramienta de gestion.</h2>
+          </div>
+          <p class="lead">El objetivo es que el costo del beneficio sea menor que el margen incremental generado por visitas repetidas, recomendaciones y compras en horarios de baja demanda.</p>
+        </div>
+
+        <div class="pillars">
+          <article class="pillar fade">
+            <div class="label" style="background:rgba(255,255,255,.12);color:#fff">Beneficios</div>
+            <h3>Lo que empuja visitas</h3>
+            <p>Cafe chico, combo merienda, referidos y cumpleanos se pueden configurar por horario o producto especifico.</p>
+          </article>
+          <article class="pillar alt fade">
+            <div class="label" style="background:rgba(255,255,255,.12);color:#fff">Analitica</div>
+            <h3>Datos para decidir</h3>
+            <p>Clientes activos, frecuencia, ticket, puntos emitidos, canjes y campanas efectivas quedan visibles para el local.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="fuentes" class="section">
+      <div class="wrap">
+        <div class="section-head fade">
+          <div>
+            <span class="eyebrow">Fuentes</span>
+            <h2>Precios de referencia usados.</h2>
+          </div>
+          <p class="lead">Los importes del modelo fueron ajustados con referencias reales/locales para que la defensa del trabajo sea mas solida.</p>
+        </div>
+
+        <div class="sources">
+          <article class="card card-pad source fade">
+            <div class="label">Dominio</div>
+            <h3>NIC Argentina</h3>
+            <p>Aranceles para dominios .com.ar.</p>
+            <a href="https://nic.ar/index.php/es/dominios/aranceles" target="_blank" rel="noreferrer">nic.ar</a>
+          </article>
+          <article class="card card-pad source fade">
+            <div class="label">QR acrilico</div>
+            <h3>PIAD Grafico</h3>
+            <p>Referencia de cartel QR acrilico.</p>
+            <a href="https://www.piadgrafico.com.ar/emprendimientos/cartel-qr-acrilico" target="_blank" rel="noreferrer">piadgrafico.com.ar</a>
+          </article>
+          <article class="card card-pad source fade">
+            <div class="label">Hosting</div>
+            <h3>DonWeb</h3>
+            <p>Hosting local de referencia.</p>
+            <a href="https://donweb.com/es-ar/web-hosting" target="_blank" rel="noreferrer">donweb.com</a>
+          </article>
+          <article class="card card-pad source fade">
+            <div class="label">Web</div>
+            <h3>Rango de desarrollo</h3>
+            <p>Landing y desarrollo web en Argentina.</p>
+            <a href="https://manivela.com.ar/blog/cuanto-cuesta-landing-page-argentina-2026" target="_blank" rel="noreferrer">manivela.com.ar</a>
+          </article>
+          <article class="card card-pad source fade">
+            <div class="label">Dolar</div>
+            <h3>Banco Nacion historico</h3>
+            <p>Referencia usada para equivalencias.</p>
+            <a href="https://dolarhistorico.com/dolar-banco-nacion/mes/junio-2026" target="_blank" rel="noreferrer">dolarhistorico.com</a>
+          </article>
+          <article class="card card-pad source fade">
+            <div class="label">Archivo</div>
+            <h3>Modelo financiero</h3>
+            <p>El detalle completo esta en el Excel actualizado del proyecto.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta">
+      <div class="wrap">
+        <div class="cta-card fade">
+          <img src="assets/sumi-logo.png" alt="Logo Sumi">
+          <h2>Sumi convierte consumo en recompra medible.</h2>
+          <p>La idea queda mas defendible porque ahora la pagina comunica mejor el producto, muestra el flujo con claridad y deja los numeros al final con una lectura mucho mas limpia.</p>
+          <a class="btn" href="#top">Volver arriba</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">Sumi - Proyecto gastronomico ficticio | Visual actualizado para mejorar UI y UX</div>
+  </footer>
+
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) entry.target.classList.add("show");
+      }
+    }, { threshold: 0.12 });
+
+    document.querySelectorAll(".fade").forEach((el) => observer.observe(el));
+  </script>
+</body>
+</html>
