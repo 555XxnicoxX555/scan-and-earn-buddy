@@ -2,11 +2,43 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="0; url=Sumi_Web_Proyecto_Visual.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sumi</title>
+  <meta name="theme-color" content="#081210" />
+  <title>Sumi | Fidelizacion gastronomica</title>
+  <style>
+    html,body{margin:0;min-height:100%;background:#081210;color:#fff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    body{display:grid;place-items:center;padding:24px;box-sizing:border-box}
+    .shell{max-width:720px;width:100%;text-align:center}
+    .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:28px;backdrop-filter:blur(16px);box-shadow:0 24px 70px rgba(0,0,0,.22)}
+    .muted{color:rgba(255,255,255,.72);line-height:1.6}
+    a{color:#9ef7eb;text-decoration:none;font-weight:700}
+  </style>
 </head>
 <body>
-  <p><a href="Sumi_Web_Proyecto_Visual.html">Abrir Sumi_Web_Proyecto_Visual.html</a></p>
+  <div class="shell">
+    <div class="card">
+      <h1 style="margin:0 0 12px;font-size:clamp(28px,4vw,44px);letter-spacing:-.04em">Cargando Sumi…</h1>
+      <p class="muted" style="margin:0 0 18px">La vista principal se carga desde <code>Sumi_Web_Proyecto_Visual.html</code> para que Lovable abra la landing completa con los assets desde <code>assets/</code>.</p>
+      <p class="muted" id="status" style="margin:0">Si esto tarda demasiado, usá el enlace de abajo.</p>
+      <p style="margin:18px 0 0"><a href="Sumi_Web_Proyecto_Visual.html">Abrir landing directamente</a></p>
+    </div>
+  </div>
+
+  <script>
+    (async () => {
+      const status = document.getElementById("status");
+      try {
+        const response = await fetch("Sumi_Web_Proyecto_Visual.html", { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const html = await response.text();
+        document.open();
+        document.write(html);
+        document.close();
+      } catch (error) {
+        status.textContent = "No se pudo cargar la vista principal automáticamente, pero el enlace manual sigue disponible.";
+        console.error(error);
+      }
+    })();
+  </script>
 </body>
 </html>
