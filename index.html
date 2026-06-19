@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sumi Menu Admin</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="landing-active">
+    <section class="language-screen" id="languageScreen" aria-label="Seleccion de idioma">
+      <div class="language-ornament"></div>
+      <p class="venue">Hipodromo Condesa · CDMX</p>
+
+      <div class="logo-seal" aria-label="Habibi Bites & Coffee">
+        <div class="seal-art">HB</div>
+        <strong>Habibi</strong>
+        <span>Bites & Coffee</span>
+      </div>
+
+      <h2>& Croissant de Lune</h2>
+      <p class="cuisine">Libano · Mexico · Francia</p>
+
+      <div class="language-divider">
+        <span>Elige tu idioma</span>
+      </div>
+
+      <div class="language-options">
+        <button class="language-option selected" data-enter-lang="es">
+          <span class="flag mx"></span>
+          <span>
+            <strong>Español</strong>
+            <small>Continuar en español</small>
+          </span>
+          <i>→</i>
+        </button>
+        <button class="language-option" data-enter-lang="en">
+          <span class="flag us"></span>
+          <span>
+            <strong>English</strong>
+            <small>Continue in English</small>
+          </span>
+          <i>→</i>
+        </button>
+        <button class="language-option" data-enter-lang="ar">
+          <span class="flag lb"></span>
+          <span dir="rtl">
+            <strong>العربية</strong>
+            <small>متابعة بالعربية</small>
+          </span>
+          <i>→</i>
+        </button>
+      </div>
+
+      <footer class="language-footer">
+        <div>
+          <strong>Tamaulipas 109</strong>
+          <span>H. Condesa, CDMX</span>
+        </div>
+        <div>
+          <strong>8:00 — 22:00</strong>
+          <span>todos los dias</span>
+        </div>
+      </footer>
+    </section>
+
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">HB</div>
+        <div>
+          <strong>Habibi Bites</strong>
+          <span>Panel del dueno</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a href="#" class="nav-item">
+          <span class="nav-icon">⌂</span>
+          Inicio
+        </a>
+        <a href="#" class="nav-item active">
+          <span class="nav-icon">☰</span>
+          Mi menu
+        </a>
+        <a href="#" class="nav-item">
+          <span class="nav-icon">✦</span>
+          Crear contenido
+          <small>IA</small>
+        </a>
+        <a href="#" class="nav-item">
+          <span class="nav-icon">▦</span>
+          Mi biblioteca
+        </a>
+        <a href="#" class="nav-item">
+          <span class="nav-icon">⚙</span>
+          Ajustes
+        </a>
+      </nav>
+
+      <section class="help-box">
+        <h3>Necesitas ayuda?</h3>
+        <p>Te respondemos en WhatsApp en menos de una hora.</p>
+        <button>Abrir WhatsApp</button>
+      </section>
+    </aside>
+
+    <main class="shell menu-app" id="menuApp">
+      <header class="menu-header">
+        <div class="restaurant-lockup">
+          <div class="mini-logo">HB</div>
+          <div>
+            <strong>Habibi Bites</strong>
+            <span>Comida libanesa</span>
+          </div>
+        </div>
+        <div class="menu-tools">
+          <button id="searchToggle" aria-label="Buscar">⌕</button>
+          <button id="languageToggle" aria-label="Cambiar idioma"><span class="globe-icon"></span></button>
+        </div>
+      </header>
+
+      <section class="brand-switch" aria-label="Marca">
+        <button class="active" data-brand="Habibi Bites">
+          <strong>Habibi Bites</strong>
+          <span>Libanes</span>
+        </button>
+        <button data-brand="Croissant de Lune">
+          <strong>Croissant de Lune</strong>
+          <span>Cafe & Desayunos</span>
+        </button>
+      </section>
+
+      <nav class="category-strip" id="categoryStrip" aria-label="Categorias"></nav>
+
+      <section class="recommendation">
+        <p>Hoy te recomendamos</p>
+        <button class="hero-card" id="recommendedCard" type="button">
+          <span class="badge">Mas pedido</span>
+          <strong>Shawarma de carne</strong>
+          <small>Carne de res marinada, cebolla, perejil, jitomate, tahini y reduccion de granada.</small>
+          <span class="hero-prices">
+            <b>Pan arabe $145</b>
+            <b>Tabliye $185</b>
+            <b>Plato $210</b>
+          </span>
+        </button>
+      </section>
+
+      <section class="public-list" aria-label="Productos">
+        <div class="section-title">
+          <h1 id="categoryTitle">Entradas</h1>
+          <span id="categoryCount">0 platillos</span>
+        </div>
+        <label class="customer-search">
+          <span>⌕</span>
+          <input id="searchInput" type="search" placeholder="Buscar en el menu" />
+        </label>
+        <div id="dishList" class="customer-dish-list"></div>
+      </section>
+    </main>
+
+    <section class="detail-view" id="detailView" aria-label="Detalle del producto">
+      <div class="detail-hero" id="detailPhoto">
+        <button class="detail-back" id="detailBack" aria-label="Volver">‹</button>
+        <div class="detail-actions">
+          <button aria-label="Compartir">⇧</button>
+          <button aria-label="Favorito">♡</button>
+        </div>
+      </div>
+
+      <article class="detail-content">
+        <div class="detail-category" id="detailCategory">Comida Rapida</div>
+        <div class="detail-title-row">
+          <h1 id="detailName">Shawarma de carne</h1>
+          <span id="detailArabic">شاورما لحم</span>
+        </div>
+        <span class="detail-chip">Mas pedido</span>
+        <p id="detailDescription"></p>
+
+        <h2>Elige tu presentacion</h2>
+        <div class="detail-options" id="detailOptions"></div>
+
+        <h2>Va perfecto con</h2>
+        <div class="pairings" id="pairings"></div>
+      </article>
+    </section>
+
+    <section class="editor" id="editorPanel" aria-label="Editor de producto">
+      <div class="editor-scroll">
+        <header class="editor-hero">
+          <button class="ghost" id="backButton">← Volver al menu</button>
+          <h2 id="editorTitle">Cafe Turco</h2>
+          <p><span class="dot"></span> Visible en el menu · Ultima edicion: hoy 14:22 por Karim</p>
+        </header>
+
+        <div class="editor-grid">
+          <div class="editor-main">
+            <section class="panel">
+              <div class="panel-title-row">
+                <div>
+                  <h3>Nombre y descripcion</h3>
+                  <p>Edita cada idioma. La IA puede traducir el resto.</p>
+                </div>
+                <button class="outline" id="translateButton">✦ Traducir con IA</button>
+              </div>
+
+              <div class="tabs" role="tablist">
+                <button class="tab active" data-lang="es">Espanol <span></span></button>
+                <button class="tab" data-lang="en">English <span></span></button>
+                <button class="tab" data-lang="ar">العربية <span></span></button>
+              </div>
+
+              <label class="field">
+                <span>Nombre del platillo</span>
+                <input id="dishName" type="text" maxlength="80" />
+              </label>
+
+              <label class="field">
+                <span>Descripcion corta</span>
+                <textarea id="dishDescription" rows="5" maxlength="300"></textarea>
+              </label>
+              <div class="hint-row">
+                <small>Tip: menciona ingredientes clave y tecnica.</small>
+                <small><span id="descCount">0</span> / 300</small>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-title-row">
+                <div>
+                  <h3>Presentaciones y precios</h3>
+                  <p>Hasta tres tamanos o estilos.</p>
+                </div>
+                <button class="outline" id="addPresentationButton">+ Agregar</button>
+              </div>
+              <div id="presentations" class="presentations"></div>
+            </section>
+          </div>
+
+          <aside class="editor-side">
+            <section class="photo-card">
+              <div id="dishPhoto" class="dish-photo"></div>
+              <button class="photo-button">▧ Cambiar foto</button>
+              <button class="ai-photo">✦ Mejorar con IA</button>
+            </section>
+
+            <section class="panel compact">
+              <h3>Clasificacion</h3>
+              <label class="field">
+                <span>Marca</span>
+                <select id="brandSelect"></select>
+              </label>
+              <label class="field">
+                <span>Categoria</span>
+                <select id="categorySelect"></select>
+              </label>
+              <label class="toggle-row">
+                <input id="visibleToggle" type="checkbox" />
+                <span>Visible en el menu</span>
+              </label>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <script src="app.js"></script>
+  </body>
+</html>
