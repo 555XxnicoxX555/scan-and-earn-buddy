@@ -1028,20 +1028,16 @@ body:not(.landing-active) .language-screen {
   height: 40px;
   border-radius: 5px;
   box-shadow: 0 8px 14px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+  display: inline-block;
+  flex: 0 0 auto;
+  background: #1a120a;
 }
 
-.flag.mx {
-  background: linear-gradient(90deg, #087b41 0 33%, #fff 33% 66%, #d51b31 66%);
-}
-
-.flag.us {
-  background:
-    linear-gradient(#bf1f2e 0 12%, #fff 12% 24%, #bf1f2e 24% 36%, #fff 36% 48%, #bf1f2e 48% 60%, #fff 60% 72%, #bf1f2e 72% 84%, #fff 84%),
-    linear-gradient(90deg, #1f438a 0 45%, transparent 45%);
-}
-
-.flag.lb {
-  background: linear-gradient(#ec2532 0 25%, #fff 25% 75%, #ec2532 75%);
+.flag svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .language-footer {
