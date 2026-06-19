@@ -1445,6 +1445,152 @@ body.landing-active .detail-view {
   color: #26180c;
 }
 
+.loyalty-card {
+  margin-top: 16px;
+  padding: 15px;
+  overflow: hidden;
+  border: 1px solid rgba(242, 189, 49, 0.34);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(242, 189, 49, 0.22), transparent 34%),
+    linear-gradient(135deg, #21160d, #100b07 62%);
+  color: #fff3d8;
+}
+
+.loyalty-top,
+.level-row,
+.loyalty-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.loyalty-top span,
+.level-row span {
+  display: block;
+}
+
+.loyalty-top span {
+  color: #f2bd31;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.loyalty-top strong {
+  margin-top: 4px;
+  display: block;
+  font-family: Georgia, serif;
+  font-size: 30px;
+  font-style: italic;
+  line-height: 1;
+}
+
+.loyalty-top button {
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(255, 239, 205, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2bd31;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.level-row {
+  margin-top: 13px;
+  color: #d9cdb7;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.level-track {
+  height: 7px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.level-track span {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f2bd31, #d7e34f);
+}
+
+.loyalty-actions {
+  margin-top: 13px;
+}
+
+.loyalty-actions button,
+.earn-points-button {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid rgba(242, 189, 49, 0.46);
+  border-radius: 999px;
+  background: transparent;
+  color: #f7d77a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.loyalty-actions button:first-child,
+.earn-points-button {
+  background: #f2bd31;
+  color: #201206;
+}
+
+.reward-strip {
+  margin: 13px -15px -4px;
+  padding: 0 15px 4px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.reward-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.reward-chip {
+  min-width: 132px;
+  padding: 10px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 239, 205, 0.17);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #cdbf9f;
+  text-align: left;
+}
+
+.reward-chip.available {
+  border-color: rgba(242, 189, 49, 0.7);
+  color: #fff3d8;
+}
+
+.reward-chip strong,
+.reward-chip span {
+  display: block;
+}
+
+.reward-chip strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reward-chip span {
+  margin-top: 4px;
+  color: #f2bd31;
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .recommendation {
   margin-top: 26px;
 }
@@ -1721,6 +1867,11 @@ body.landing-active .detail-view {
   gap: 10px;
 }
 
+.earn-points-button {
+  width: 100%;
+  margin-top: 12px;
+}
+
 .detail-option {
   min-height: 66px;
   padding: 12px 14px;
@@ -1823,4 +1974,28 @@ body.landing-active .detail-view {
   margin-top: 3px;
   color: #f2bd31;
   font-size: 11px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 80;
+  max-width: min(360px, calc(100vw - 36px));
+  padding: 12px 16px;
+  border: 1px solid rgba(242, 189, 49, 0.45);
+  border-radius: 999px;
+  background: rgba(18, 12, 6, 0.94);
+  color: #fff3d8;
+  font-size: 13px;
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 12px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }

@@ -131,6 +131,28 @@
 
       <nav class="category-strip" id="categoryStrip" aria-label="Categorias"></nav>
 
+      <section class="loyalty-card" aria-label="Puntos Sumi">
+        <div class="loyalty-top">
+          <div>
+            <span id="loyaltyKicker">Tarjeta Sumi</span>
+            <strong><span id="pointsBalance">420</span> pts</strong>
+          </div>
+          <button id="scanQrButton" type="button">QR</button>
+        </div>
+        <div class="level-row">
+          <span id="levelName">Nivel Bronce</span>
+          <span id="nextReward">80 pts para Plata</span>
+        </div>
+        <div class="level-track">
+          <span id="levelProgress"></span>
+        </div>
+        <div class="loyalty-actions">
+          <button id="addPurchaseButton" type="button">Sumar compra</button>
+          <button id="rewardsButton" type="button">Ver premios</button>
+        </div>
+        <div class="reward-strip" id="rewardStrip"></div>
+      </section>
+
       <section class="recommendation">
         <p>Hoy te recomendamos</p>
         <button class="hero-card" id="recommendedCard" type="button">
@@ -178,11 +200,14 @@
 
         <h2>Elige tu presentacion</h2>
         <div class="detail-options" id="detailOptions"></div>
+        <button class="earn-points-button" id="earnDetailPoints" type="button">Sumar puntos por esta compra</button>
 
         <h2>Va perfecto con</h2>
         <div class="pairings" id="pairings"></div>
       </article>
     </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <section class="editor" id="editorPanel" aria-label="Editor de producto">
       <div class="editor-scroll">

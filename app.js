@@ -31,6 +31,16 @@ const labels = {
     choose: "Elige tu presentacion",
     pairings: "Va perfecto con",
     badge: "Mas pedido",
+    loyalty: "Tarjeta Sumi",
+    addPurchase: "Sumar compra",
+    rewards: "Ver premios",
+    earnDetail: "Sumar puntos por esta compra",
+    qrEarned: "QR escaneado",
+    purchaseEarned: "Compra registrada",
+    redeemed: "Premio solicitado",
+    bronze: "Nivel Bronce",
+    silver: "Nivel Plata",
+    gold: "Nivel Oro",
     subtitles: { "Habibi Bites": "Comida libanesa", "Croissant de Lune": "Cafe & postres" }
   },
   en: {
@@ -41,6 +51,16 @@ const labels = {
     choose: "Choose a presentation",
     pairings: "Perfect with",
     badge: "Best seller",
+    loyalty: "Sumi Card",
+    addPurchase: "Add purchase",
+    rewards: "Rewards",
+    earnDetail: "Earn points for this order",
+    qrEarned: "QR scanned",
+    purchaseEarned: "Purchase registered",
+    redeemed: "Reward requested",
+    bronze: "Bronze Level",
+    silver: "Silver Level",
+    gold: "Gold Level",
     subtitles: { "Habibi Bites": "Lebanese food", "Croissant de Lune": "Coffee & desserts" }
   },
   ar: {
@@ -51,6 +71,16 @@ const labels = {
     choose: "اختر التقديم",
     pairings: "يناسب معه",
     badge: "الأكثر طلبا",
+    loyalty: "بطاقة Sumi",
+    addPurchase: "إضافة شراء",
+    rewards: "المكافآت",
+    earnDetail: "اكسب نقاط هذه الطلبية",
+    qrEarned: "تم مسح QR",
+    purchaseEarned: "تم تسجيل الشراء",
+    redeemed: "تم طلب المكافأة",
+    bronze: "المستوى البرونزي",
+    silver: "المستوى الفضي",
+    gold: "المستوى الذهبي",
     subtitles: { "Habibi Bites": "طعام لبناني", "Croissant de Lune": "قهوة وحلويات" }
   }
 };
@@ -218,6 +248,14 @@ let currentLang = "es";
 let currentBrand = "Habibi Bites";
 let currentCategory = "Entradas";
 let currentDetailId = "shawarma-carne";
+let pointsBalance = 420;
+let selectedPresentationIndex = 0;
+
+const rewardCatalog = [
+  { id: "coffee", name: "Cafe gratis", cost: 120 },
+  { id: "dessert", name: "Postre sorpresa", cost: 240 },
+  { id: "shawarma", name: "Shawarma 2x1", cost: 520 }
+];
 
 const dishList = document.querySelector("#dishList");
 const searchInput = document.querySelector("#searchInput");
@@ -238,6 +276,17 @@ const restaurantName = document.querySelector(".restaurant-lockup strong");
 const restaurantSubtitle = document.querySelector(".restaurant-lockup span");
 const searchToggle = document.querySelector("#searchToggle");
 const languageToggle = document.querySelector("#languageToggle");
+const pointsBalanceEl = document.querySelector("#pointsBalance");
+const loyaltyKicker = document.querySelector("#loyaltyKicker");
+const levelName = document.querySelector("#levelName");
+const nextReward = document.querySelector("#nextReward");
+const levelProgress = document.querySelector("#levelProgress");
+const rewardStrip = document.querySelector("#rewardStrip");
+const scanQrButton = document.querySelector("#scanQrButton");
+const addPurchaseButton = document.querySelector("#addPurchaseButton");
+const rewardsButton = document.querySelector("#rewardsButton");
+const earnDetailPoints = document.querySelector("#earnDetailPoints");
+const toast = document.querySelector("#toast");
 
 function localCategory(category) {
   return categoryLabels[currentLang]?.[category] || category;
@@ -253,6 +302,48 @@ function localDescription(dish) {
 
 function currentItems() {
   return menuItems.filter((dish) => dish.brand === currentBrand && dish.visible);
+}
+
+function currentLevel() {
+  if (pointsBalance >= 1000) return { name: labels[currentLang].gold, next: null, floor: 1000, target: 1000 };
+  if (pointsBalance >= 500) return { name: labels[currentLang].silver, next: labels[currentLang].gold, floor: 500, target: 1000 };
+  return { name: labels[currentLang].bronze, next: labels[currentLang].silver, floor: 0, target: 500 };
+}
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("show");
+  window.clearTimeout(showToast.timeout);
+  showToast.timeout = window.setTimeout(() => toast.classList.remove("show"), 2200);
+}
+
+function addPoints(amount, reason) {
+  pointsBalance += amount;
+  renderLoyalty();
+  showToast(`${reason}: +${amount} pts`);
+}
+
+function renderLoyalty() {
+  const level = currentLevel();
+  const progress = level.target === level.floor ? 100 : Math.min(100, ((pointsBalance - level.floor) / (level.target - level.floor)) * 100);
+  loyaltyKicker.textContent = labels[currentLang].loyalty;
+  pointsBalanceEl.textContent = pointsBalance;
+  levelName.textContent = level.name;
+  nextReward.textContent = level.next ? `${level.target - pointsBalance} pts para ${level.next.replace("Nivel ", "")}` : "Nivel maximo";
+  levelProgress.style.width = `${progress}%`;
+  addPurchaseButton.textContent = labels[currentLang].addPurchase;
+  rewardsButton.textContent = labels[currentLang].rewards;
+  earnDetailPoints.textContent = labels[currentLang].earnDetail;
+  rewardStrip.innerHTML = rewardCatalog
+    .map(
+      (reward) => `
+        <button class="reward-chip ${pointsBalance >= reward.cost ? "available" : ""}" data-reward="${reward.id}" type="button">
+          <strong>${reward.name}</strong>
+          <span>${reward.cost} pts</span>
+        </button>
+      `
+    )
+    .join("");
 }
 
 function recommendedDish() {
@@ -313,6 +404,7 @@ function renderList() {
 
   renderCategories();
   renderRecommendation();
+  renderLoyalty();
   updateHeader();
 
   categoryTitle.textContent = query ? labels[currentLang].results : localCategory(currentCategory);
@@ -339,6 +431,7 @@ function openDetail(id) {
   const dish = menuItems.find((item) => item.id === id);
   if (!dish) return;
   currentDetailId = id;
+  selectedPresentationIndex = 0;
   detailPhoto.style.backgroundImage = `linear-gradient(to bottom, rgba(0,0,0,0.05), rgba(0,0,0,0.78)), url('${dish.photo}')`;
   detailCategory.textContent = localCategory(dish.category);
   detailName.textContent = localName(dish);
@@ -347,7 +440,7 @@ function openDetail(id) {
   detailOptions.innerHTML = dish.presentations
     .map(
       (presentation, index) => `
-        <button class="detail-option ${index === 0 ? "selected" : ""}" type="button">
+        <button class="detail-option ${index === 0 ? "selected" : ""}" data-presentation-index="${index}" type="button">
           <span></span>
           <strong>${presentation.name}</strong>
           <small>${presentation.note || "Presentacion disponible"}</small>
@@ -360,6 +453,7 @@ function openDetail(id) {
   document.querySelectorAll(".detail-content h2")[0].textContent = labels[currentLang].choose;
   document.querySelectorAll(".detail-content h2")[1].textContent = labels[currentLang].pairings;
   document.querySelector(".detail-chip").textContent = labels[currentLang].badge;
+  earnDetailPoints.textContent = labels[currentLang].earnDetail;
 
   pairings.innerHTML = menuItems
     .filter((item) => item.visible && item.brand === dish.brand)
@@ -411,6 +505,48 @@ dishList.addEventListener("click", (event) => {
 });
 
 recommendedCard.addEventListener("click", () => openDetail(recommendedCard.dataset.id));
+
+detailOptions.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-presentation-index]");
+  if (!option) return;
+  selectedPresentationIndex = Number(option.dataset.presentationIndex);
+  detailOptions.querySelectorAll(".detail-option").forEach((button) => button.classList.remove("selected"));
+  option.classList.add("selected");
+});
+
+scanQrButton.addEventListener("click", () => {
+  addPoints(25, labels[currentLang].qrEarned);
+});
+
+addPurchaseButton.addEventListener("click", () => {
+  addPoints(40, labels[currentLang].purchaseEarned);
+});
+
+earnDetailPoints.addEventListener("click", () => {
+  const dish = menuItems.find((item) => item.id === currentDetailId);
+  if (!dish) return;
+  const presentation = dish.presentations[selectedPresentationIndex] || dish.presentations[0];
+  const earned = Math.max(5, Math.round(presentation.price * 0.12));
+  addPoints(earned, labels[currentLang].purchaseEarned);
+});
+
+rewardStrip.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-reward]");
+  if (!button) return;
+  const reward = rewardCatalog.find((item) => item.id === button.dataset.reward);
+  if (!reward) return;
+  if (pointsBalance < reward.cost) {
+    showToast(`${reward.cost - pointsBalance} pts restantes`);
+    return;
+  }
+  pointsBalance -= reward.cost;
+  renderLoyalty();
+  showToast(`${labels[currentLang].redeemed}: ${reward.name}`);
+});
+
+rewardsButton.addEventListener("click", () => {
+  rewardStrip.scrollIntoView({ block: "center", behavior: "smooth" });
+});
 
 document.querySelector("#detailBack").addEventListener("click", () => {
   detailView.classList.remove("open");
