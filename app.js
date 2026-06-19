@@ -206,6 +206,61 @@ const menuItems = [
   item("jugos", "Croissant de Lune", "Bebidas", "Jugos naturales", "Pina, jugo verde o naranja, exprimido al momento.", [{ name: "Vaso", price: 70 }], photos.smoothie)
 ];
 
+const imageQueries = {
+  hummus: "hummus tahini bowl",
+  "hummus-carne": "hummus beef pine nuts",
+  jocoque: "labneh olive oil zaatar",
+  "jocoque-ajo": "garlic labneh dip",
+  "papas-asadas": "roasted potatoes herbs",
+  "ensalada-libanesa": "lebanese salad parsley tomato cucumber",
+  "arroz-fideos": "vermicelli rice pilaf",
+  "huevo-cazuela": "baked eggs skillet",
+  "huevo-cazuela-morron-jocoque": "shakshuka labneh peppers",
+  taouk: "chicken taouk wrap",
+  kafta: "kafta kebab wrap",
+  "shawarma-pollo": "chicken shawarma wrap",
+  "shawarma-carne": "beef shawarma wrap",
+  papas: "loaded roasted potatoes",
+  "higado-encebollado": "liver onions plate",
+  "cafe-turco": "turkish coffee cezve cup",
+  argile: "hookah argile lounge",
+  "dedos-novia": "baklava pistachio pastry",
+  "pizza-zaatar": "zaatar manakish",
+  "pizza-zaatar-queso": "cheese zaatar manakish",
+  "pizza-zaatar-verduras": "vegetable flatbread zaatar",
+  "pizza-kafta": "kafta flatbread",
+  "pizza-queso": "cheese manakish",
+  "pizza-jocoque-verduras": "labneh vegetable flatbread",
+  americano: "americano coffee cup",
+  cappuccino: "cappuccino foam cup",
+  "flat-white": "flat white coffee",
+  espresso: "espresso shot cup",
+  "chocolate-caliente": "hot chocolate cup",
+  "chai-latte": "chai latte spices",
+  matcha: "matcha latte cup",
+  "latte-frio": "iced latte cup",
+  "cafe-frio-16": "iced coffee glass",
+  malteadas: "milkshake glass",
+  "frappe-16": "coffee frappe whipped cream",
+  "smoothie-16": "fruit smoothie glass",
+  "brownie-helado": "brownie ice cream dessert",
+  "croissant-mermelada": "croissant jam plate",
+  "crepa-nutella": "nutella crepe dessert",
+  "crepa-nutella-frutos": "crepe berries nutella",
+  "crepa-jamon-queso": "savory ham cheese crepe",
+  "agua-natural": "water bottle restaurant",
+  jugos: "fresh orange juice glass"
+};
+
+function productImage(id, index) {
+  const query = encodeURIComponent(imageQueries[id] || id.replaceAll("-", " "));
+  return `https://source.unsplash.com/900x700/?${query}&sig=sumi-${index + 1}`;
+}
+
+menuItems.forEach((dish, index) => {
+  dish.photo = productImage(dish.id, index);
+});
+
 let currentLang = "es";
 let currentBrand = "Habibi Bites";
 let currentCategory = "Entradas";
