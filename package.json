@@ -1,7 +1,7 @@
 {
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 8080",
-    "build": "mkdir -p dist && cp index.html styles.css app.js dist/"
+    "build": "node scripts/build.mjs"
   },
   "dependencies": {},
   "devDependencies": {
