@@ -1,20 +1,20 @@
 const photos = {
-  hummus: "https://images.unsplash.com/photo-1577805947697-89e18249d767?auto=format&fit=crop&w=900&q=80",
-  eggs: "https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=900&q=80",
-  shawarma: "https://images.unsplash.com/photo-1603360946369-dc9bb6258143?auto=format&fit=crop&w=900&q=80",
-  coffee: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=900&q=80",
-  turkishCoffee: "https://images.unsplash.com/photo-1601992425387-6826b5330846?auto=format&fit=crop&w=900&q=80",
-  pizza: "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=900&q=80",
-  dessert: "https://images.unsplash.com/photo-1551024506-0bccd828d307?auto=format&fit=crop&w=900&q=80",
-  salad: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80",
-  rice: "https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?auto=format&fit=crop&w=900&q=80",
-  potatoes: "https://images.unsplash.com/photo-1518013431117-eb1465fa5752?auto=format&fit=crop&w=900&q=80",
-  argile: "https://images.unsplash.com/photo-1542444459-db63c59b5956?auto=format&fit=crop&w=900&q=80",
-  coldCoffee: "https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=900&q=80",
-  frappe: "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=900&q=80",
-  smoothie: "https://images.unsplash.com/photo-1505252585461-04db1eb84625?auto=format&fit=crop&w=900&q=80",
-  water: "https://images.unsplash.com/photo-1523362628745-0c100150b504?auto=format&fit=crop&w=900&q=80",
-  croissant: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=900&q=80"
+  hummus: "assets/products/hummus.jpg",
+  eggs: "assets/products/eggs.jpg",
+  shawarma: "assets/products/shawarma.jpg",
+  coffee: "assets/products/coffee.jpg",
+  turkishCoffee: "assets/products/turkishCoffee.jpg",
+  pizza: "assets/products/pizza.jpg",
+  dessert: "assets/products/dessert.jpg",
+  salad: "assets/products/salad.jpg",
+  rice: "assets/products/rice.jpg",
+  potatoes: "assets/products/potatoes.jpg",
+  argile: "assets/products/argile.jpg",
+  coldCoffee: "assets/products/coldCoffee.jpg",
+  frappe: "assets/products/frappe.jpg",
+  smoothie: "assets/products/smoothie.jpg",
+  water: "assets/products/water.jpg",
+  croissant: "assets/products/croissant.jpg"
 };
 
 const categoryOrder = {
