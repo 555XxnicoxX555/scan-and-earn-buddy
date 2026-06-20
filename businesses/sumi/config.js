@@ -247,13 +247,6 @@ menuItems.forEach((dish) => {
   dish.photo = productImage(dish.id);
 });
 
-let currentLang = "es";
-let currentBrand = "Habibi Bites";
-let currentCategory = "Entradas";
-let currentDetailId = "shawarma-carne";
-let pointsBalance = 420;
-let selectedPresentationIndex = 0;
-
 const rewardCatalog = [
   { id: "coffee", name: "Cafe gratis", cost: 120 },
   { id: "dessert", name: "Postre sorpresa", cost: 240 },
@@ -268,6 +261,11 @@ const rewardCatalog = [
     defaultCategory: "Entradas",
     defaultDetailId: "shawarma-carne",
     initialPoints: 420,
+    languages: [
+      { code: "es", label: "Español", helper: "Continuar en español", flag: "mx", dir: "ltr" },
+      { code: "en", label: "English", helper: "Continue in English", flag: "us", dir: "ltr" },
+      { code: "ar", label: "العربية", helper: "متابعة بالعربية", flag: "lb", dir: "rtl" }
+    ],
     recommendedByBrand: {
       "Habibi Bites": "shawarma-carne",
       "Croissant de Lune": "americano"

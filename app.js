@@ -12,6 +12,11 @@ const nameTranslations = businessConfig.nameTranslations;
 const menuItems = businessConfig.menuItems;
 const rewardCatalog = businessConfig.rewardCatalog;
 const brandSwitcher = businessConfig.brandSwitcher || Object.keys(categoryOrder).map((name) => ({ name, labels: {} }));
+const languages = businessConfig.languages || [
+  { code: "es", label: "Español", helper: "Continuar en español", flag: "mx", dir: "ltr" },
+  { code: "en", label: "English", helper: "Continue in English", flag: "us", dir: "ltr" },
+  { code: "ar", label: "العربية", helper: "متابعة بالعربية", flag: "lb", dir: "rtl" }
+];
 
 let currentLang = businessConfig.defaultLang || "es";
 let currentBrand = businessConfig.defaultBrand || brandSwitcher[0]?.name || Object.keys(categoryOrder)[0];
@@ -50,6 +55,7 @@ const addPurchaseButton = document.querySelector("#addPurchaseButton");
 const rewardsButton = document.querySelector("#rewardsButton");
 const earnDetailPoints = document.querySelector("#earnDetailPoints");
 const toast = document.querySelector("#toast");
+const languageOptions = document.querySelector(".language-options");
 
 function setText(selector, value) {
   const element = document.querySelector(selector);
@@ -80,6 +86,21 @@ function applyBusinessShell() {
   setText(".help-box p", businessConfig.admin?.helpText);
   setText(".help-box button", businessConfig.admin?.helpButton);
   setText(".mini-logo", businessConfig.admin?.brandMark);
+
+  languageOptions.innerHTML = languages
+    .map(
+      (language) => `
+        <button class="language-option ${language.code === currentLang ? "selected" : ""}" data-enter-lang="${language.code}" type="button">
+          <span class="flag ${language.flag}" aria-hidden="true"></span>
+          <span dir="${language.dir || "ltr"}">
+            <strong>${language.label}</strong>
+            <small>${language.helper}</small>
+          </span>
+          <i>&rarr;</i>
+        </button>
+      `
+    )
+    .join("");
 
   brandSwitch.innerHTML = brandSwitcher
     .map(
@@ -158,11 +179,12 @@ function recommendedDish() {
 }
 
 function updateHeader() {
+  const language = languages.find((item) => item.code === currentLang);
   restaurantName.textContent = currentBrand;
   restaurantSubtitle.textContent = labels[currentLang].subtitles[currentBrand];
   searchInput.placeholder = labels[currentLang].search;
   document.documentElement.lang = currentLang;
-  document.body.dir = currentLang === "ar" ? "rtl" : "ltr";
+  document.body.dir = language?.dir || "ltr";
 
   brandButtons.forEach((button) => {
     const active = button.dataset.brand === currentBrand;
@@ -278,12 +300,12 @@ function openDetail(id) {
   detailView.classList.add("open");
 }
 
-document.querySelectorAll("[data-enter-lang]").forEach((button) => {
-  button.addEventListener("click", () => {
-    currentLang = button.dataset.enterLang;
-    document.body.classList.remove("landing-active");
-    renderList();
-  });
+languageOptions.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-enter-lang]");
+  if (!button) return;
+  currentLang = button.dataset.enterLang;
+  document.body.classList.remove("landing-active");
+  renderList();
 });
 
 function bindBrandButtons() {
@@ -373,7 +395,7 @@ searchToggle.addEventListener("click", () => {
 });
 
 languageToggle.addEventListener("click", () => {
-  const langs = ["es", "en", "ar"];
+  const langs = languages.map((language) => language.code);
   currentLang = langs[(langs.indexOf(currentLang) + 1) % langs.length];
   renderList();
   if (detailView.classList.contains("open")) openDetail(currentDetailId);

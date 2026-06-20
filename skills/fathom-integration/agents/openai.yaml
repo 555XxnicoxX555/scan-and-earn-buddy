@@ -1,0 +1,7 @@
+interface:
+  display_name: "Fathom Integration"
+  short_description: "Debug Blu Fathom sync and call assignment."
+  default_prompt: "Use $fathom-integration to troubleshoot Blu Analyzer Fathom sync, webhook ingestion, closer assignment, or Revisión Fathom behavior."
+
+policy:
+  allow_implicit_invocation: true

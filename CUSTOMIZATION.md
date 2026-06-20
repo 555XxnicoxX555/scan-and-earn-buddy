@@ -51,6 +51,7 @@ En `businesses/<negocio>/config.js` se editan:
 - `defaultCategory`: categoria inicial.
 - `defaultDetailId`: producto inicial para el detalle.
 - `initialPoints`: puntos de ejemplo para la tarjeta.
+- `languages`: idiomas disponibles, texto del boton, direccion y bandera.
 - `recommendedByBrand`: producto recomendado por marca.
 - `brandSwitcher`: marcas o conceptos visibles en el selector.
 - `landing`: textos de la pantalla inicial.
@@ -267,12 +268,47 @@ negocios:
   HTML; usar entidades HTML o clases CSS estables.
 - Las banderas del selector de idioma deben ser SVGs en `assets/flags/`.
 - Cada idioma nuevo debe agregar su bandera como `assets/flags/<codigo>.svg`.
+- Cada idioma se configura en `languages` con `code`, `label`, `helper`,
+  `flag` y `dir`.
 - La clase CSS de cada bandera debe apuntar al SVG, por ejemplo `.flag.mx`.
 - Antes de entregar una plantilla o negocio nuevo, revisar visualmente que los
   iconos de buscar, idioma, volver, compartir, favorito, navegacion y acciones
   del editor se vean correctamente.
 - Si se agrega una libreria de iconos en el futuro, usar una sola libreria para
   toda la interfaz y documentar esa decision aqui.
+
+Proceso obligatorio de revision UI/UX antes de mostrar al cliente:
+
+1. Revisar landing, menu principal, detalle de producto y cualquier panel editor
+   activo.
+2. Revisar mobile real y desktop con contenedor tipo telefono.
+3. Confirmar que no haya overflow horizontal de pagina.
+4. Confirmar que botones icon-only tengan `aria-label`.
+5. Confirmar que iconos de buscar, idioma, volver, compartir, favorito,
+   navegacion y acciones del editor no dependan de caracteres corruptibles.
+6. Confirmar que las banderas carguen desde `assets/flags/`.
+7. Confirmar que el idioma seleccionado cambie textos y direccion del documento
+   cuando aplique.
+8. Si una pantalla usa assets placeholder, confirmar que no tengan texto
+   incrustado que compita con la UI final.
+
+## Skills del proyecto
+
+Si el repo incluye una carpeta `skills/`, se debe tratar como parte del sistema
+operativo de la plantilla:
+
+- No ejecutar scripts de skills sin revisarlos antes.
+- Validar que cada skill tenga `SKILL.md` con frontmatter `name` y
+  `description`.
+- Revisar red flags antes de instalar o copiar una skill: `curl`, `wget`,
+  `sudo`, acceso a credenciales, `.env`, `.ssh`, `.aws`, instrucciones para
+  ignorar reglas o comandos destructivos.
+- Corregir codificacion rota o mojibake antes de versionar una skill.
+- Mantener instrucciones concisas; mover referencias largas a `references/`.
+- Si una skill trae instaladores externos, conservarlos solo si son necesarios y
+  nunca ejecutarlos automaticamente.
+- Despues de actualizar skills, correr una validacion local de estructura y
+  dejar reporte de hallazgos pendientes.
 
 ### 6. Idiomas y traducciones
 
