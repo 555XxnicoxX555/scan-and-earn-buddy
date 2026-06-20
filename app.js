@@ -1,262 +1,24 @@
-const photos = {
-  hummus: "assets/products/hummus.jpg",
-  eggs: "assets/products/eggs.jpg",
-  shawarma: "assets/products/shawarma.jpg",
-  coffee: "assets/products/coffee.jpg",
-  turkishCoffee: "assets/products/turkishCoffee.jpg",
-  pizza: "assets/products/pizza.jpg",
-  dessert: "assets/products/dessert.jpg",
-  salad: "assets/products/salad.jpg",
-  rice: "assets/products/rice.jpg",
-  potatoes: "assets/products/potatoes.jpg",
-  argile: "assets/products/argile.jpg",
-  coldCoffee: "assets/products/coldCoffee.jpg",
-  frappe: "assets/products/frappe.jpg",
-  smoothie: "assets/products/smoothie.jpg",
-  water: "assets/products/water.jpg",
-  croissant: "assets/products/croissant.jpg"
-};
+const businessConfig = window.SUMI_BUSINESS_CONFIG;
 
-const categoryOrder = {
-  "Habibi Bites": ["Entradas", "Desayunos", "Comida Rapida", "Argile & Cafe", "Pizzas Libanesas"],
-  "Croissant de Lune": ["Cafe", "Cafe Frio", "Frappe", "Smoothies", "Dulces Tentaciones", "Bebidas"]
-};
-
-const labels = {
-  es: {
-    recommended: "Hoy te recomendamos",
-    search: "Buscar en el menu",
-    results: "Resultados",
-    dishes: "platillos",
-    choose: "Elige tu presentacion",
-    pairings: "Va perfecto con",
-    badge: "Mas pedido",
-    loyalty: "Tarjeta Sumi",
-    addPurchase: "Sumar compra",
-    rewards: "Ver premios",
-    earnDetail: "Sumar puntos por esta compra",
-    qrEarned: "QR escaneado",
-    purchaseEarned: "Compra registrada",
-    redeemed: "Premio solicitado",
-    bronze: "Nivel Bronce",
-    silver: "Nivel Plata",
-    gold: "Nivel Oro",
-    subtitles: { "Habibi Bites": "Comida libanesa", "Croissant de Lune": "Cafe & postres" }
-  },
-  en: {
-    recommended: "Today we recommend",
-    search: "Search menu",
-    results: "Results",
-    dishes: "items",
-    choose: "Choose a presentation",
-    pairings: "Perfect with",
-    badge: "Best seller",
-    loyalty: "Sumi Card",
-    addPurchase: "Add purchase",
-    rewards: "Rewards",
-    earnDetail: "Earn points for this order",
-    qrEarned: "QR scanned",
-    purchaseEarned: "Purchase registered",
-    redeemed: "Reward requested",
-    bronze: "Bronze Level",
-    silver: "Silver Level",
-    gold: "Gold Level",
-    subtitles: { "Habibi Bites": "Lebanese food", "Croissant de Lune": "Coffee & desserts" }
-  },
-  ar: {
-    recommended: "نوصي اليوم",
-    search: "ابحث في القائمة",
-    results: "نتائج",
-    dishes: "أطباق",
-    choose: "اختر التقديم",
-    pairings: "يناسب معه",
-    badge: "الأكثر طلبا",
-    loyalty: "بطاقة Sumi",
-    addPurchase: "إضافة شراء",
-    rewards: "المكافآت",
-    earnDetail: "اكسب نقاط هذه الطلبية",
-    qrEarned: "تم مسح QR",
-    purchaseEarned: "تم تسجيل الشراء",
-    redeemed: "تم طلب المكافأة",
-    bronze: "المستوى البرونزي",
-    silver: "المستوى الفضي",
-    gold: "المستوى الذهبي",
-    subtitles: { "Habibi Bites": "طعام لبناني", "Croissant de Lune": "قهوة وحلويات" }
-  }
-};
-
-const categoryLabels = {
-  es: {
-    "Comida Rapida": "Comida Rápida",
-    "Argile & Cafe": "Argile & Café",
-    "Pizzas Libanesas": "Pizzas Libanesas",
-    Cafe: "Café",
-    "Cafe Frio": "Café Frío",
-    Frappe: "Frappé",
-    "Dulces Tentaciones": "Dulces Tentaciones"
-  },
-  en: {
-    Entradas: "Starters",
-    Desayunos: "Breakfast",
-    "Comida Rapida": "Fast Food",
-    "Argile & Cafe": "Argile & Coffee",
-    "Pizzas Libanesas": "Lebanese Pizzas",
-    Cafe: "Coffee",
-    "Cafe Frio": "Cold Coffee",
-    Frappe: "Frappe",
-    Smoothies: "Smoothies",
-    "Dulces Tentaciones": "Sweet Treats",
-    Bebidas: "Drinks"
-  },
-  ar: {
-    Entradas: "مقبلات",
-    Desayunos: "فطور",
-    "Comida Rapida": "وجبات سريعة",
-    "Argile & Cafe": "أركيلة وقهوة",
-    "Pizzas Libanesas": "مناقيش لبنانية",
-    Cafe: "قهوة",
-    "Cafe Frio": "قهوة باردة",
-    Frappe: "فرابيه",
-    Smoothies: "سموذي",
-    "Dulces Tentaciones": "حلويات",
-    Bebidas: "مشروبات"
-  }
-};
-
-const descriptionTranslations = {
-  en: {
-    "Hummus tradicional con tahini, limon y aceite de oliva extra virgen.": "Traditional hummus with tahini, lemon and extra virgin olive oil.",
-    "Hummus suave, carne molida especiada, pinones tostados y aceite de oliva.": "Smooth hummus, spiced ground beef, toasted pine nuts and olive oil.",
-    "Jocoque cremoso con aceite de oliva y zaatar fresco.": "Creamy labneh with olive oil and fresh zaatar.",
-    "Jocoque mezclado con ajo machacado y aceite de oliva.": "Labneh mixed with crushed garlic and olive oil.",
-    "Carne de res marinada, cebolla, perejil, jitomate, tahini y reduccion de granada.": "Marinated beef, onion, parsley, tomato, tahini and pomegranate reduction.",
-    "Espresso doble con agua caliente. Cuerpo limpio y aroma intenso.": "Double espresso with hot water. Clean body and intense aroma."
-  },
-  ar: {
-    "Hummus tradicional con tahini, limon y aceite de oliva extra virgen.": "حمص تقليدي مع طحينة وليمون وزيت زيتون.",
-    "Hummus suave, carne molida especiada, pinones tostados y aceite de oliva.": "حمص ناعم مع لحم متبل وصنوبر وزيت زيتون.",
-    "Jocoque cremoso con aceite de oliva y zaatar fresco.": "لبنة كريمية مع زيت زيتون وزعتر.",
-    "Jocoque mezclado con ajo machacado y aceite de oliva.": "لبنة مع ثوم مهروس وزيت زيتون.",
-    "Carne de res marinada, cebolla, perejil, jitomate, tahini y reduccion de granada.": "لحم بقري متبل مع بصل وبقدونس وطماطم وطحينة ودبس رمان.",
-    "Espresso doble con agua caliente. Cuerpo limpio y aroma intenso.": "إسبريسو مزدوج مع ماء ساخن ونكهة قوية."
-  }
-};
-
-const nameTranslations = {
-  es: {
-    "Cafe Turco": "Café Turco",
-    "Cafe Frio 16 oz": "Café Frío 16 oz",
-    "Higado encebollado": "Hígado encebollado",
-    "Pina, jugo verde o naranja, exprimido al momento.": "Piña, jugo verde o naranja, exprimido al momento."
-  },
-  en: {
-    "Hummus con carne": "Hummus with Beef",
-    "Papas asadas": "Roasted Potatoes",
-    "Ensalada Libanesa": "Lebanese Salad",
-    "Arroz con fideos": "Rice with Vermicelli",
-    "Huevo a la cazuela": "Baked Eggs",
-    "Shawarma de carne": "Beef Shawarma",
-    "Shawarma de pollo": "Chicken Shawarma",
-    "Cafe Turco": "Turkish Coffee",
-    "Cafe Frio 16 oz": "Iced Coffee 16 oz",
-    "Chocolate caliente": "Hot Chocolate",
-    "Jugos naturales": "Fresh Juices",
-    "Agua natural": "Still Water"
-  },
-  ar: {
-    Hummus: "حمص",
-    "Hummus con carne": "حمص باللحم",
-    Jocoque: "لبنة",
-    "Jocoque con ajo": "لبنة بالثوم",
-    "Papas asadas": "بطاطا مشوية",
-    "Ensalada Libanesa": "سلطة لبنانية",
-    "Arroz con fideos": "أرز بالشعيرية",
-    "Shawarma de carne": "شاورما لحم",
-    "Shawarma de pollo": "شاورما دجاج",
-    "Cafe Turco": "قهوة تركية",
-    Americano: "أمريكانو",
-    Cappuccino: "كابتشينو",
-    Espresso: "إسبريسو"
-  }
-};
-
-function item(id, brand, category, name, description, presentations, photo) {
-  return { id, brand, category, name, description, presentations, photo, visible: true };
+if (!businessConfig) {
+  throw new Error("Missing SUMI_BUSINESS_CONFIG. Load a business config before app.js.");
 }
 
-const wrapOptions = [
-  { name: "Pan arabe", price: 145, note: "Envuelto, para llevar" },
-  { name: "Tabliye", price: 185, note: "Sobre pan tabliye crujiente" },
-  { name: "Plato", price: 210, note: "Servido en plato con guarnicion" }
-];
+const categoryOrder = businessConfig.categoryOrder;
+const labels = businessConfig.labels;
+const categoryLabels = businessConfig.categoryLabels;
+const descriptionTranslations = businessConfig.descriptionTranslations;
+const nameTranslations = businessConfig.nameTranslations;
+const menuItems = businessConfig.menuItems;
+const rewardCatalog = businessConfig.rewardCatalog;
+const brandSwitcher = businessConfig.brandSwitcher || Object.keys(categoryOrder).map((name) => ({ name, labels: {} }));
 
-const menuItems = [
-  item("hummus", "Habibi Bites", "Entradas", "Hummus", "Hummus tradicional con tahini, limon y aceite de oliva extra virgen.", [{ name: "Plato", price: 120 }], photos.hummus),
-  item("hummus-carne", "Habibi Bites", "Entradas", "Hummus con carne", "Hummus suave, carne molida especiada, pinones tostados y aceite de oliva.", [{ name: "Plato", price: 175 }], photos.hummus),
-  item("jocoque", "Habibi Bites", "Entradas", "Jocoque", "Jocoque cremoso con aceite de oliva y zaatar fresco.", [{ name: "Plato", price: 120 }], photos.hummus),
-  item("jocoque-ajo", "Habibi Bites", "Entradas", "Jocoque con ajo", "Jocoque mezclado con ajo machacado y aceite de oliva.", [{ name: "Plato", price: 130 }], photos.hummus),
-  item("papas-asadas", "Habibi Bites", "Entradas", "Papas asadas", "Papas asadas con crema de ajo y especias libanesas.", [{ name: "Plato", price: 120 }], photos.potatoes),
-  item("ensalada-libanesa", "Habibi Bites", "Entradas", "Ensalada Libanesa", "Mezcla fresca de jitomate, pepino, perejil, hierbabuena y limon.", [{ name: "Plato", price: 125 }], photos.salad),
-  item("arroz-fideos", "Habibi Bites", "Entradas", "Arroz con fideos", "Arroz blanco con fideos tostados, clasico libanes.", [{ name: "Plato", price: 100 }], photos.rice),
-  item("huevo-cazuela", "Habibi Bites", "Desayunos", "Huevo a la cazuela", "Huevos cocidos en cazuela con aceite de oliva y especias.", [{ name: "Plato", price: 110 }], photos.eggs),
-  item("huevo-cazuela-morron-jocoque", "Habibi Bites", "Desayunos", "Huevo a la cazuela con morron y jocoque", "Huevos a la cazuela con morron asado y jocoque cremoso.", [{ name: "Plato", price: 135 }], photos.eggs),
-  item("taouk", "Habibi Bites", "Comida Rapida", "Taouk", "Pollo marinado, papas asadas, ensalada de col, pepinillos, crema de ajo.", wrapOptions, photos.shawarma),
-  item("kafta", "Habibi Bites", "Comida Rapida", "Kafta", "Mezcla de carne, hummus, mayonesa, jitomate, perejil, cebolla.", wrapOptions, photos.shawarma),
-  item("shawarma-pollo", "Habibi Bites", "Comida Rapida", "Shawarma de pollo", "Pollo marinado 24 horas en especias libanesas, lechuga fresca, papas asadas, pepinillos en escabeche, crema de ajo picante y reduccion de granada.", wrapOptions, photos.shawarma),
-  item("shawarma-carne", "Habibi Bites", "Comida Rapida", "Shawarma de carne", "Carne de res marinada, cebolla, perejil, jitomate, tahini y reduccion de granada.", wrapOptions, photos.shawarma),
-  item("papas", "Habibi Bites", "Comida Rapida", "Papas", "Papas asadas, crema de ajo, ensalada de col, catsup.", [{ name: "Plato", price: 125 }], photos.potatoes),
-  item("higado-encebollado", "Habibi Bites", "Comida Rapida", "Higado encebollado", "Higado preparado a la libanesa, hierbabuena, jitomate, crema de ajo.", wrapOptions, photos.shawarma),
-  item("cafe-turco", "Habibi Bites", "Argile & Cafe", "Cafe Turco", "Cafe turco molido fino, servido en taza pequena o jarra.", [{ name: "Taza", price: 55 }, { name: "Jarra", price: 85 }], photos.turkishCoffee),
-  item("argile", "Habibi Bites", "Argile & Cafe", "Argile", "Doble manzana, sandia-menta o limon-menta.", [{ name: "Servicio", price: 300 }], photos.argile),
-  item("dedos-novia", "Habibi Bites", "Argile & Cafe", "Dedos de novia", "Pasta filo rellena de pistache y nueces, banada en almibar de azahar.", [{ name: "1 pieza", price: 40 }, { name: "3 piezas", price: 100 }, { name: "Medio kilo", price: 400 }], photos.dessert),
-  item("pizza-zaatar", "Habibi Bites", "Pizzas Libanesas", "Pizza Zaatar", "Masa libanesa al horno con mezcla zaatar y aceite de oliva.", [{ name: "Individual", price: 120 }], photos.pizza),
-  item("pizza-zaatar-queso", "Habibi Bites", "Pizzas Libanesas", "Pizza Zaatar con queso", "Masa libanesa con zaatar, aceite de oliva y queso fundido.", [{ name: "Individual", price: 150 }], photos.pizza),
-  item("pizza-zaatar-verduras", "Habibi Bites", "Pizzas Libanesas", "Pizza Zaatar con verduras", "Pizza zaatar con jitomate, pepino, lechuga y aceitunas.", [{ name: "Individual", price: 135 }], photos.pizza),
-  item("pizza-kafta", "Habibi Bites", "Pizzas Libanesas", "Pizza Kafta", "Masa libanesa con kafta de carne molida y cebolla.", [{ name: "Individual", price: 160 }], photos.pizza),
-  item("pizza-queso", "Habibi Bites", "Pizzas Libanesas", "Pizza de queso", "Masa libanesa con queso fundido al horno.", [{ name: "Individual", price: 125 }], photos.pizza),
-  item("pizza-jocoque-verduras", "Habibi Bites", "Pizzas Libanesas", "Pizza Jocoque con verduras", "Masa libanesa con jocoque cremoso, jitomate, pepino y aceitunas.", [{ name: "Individual", price: 130 }], photos.pizza),
-  item("americano", "Croissant de Lune", "Cafe", "Americano", "Espresso doble con agua caliente. Cuerpo limpio y aroma intenso.", [{ name: "Taza", price: 60 }], photos.coffee),
-  item("cappuccino", "Croissant de Lune", "Cafe", "Cappuccino", "Espresso con leche vaporizada y espuma cremosa.", [{ name: "Taza", price: 70 }], photos.coffee),
-  item("flat-white", "Croissant de Lune", "Cafe", "Flat White", "Doble espresso con microespuma sedosa.", [{ name: "Taza", price: 75 }], photos.coffee),
-  item("espresso", "Croissant de Lune", "Cafe", "Espresso", "Shot puro de cafe molido en el momento.", [{ name: "Shot", price: 45 }], photos.coffee),
-  item("chocolate-caliente", "Croissant de Lune", "Cafe", "Chocolate caliente", "Chocolate fundido con leche vaporizada.", [{ name: "Taza", price: 80 }], photos.coffee),
-  item("chai-latte", "Croissant de Lune", "Cafe", "Chai Latte", "Te chai especiado con leche vaporizada.", [{ name: "Taza", price: 95 }], photos.coffee),
-  item("matcha", "Croissant de Lune", "Cafe", "Matcha", "Te matcha ceremonial con leche vaporizada.", [{ name: "Taza", price: 95 }], photos.coffee),
-  item("latte-frio", "Croissant de Lune", "Cafe Frio", "Latte 16 oz", "Latte frio 16 oz. Sabores: sencillo, caramelo, vainilla, avellana, mocha, cajeta y mas.", [{ name: "16 oz", price: 85 }], photos.coldCoffee),
-  item("cafe-frio-16", "Croissant de Lune", "Cafe Frio", "Cafe Frio 16 oz", "Cafe frio con sabores: sencillo, caramelo, vainilla, avellana, mocha, toffee, oreo.", [{ name: "16 oz", price: 90 }], photos.coldCoffee),
-  item("malteadas", "Croissant de Lune", "Cafe Frio", "Malteadas 16 oz", "Sabores: fresa, lotus, oreo, chocolate, caramelo salado, vainilla, frutos rojos.", [{ name: "16 oz", price: 90 }], photos.coldCoffee),
-  item("frappe-16", "Croissant de Lune", "Frappe", "Frappe 16 oz", "Frappe con sabores: sencillo, caramelo, salado, crema irlandesa, vainilla, avellana, mocha, toffee, oreo.", [{ name: "16 oz", price: 90 }], photos.frappe),
-  item("smoothie-16", "Croissant de Lune", "Smoothies", "Smoothies 16 oz", "Sabores: pina colada, mango, fresa, mora azul, durazno-maracuya, limonada de frutos rojos, mango-fresa.", [{ name: "16 oz", price: 95 }], photos.smoothie),
-  item("brownie-helado", "Croissant de Lune", "Dulces Tentaciones", "Brownie con helado", "Brownie tibio con bola de helado de vainilla.", [{ name: "Postre", price: 100 }], photos.dessert),
-  item("croissant-mermelada", "Croissant de Lune", "Dulces Tentaciones", "Croissant con mermelada", "Croissant horneado en casa con mermelada artesanal.", [{ name: "Pieza", price: 65 }], photos.croissant),
-  item("crepa-nutella", "Croissant de Lune", "Dulces Tentaciones", "Crepa de Nutella con lechera", "Crepa francesa rellena de Nutella y lechera.", [{ name: "Postre", price: 125 }], photos.dessert),
-  item("crepa-nutella-frutos", "Croissant de Lune", "Dulces Tentaciones", "Crepa de Nutella con frutos rojos", "Crepa con Nutella y mezcla de frutos rojos frescos.", [{ name: "Postre", price: 155 }], photos.dessert),
-  item("crepa-jamon-queso", "Croissant de Lune", "Dulces Tentaciones", "Crepa de jamon con queso", "Crepa salada con jamon y queso fundido.", [{ name: "Plato", price: 135 }], photos.dessert),
-  item("agua-natural", "Croissant de Lune", "Bebidas", "Agua natural", "Botella 600 ml.", [{ name: "600 ml", price: 35 }], photos.water),
-  item("jugos", "Croissant de Lune", "Bebidas", "Jugos naturales", "Pina, jugo verde o naranja, exprimido al momento.", [{ name: "Vaso", price: 70 }], photos.smoothie)
-];
-
-function productImage(id) {
-  return `assets/menu/${id}.png`;
-}
-
-menuItems.forEach((dish) => {
-  dish.photo = productImage(dish.id);
-});
-
-let currentLang = "es";
-let currentBrand = "Habibi Bites";
-let currentCategory = "Entradas";
-let currentDetailId = "shawarma-carne";
-let pointsBalance = 420;
+let currentLang = businessConfig.defaultLang || "es";
+let currentBrand = businessConfig.defaultBrand || brandSwitcher[0]?.name || Object.keys(categoryOrder)[0];
+let currentCategory = businessConfig.defaultCategory || categoryOrder[currentBrand]?.[0];
+let currentDetailId = businessConfig.defaultDetailId || menuItems[0]?.id;
+let pointsBalance = businessConfig.initialPoints || 0;
 let selectedPresentationIndex = 0;
-
-const rewardCatalog = [
-  { id: "coffee", name: "Cafe gratis", cost: 120 },
-  { id: "dessert", name: "Postre sorpresa", cost: 240 },
-  { id: "shawarma", name: "Shawarma 2x1", cost: 520 }
-];
-
 const dishList = document.querySelector("#dishList");
 const searchInput = document.querySelector("#searchInput");
 const categoryStrip = document.querySelector("#categoryStrip");
@@ -271,7 +33,8 @@ const detailDescription = document.querySelector("#detailDescription");
 const detailOptions = document.querySelector("#detailOptions");
 const pairings = document.querySelector("#pairings");
 const recommendedCard = document.querySelector("#recommendedCard");
-const brandButtons = document.querySelectorAll("[data-brand]");
+const brandSwitch = document.querySelector(".brand-switch");
+let brandButtons = document.querySelectorAll("[data-brand]");
 const restaurantName = document.querySelector(".restaurant-lockup strong");
 const restaurantSubtitle = document.querySelector(".restaurant-lockup span");
 const searchToggle = document.querySelector("#searchToggle");
@@ -287,6 +50,49 @@ const addPurchaseButton = document.querySelector("#addPurchaseButton");
 const rewardsButton = document.querySelector("#rewardsButton");
 const earnDetailPoints = document.querySelector("#earnDetailPoints");
 const toast = document.querySelector("#toast");
+
+function setText(selector, value) {
+  const element = document.querySelector(selector);
+  if (element && value) element.textContent = value;
+}
+
+function applyBusinessShell() {
+  document.title = businessConfig.appTitle || document.title;
+
+  setText(".venue", businessConfig.landing?.venue);
+  setText(".seal-art", businessConfig.landing?.sealMark);
+  setText(".logo-seal strong", businessConfig.landing?.primaryName);
+  setText(".logo-seal span", businessConfig.landing?.secondaryName);
+  setText(".language-screen h2", businessConfig.landing?.partnerName);
+  setText(".cuisine", businessConfig.landing?.cuisine);
+  document.querySelector(".logo-seal")?.setAttribute("aria-label", businessConfig.landing?.sealLabel || "");
+
+  const footerItems = document.querySelectorAll(".language-footer > div");
+  businessConfig.landing?.footer?.forEach((item, index) => {
+    setText(`.language-footer > div:nth-child(${index + 1}) strong`, item.title);
+    setText(`.language-footer > div:nth-child(${index + 1}) span`, item.text);
+  });
+
+  setText(".brand-mark", businessConfig.admin?.brandMark);
+  setText(".brand strong", businessConfig.admin?.brandName);
+  setText(".brand span", businessConfig.admin?.ownerLabel);
+  setText(".help-box h3", businessConfig.admin?.helpTitle);
+  setText(".help-box p", businessConfig.admin?.helpText);
+  setText(".help-box button", businessConfig.admin?.helpButton);
+  setText(".mini-logo", businessConfig.admin?.brandMark);
+
+  brandSwitch.innerHTML = brandSwitcher
+    .map(
+      (brand) => `
+        <button class="${brand.name === currentBrand ? "active" : ""}" data-brand="${brand.name}" type="button">
+          <strong>${brand.name}</strong>
+          <span>${brand.labels?.[currentLang] || brand.name}</span>
+        </button>
+      `
+    )
+    .join("");
+  brandButtons = document.querySelectorAll("[data-brand]");
+}
 
 function localCategory(category) {
   return categoryLabels[currentLang]?.[category] || category;
@@ -347,9 +153,8 @@ function renderLoyalty() {
 }
 
 function recommendedDish() {
-  return currentBrand === "Habibi Bites"
-    ? menuItems.find((dish) => dish.id === "shawarma-carne")
-    : menuItems.find((dish) => dish.id === "americano");
+  const recommendedId = businessConfig.recommendedByBrand?.[currentBrand] || currentItems()[0]?.id;
+  return menuItems.find((dish) => dish.id === recommendedId) || currentItems()[0];
 }
 
 function updateHeader() {
@@ -362,8 +167,8 @@ function updateHeader() {
   brandButtons.forEach((button) => {
     const active = button.dataset.brand === currentBrand;
     button.classList.toggle("active", active);
-    button.querySelector("span").textContent =
-      button.dataset.brand === "Habibi Bites" ? (currentLang === "en" ? "Lebanese" : "Libanes") : "Cafe & Desayunos";
+    const brand = brandSwitcher.find((item) => item.name === button.dataset.brand);
+    button.querySelector("span").textContent = brand?.labels?.[currentLang] || button.dataset.brand;
   });
 }
 
@@ -481,14 +286,16 @@ document.querySelectorAll("[data-enter-lang]").forEach((button) => {
   });
 });
 
-brandButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    currentBrand = button.dataset.brand;
-    currentCategory = categoryOrder[currentBrand][0];
-    searchInput.value = "";
-    renderList();
+function bindBrandButtons() {
+  brandButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      currentBrand = button.dataset.brand;
+      currentCategory = categoryOrder[currentBrand][0];
+      searchInput.value = "";
+      renderList();
+    });
   });
-});
+}
 
 categoryStrip.addEventListener("click", (event) => {
   const button = event.target.closest("[data-category]");
@@ -572,4 +379,6 @@ languageToggle.addEventListener("click", () => {
   if (detailView.classList.contains("open")) openDetail(currentDetailId);
 });
 
+applyBusinessShell();
+bindBrandButtons();
 renderList();

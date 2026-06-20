@@ -12,3 +12,4 @@ for (const file of ["index.html", "styles.css", "app.js"]) {
 }
 
 cpSync(join(root, "assets"), join(dist, "assets"), { recursive: true });
+cpSync(join(root, "businesses"), join(dist, "businesses"), { recursive: true });

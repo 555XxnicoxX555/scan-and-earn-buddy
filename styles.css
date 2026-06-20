@@ -1028,16 +1028,20 @@ body:not(.landing-active) .language-screen {
   height: 40px;
   border-radius: 5px;
   box-shadow: 0 8px 14px rgba(0, 0, 0, 0.24);
-  overflow: hidden;
-  display: inline-block;
-  flex: 0 0 auto;
-  background: #1a120a;
+  background-position: center;
+  background-size: cover;
 }
 
-.flag svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+.flag.mx {
+  background-image: url("assets/flags/mx.svg");
+}
+
+.flag.us {
+  background-image: url("assets/flags/us.svg");
+}
+
+.flag.lb {
+  background-image: url("assets/flags/lb.svg");
 }
 
 .language-footer {
@@ -1244,19 +1248,62 @@ body.landing-active .detail-view {
   line-height: 1;
 }
 
-.menu-tools button .icon,
-.detail-back .icon,
-.detail-actions button .icon {
-  width: 18px;
-  height: 18px;
+.search-icon,
+.globe-icon {
+  position: relative;
+  width: 17px;
+  height: 17px;
   display: block;
+  flex: 0 0 auto;
 }
 
-.customer-search .icon {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  color: #b9ad98;
+.search-icon::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  width: 10px;
+  height: 10px;
+  border: 1.8px solid currentColor;
+  border-radius: 50%;
+}
+
+.search-icon::after {
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 2px;
+  width: 7px;
+  height: 1.8px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: rotate(45deg);
+  transform-origin: center;
+}
+
+.globe-icon {
+  border: 1.8px solid currentColor;
+  border-radius: 50%;
+}
+
+.globe-icon::before,
+.globe-icon::after {
+  content: "";
+  position: absolute;
+  inset: 3px 0;
+  margin: auto;
+  border: 1.5px solid currentColor;
+  border-top: 0;
+  border-bottom: 0;
+  border-radius: 50%;
+}
+
+.globe-icon::after {
+  inset: 7px 2px auto;
+  height: 1.5px;
+  border: 0;
+  border-radius: 0;
+  background: currentColor;
 }
 
 .back-icon,
