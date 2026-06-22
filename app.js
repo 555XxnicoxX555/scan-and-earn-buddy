@@ -266,7 +266,7 @@ async function loadCustomerData(session = currentSession, options = {}) {
       .eq("customer_id", profile.id)
       .eq("business_id", businessId)
       .order("created_at", { ascending: false })
-      .limit(6)
+      .limit(30)
   ]);
 
   if (accountError) throw accountError;
