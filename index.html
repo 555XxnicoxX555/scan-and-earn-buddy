@@ -7,6 +7,84 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="landing-active">
+    <svg class="icon-sprite" aria-hidden="true" focusable="false">
+      <symbol id="icon-home" viewBox="0 0 24 24">
+        <path d="M3 10.5 12 3l9 7.5" />
+        <path d="M5 9.5V21h14V9.5" />
+        <path d="M9 21v-7h6v7" />
+      </symbol>
+      <symbol id="icon-menu" viewBox="0 0 24 24">
+        <path d="M4 7h16" />
+        <path d="M4 12h16" />
+        <path d="M4 17h16" />
+      </symbol>
+      <symbol id="icon-spark" viewBox="0 0 24 24">
+        <path d="M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9L12 3Z" />
+        <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z" />
+      </symbol>
+      <symbol id="icon-library" viewBox="0 0 24 24">
+        <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z" />
+        <path d="M8 4v16" />
+        <path d="M11 8h5" />
+      </symbol>
+      <symbol id="icon-settings" viewBox="0 0 24 24">
+        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+        <path d="M19.4 15a1.8 1.8 0 0 0 .4 2l.1.1-2 3.4-.2-.1a1.8 1.8 0 0 0-2.1.3l-.4.3-3.2-1.8v-.5a1.8 1.8 0 0 0-1.4-1.7l-.5-.1-1.1-3.6.4-.3a1.8 1.8 0 0 0 .6-2l-.2-.5 2.4-2.8.5.2a1.8 1.8 0 0 0 2-.5l.3-.4 3.5 1.2v.5a1.8 1.8 0 0 0 1.2 1.7l.5.2v3.9l-.5.2Z" />
+      </symbol>
+      <symbol id="icon-image" viewBox="0 0 24 24">
+        <path d="M4 5h16v14H4z" />
+        <path d="m4 16 4.5-4.5L12 15l2-2 6 6" />
+        <path d="M15.5 9.5h.01" />
+      </symbol>
+      <symbol id="icon-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m16.5 16.5 4 4" />
+      </symbol>
+      <symbol id="icon-language" viewBox="0 0 24 24">
+        <path d="M4 5h9" />
+        <path d="M9 3v2c0 4.4-2.2 7.8-5 9.6" />
+        <path d="M5 9c1.4 2.4 3.4 4.2 6 5.2" />
+        <path d="M13 21l4.5-10L22 21" />
+        <path d="M14.5 18h6" />
+      </symbol>
+      <symbol id="icon-arrow-left" viewBox="0 0 24 24">
+        <path d="M19 12H5" />
+        <path d="m12 19-7-7 7-7" />
+      </symbol>
+      <symbol id="icon-share" viewBox="0 0 24 24">
+        <circle cx="18" cy="5" r="3" />
+        <circle cx="6" cy="12" r="3" />
+        <circle cx="18" cy="19" r="3" />
+        <path d="m8.6 10.7 6.8-4.4" />
+        <path d="m8.6 13.3 6.8 4.4" />
+      </symbol>
+      <symbol id="icon-heart" viewBox="0 0 24 24">
+        <path d="M20.8 5.6a5.1 5.1 0 0 0-7.2 0L12 7.2l-1.6-1.6a5.1 5.1 0 1 0-7.2 7.2L12 21l8.8-8.2a5.1 5.1 0 0 0 0-7.2Z" />
+      </symbol>
+      <symbol id="icon-qr" viewBox="0 0 24 24">
+        <path d="M4 4h6v6H4z" />
+        <path d="M14 4h6v6h-6z" />
+        <path d="M4 14h6v6H4z" />
+        <path d="M14 14h2v2h-2z" />
+        <path d="M18 14h2v6h-4v-2h2z" />
+      </symbol>
+      <symbol id="icon-user" viewBox="0 0 24 24">
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21a8 8 0 0 1 16 0" />
+      </symbol>
+      <symbol id="icon-mail" viewBox="0 0 24 24">
+        <path d="M4 6h16v12H4z" />
+        <path d="m4 7 8 6 8-6" />
+      </symbol>
+      <symbol id="icon-lock" viewBox="0 0 24 24">
+        <path d="M6 10h12v10H6z" />
+        <path d="M8 10V8a4 4 0 0 1 8 0v2" />
+      </symbol>
+      <symbol id="icon-x" viewBox="0 0 24 24">
+        <path d="m6 6 12 12" />
+        <path d="m18 6-12 12" />
+      </symbol>
+    </svg>
     <section class="language-screen" id="languageScreen" aria-label="Seleccion de idioma">
       <div class="language-ornament"></div>
       <p class="venue">Hipodromo Condesa &middot; CDMX</p>
@@ -63,6 +141,69 @@
       </footer>
     </section>
 
+    <section class="signup-modal" id="signupModal" role="dialog" aria-modal="true" aria-labelledby="signupTitle" hidden>
+      <div class="signup-backdrop" data-signup-close></div>
+      <div class="signup-dialog">
+        <div class="signup-hero">
+        <p class="signup-kicker" id="signupKicker">Tarjeta Sumi</p>
+        <h1 id="signupTitle">Registrate y empieza a ganar puntos</h1>
+        <button class="signup-close" id="signupClose" type="button" aria-label="Cerrar registro">
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+        </button>
+        <p id="signupText">Crea tu cuenta, guarda tus visitas y desbloquea premios cada vez que compras.</p>
+        <div class="signup-points" aria-hidden="true">
+          <strong>+40</strong>
+          <span>pts</span>
+        </div>
+        </div>
+
+        <form class="signup-form" id="signupForm">
+        <label class="signup-field">
+          <span id="signupNameLabel">Nombre</span>
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+          <input id="signupName" name="name" type="text" autocomplete="name" required />
+        </label>
+        <label class="signup-field">
+          <span id="signupEmailLabel">Gmail</span>
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-mail"></use></svg>
+          <input id="signupEmail" name="email" type="email" inputmode="email" autocomplete="email" required />
+        </label>
+        <label class="signup-field">
+          <span id="signupPasswordLabel">Contraseña</span>
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
+          <input id="signupPassword" name="password" type="password" autocomplete="new-password" minlength="6" required />
+        </label>
+        <label class="signup-field">
+          <span id="signupConfirmLabel">Repetir contraseña</span>
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
+          <input id="signupConfirm" name="confirm" type="password" autocomplete="new-password" minlength="6" required />
+        </label>
+        <p class="signup-error" id="signupError" role="alert"></p>
+          <button class="signup-submit" id="signupSubmit" type="submit">Crear cuenta</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="qr-modal" id="qrModal" role="dialog" aria-modal="true" aria-labelledby="qrTitle" hidden>
+      <div class="signup-backdrop" data-qr-close></div>
+      <div class="qr-dialog">
+        <button class="signup-close qr-close" id="qrClose" type="button" aria-label="Cerrar QR">
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+        </button>
+        <p class="qr-kicker" id="qrKicker">Mis puntos</p>
+        <h1 id="qrTitle">QR de cliente recurrente</h1>
+        <p id="qrText">Muestra este codigo al empleado al finalizar tu consumo para acreditar tus puntos.</p>
+        <div class="qr-frame">
+          <canvas id="customerQrCanvas" width="192" height="192" aria-label="QR unico de cliente"></canvas>
+        </div>
+        <p class="qr-customer">
+          <span id="qrCustomerLabel">ID de cliente</span>
+          <strong id="qrCustomerId">SUMI-CLIENTE</strong>
+        </p>
+        <p class="qr-error" id="qrError" role="alert"></p>
+      </div>
+    </section>
+
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">HB</div>
@@ -74,24 +215,24 @@
 
       <nav class="nav">
         <a href="#" class="nav-item">
-          <span class="nav-icon">&#8962;</span>
+          <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>
           Inicio
         </a>
         <a href="#" class="nav-item active">
-          <span class="nav-icon">&#9776;</span>
+          <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
           Mi menu
         </a>
         <a href="#" class="nav-item">
-          <span class="nav-icon">&#10022;</span>
+          <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
           Crear contenido
           <small>IA</small>
         </a>
         <a href="#" class="nav-item">
-          <span class="nav-icon">&#9638;</span>
+          <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-library"></use></svg>
           Mi biblioteca
         </a>
         <a href="#" class="nav-item">
-          <span class="nav-icon">&#9881;</span>
+          <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-settings"></use></svg>
           Ajustes
         </a>
       </nav>
@@ -113,8 +254,15 @@
           </div>
         </div>
         <div class="menu-tools">
-          <button id="searchToggle" aria-label="Buscar"><span class="search-icon"></span></button>
-          <button id="languageToggle" aria-label="Cambiar idioma"><span class="globe-icon"></span></button>
+          <button class="signup-cta" id="signupCta" type="button">
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+            <span id="signupCtaText">Ganar puntos</span>
+          </button>
+          <button id="languageToggle" aria-label="Cambiar idioma">
+            <span class="header-flag flag mx" id="currentLanguageFlag" aria-hidden="true"></span>
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-language"></use></svg>
+          </button>
+          <button id="searchToggle" aria-label="Buscar"><svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg></button>
         </div>
       </header>
 
@@ -133,15 +281,15 @@
 
       <section class="loyalty-card" aria-label="Puntos Sumi">
         <div class="loyalty-top">
-          <div>
-            <span id="loyaltyKicker">Tarjeta Sumi</span>
-            <strong><span id="pointsBalance">420</span> pts</strong>
+          <div class="loyalty-copy">
+            <span id="loyaltyKicker">Mis puntos</span>
+            <strong class="points-metric"><span id="pointsBalance">420</span><small>pts</small></strong>
           </div>
-          <button id="scanQrButton" type="button">QR</button>
+          <button id="scanQrButton" type="button" aria-label="Mostrar QR de cliente"><svg class="ui-icon" aria-hidden="true"><use href="#icon-qr"></use></svg></button>
         </div>
         <div class="level-row">
-          <span id="levelName">Nivel Bronce</span>
-          <span id="nextReward">80 pts para Plata</span>
+          <span class="level-pill" id="levelName">Nivel Bronce</span>
+          <span class="level-next" id="nextReward">80 pts para Plata</span>
         </div>
         <div class="level-track">
           <span id="levelProgress"></span>
@@ -173,7 +321,7 @@
           <span id="categoryCount">0 platillos</span>
         </div>
         <label class="customer-search">
-          <span>⌕</span>
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
           <input id="searchInput" type="search" placeholder="Buscar en el menu" />
         </label>
         <div id="dishList" class="customer-dish-list"></div>
@@ -182,10 +330,10 @@
 
     <section class="detail-view" id="detailView" aria-label="Detalle del producto">
       <div class="detail-hero" id="detailPhoto">
-        <button class="detail-back" id="detailBack" aria-label="Volver"><span class="back-icon"></span></button>
+        <button class="detail-back" id="detailBack" aria-label="Volver"><svg class="ui-icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg></button>
         <div class="detail-actions">
-          <button aria-label="Compartir"><span class="share-icon"></span></button>
-          <button aria-label="Favorito"><span class="heart-icon"></span></button>
+          <button id="shareButton" type="button" aria-label="Compartir"><svg class="ui-icon" aria-hidden="true"><use href="#icon-share"></use></svg></button>
+          <button id="favoriteButton" type="button" aria-label="Favorito" aria-pressed="false"><svg class="ui-icon" aria-hidden="true"><use href="#icon-heart"></use></svg></button>
         </div>
       </div>
 
@@ -212,7 +360,7 @@
     <section class="editor" id="editorPanel" aria-label="Editor de producto">
       <div class="editor-scroll">
         <header class="editor-hero">
-          <button class="ghost" id="backButton">&larr; Volver al menu</button>
+          <button class="ghost" id="backButton" type="button"><svg class="ui-icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg> Volver al menu</button>
           <h2 id="editorTitle">Cafe Turco</h2>
           <p><span class="dot"></span> Visible en el menu &middot; Ultima edicion: hoy 14:22 por Karim</p>
         </header>
@@ -225,7 +373,7 @@
                   <h3>Nombre y descripcion</h3>
                   <p>Edita cada idioma. La IA puede traducir el resto.</p>
                 </div>
-                <button class="outline" id="translateButton">&#10022; Traducir con IA</button>
+                <button class="outline" id="translateButton" type="button"><svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg> Traducir con IA</button>
               </div>
 
               <div class="tabs" role="tablist">
@@ -255,7 +403,7 @@
                   <h3>Presentaciones y precios</h3>
                   <p>Hasta tres tamanos o estilos.</p>
                 </div>
-                <button class="outline" id="addPresentationButton">+ Agregar</button>
+                <button class="outline" id="addPresentationButton" type="button">+ Agregar</button>
               </div>
               <div id="presentations" class="presentations"></div>
             </section>
@@ -264,8 +412,8 @@
           <aside class="editor-side">
             <section class="photo-card">
               <div id="dishPhoto" class="dish-photo"></div>
-              <button class="photo-button">&#9639; Cambiar foto</button>
-              <button class="ai-photo">&#10022; Mejorar con IA</button>
+              <button class="photo-button" type="button"><svg class="ui-icon" aria-hidden="true"><use href="#icon-image"></use></svg> Cambiar foto</button>
+              <button class="ai-photo" type="button"><svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg> Mejorar con IA</button>
             </section>
 
             <section class="panel compact">
@@ -289,6 +437,6 @@
     </section>
 
     <script src="businesses/sumi/config.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

@@ -271,6 +271,9 @@ negocios:
 - Cada idioma se configura en `languages` con `code`, `label`, `helper`,
   `flag` y `dir`.
 - La clase CSS de cada bandera debe apuntar al SVG, por ejemplo `.flag.mx`.
+- El boton de idioma del header usa `languages[].flag` para mostrar la bandera
+  activa; si se agrega un idioma, confirmar que ese asset tambien se vea en el
+  header del catalogo.
 - Antes de entregar una plantilla o negocio nuevo, revisar visualmente que los
   iconos de buscar, idioma, volver, compartir, favorito, navegacion y acciones
   del editor se vean correctamente.
@@ -291,6 +294,14 @@ Proceso obligatorio de revision UI/UX antes de mostrar al cliente:
    cuando aplique.
 8. Si una pantalla usa assets placeholder, confirmar que no tengan texto
    incrustado que compita con la UI final.
+9. Confirmar que controles tactiles importantes midan al menos 44px de alto o
+   ancho.
+10. Confirmar foco visible en teclado y soporte de `prefers-reduced-motion`.
+11. Confirmar estado vacio para busquedas sin resultados.
+12. Mantener escape de textos que vienen de `config.js` cuando se renderizan con
+   `innerHTML`.
+13. Confirmar que el registro de puntos sea un CTA opcional del header y no una
+   pantalla obligatoria para entrar al menu.
 
 ## Skills del proyecto
 
@@ -323,15 +334,44 @@ operativo de la plantilla:
 ### 7. Puntos, premios y fidelizacion
 
 - La tarjeta de puntos estara activa?
+- El registro de puntos se mostrara como CTA en el header?
 - Nombre del programa de puntos:
 - Puntos iniciales de ejemplo:
 - Regla de acumulacion por compra:
-- Regla de acumulacion por QR:
+- Regla de acumulacion por consumo cargado por empleado:
+- QR de cliente activo? El QR de la plantilla identifica al cliente; no acredita puntos desde el frontend.
 - Premios disponibles:
 - Costo en puntos por premio:
 - Condiciones de canje:
 - Niveles deseados: Bronce, Plata, Oro u otros:
 - Umbrales de cada nivel:
+
+#### Flujo QR de cliente
+
+En la plantilla estatica, el icono QR de la tarjeta de puntos abre un modal con
+un QR unico local del cliente. Ese QR contiene un payload v1 con:
+
+- `type`: `sumi-loyalty-customer`
+- `version`: `1`
+- `businessId`: el `businessId` del negocio
+- `customerId`: ID local persistido en `localStorage`
+
+Este QR sirve para demostrar el flujo al negocio: el cliente termina de consumir,
+muestra el QR al empleado, y el empleado lo escanea para identificar a quien debe
+acreditarse el consumo.
+
+Para produccion con backend, no se deben acreditar puntos desde el frontend del
+cliente. El flujo recomendado es:
+
+1. El QR apunta a un token o ID validable por backend.
+2. El empleado escanea el QR desde un panel autorizado.
+3. El empleado carga importe, productos o consumo.
+4. El backend calcula creditos, guarda el movimiento y actualiza el saldo.
+5. El cliente ve sus puntos actualizados al sincronizar datos.
+
+Si se conecta Supabase, definir tablas para clientes, movimientos de puntos,
+consumos, reglas de acumulacion y canjes. El `business_id` debe separar los datos
+de cada negocio.
 
 ### 8. Datos, Supabase y persistencia
 
