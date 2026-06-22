@@ -70,3 +70,55 @@ El registro de cliente debe crear automaticamente:
 - Cliente logeado: ve `Mis puntos`, QR, perfil e historial.
 - El frontend cliente no acredita puntos.
 - El QR identifica al cliente; la carga de consumos queda para panel empleado/admin.
+
+## 5. Emails de Auth con Resend
+
+La Edge Function de emails esta en:
+
+```text
+supabase/functions/auth-email-hook/index.ts
+```
+
+Secrets necesarios en Supabase:
+
+- `RESEND_API_KEY`
+- `RESEND_FROM_EMAIL`
+
+Para pruebas se puede usar:
+
+```text
+Sumi <onboarding@resend.dev>
+```
+
+Cuando el dominio del negocio este verificado en Resend, cambiar
+`RESEND_FROM_EMAIL` por un remitente propio, por ejemplo:
+
+```text
+Sumi <hola@dominio-del-negocio.com>
+```
+
+Desplegar la funcion:
+
+```powershell
+npx supabase functions deploy auth-email-hook --project-ref <project-ref> --no-verify-jwt
+```
+
+Activar manualmente en Supabase:
+
+1. Ir a `Authentication > Auth Hooks`.
+2. Agregar un hook de tipo `Send Email`.
+3. Elegir `HTTPS endpoint`.
+4. Usar este endpoint:
+
+```text
+https://<project-ref>.supabase.co/functions/v1/auth-email-hook
+```
+
+5. Guardar y dejar el hook `Enabled`.
+
+La funcion maneja estos eventos:
+
+- `signup`: confirmacion de cuenta.
+- `recovery`: recuperacion de contrasena.
+- `invite`: invitacion.
+- `email_change`: confirmacion de nuevo email.
