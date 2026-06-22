@@ -393,10 +393,13 @@
           <button id="profileQrButton" type="button">QR de cliente recurrente</button>
           <button id="profileLogoutButton" type="button">Cerrar sesion</button>
         </div>
-        <section class="profile-history">
-          <h2 id="profileHistoryTitle">Historial reciente</h2>
+        <details class="profile-history" id="profileHistory">
+          <summary>
+            <span id="profileHistoryTitle">Historial reciente</span>
+            <span class="profile-history-count" id="profileHistoryCount">0</span>
+          </summary>
           <div id="profileHistoryList"></div>
-        </section>
+        </details>
       </div>
     </section>
 

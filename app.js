@@ -103,6 +103,7 @@ const profileEmail = document.querySelector("#profileEmail");
 const profilePoints = document.querySelector("#profilePoints");
 const profileLevel = document.querySelector("#profileLevel");
 const profileHistoryList = document.querySelector("#profileHistoryList");
+const profileHistoryCount = document.querySelector("#profileHistoryCount");
 const profileQrButton = document.querySelector("#profileQrButton");
 const profileLogoutButton = document.querySelector("#profileLogoutButton");
 let lastSignupTrigger = null;
@@ -180,7 +181,12 @@ function isAuthenticated() {
 function displayError(error) {
   if (!error) return labels[currentLang].authGenericError;
   if (typeof error === "string") return error;
-  return error.message || labels[currentLang].authGenericError;
+  const message = error.message ? String(error.message).trim() : "";
+  if (message && message !== "{}") return message;
+  if (error.status === 500 || error.name === "AuthRetryableFetchError") {
+    return labels[currentLang].authEmailDeliveryError || labels[currentLang].authGenericError;
+  }
+  return labels[currentLang].authGenericError;
 }
 
 function tierLabel(tier) {
@@ -663,6 +669,7 @@ function renderProfile() {
   profileEmail.textContent = profile.email || currentSession.user.email || "";
   profilePoints.textContent = account.points_balance || 0;
   profileLevel.textContent = level.name;
+  profileHistoryCount.textContent = currentCustomer.events.length;
   profileHistoryList.innerHTML = currentCustomer.events.length
     ? currentCustomer.events
         .map((event) => {

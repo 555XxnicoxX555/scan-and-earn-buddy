@@ -103,6 +103,11 @@ Para pruebas se puede usar:
 Sumi <onboarding@resend.dev>
 ```
 
+Importante: `onboarding@resend.dev` funciona solo en modo prueba. Resend puede
+enviar unicamente al email verificado/dueño de la cuenta de Resend. Si se intenta
+registrar cualquier otro Gmail, Supabase Auth fallara porque el hook no puede
+entregar el correo de confirmacion.
+
 Cuando el dominio del negocio este verificado en Resend, cambiar
 `RESEND_FROM_EMAIL` por un remitente propio, por ejemplo:
 
