@@ -1194,9 +1194,9 @@ body:not(.landing-active) .language-screen {
   z-index: 74;
   width: min(100vw, 430px);
   display: grid;
-  align-items: end;
+  place-items: center;
   padding: 18px;
-  overflow: hidden;
+  overflow: auto;
   transform: translateX(-50%);
 }
 
@@ -1335,17 +1335,18 @@ body:not(.landing-active) .language-screen {
 .profile-sheet {
   position: relative;
   z-index: 1;
-  width: 100%;
+  width: min(100%, 394px);
+  margin: auto;
   max-height: min(680px, calc(100dvh - 34px));
-  padding: 18px;
+  padding: 20px;
   overflow: auto;
   border: 1px solid rgba(255, 137, 10, 0.34);
-  border-radius: 28px 28px 18px 18px;
+  border-radius: 28px 28px 20px 20px;
   background:
     radial-gradient(circle at 86% 10%, rgba(255, 137, 10, 0.2), transparent 30%),
     linear-gradient(180deg, var(--pumpkin-50), var(--pumpkin-100));
   color: var(--pumpkin-950);
-  box-shadow: 0 -22px 58px rgba(0, 0, 0, 0.44);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
   scrollbar-width: none;
 }
 
@@ -1369,7 +1370,7 @@ body:not(.landing-active) .language-screen {
 }
 
 .profile-sheet h1 {
-  margin: 0 54px 16px 0;
+  margin: 0 58px 16px 0;
   color: var(--pumpkin-950);
   font-size: 30px;
   line-height: 1;
@@ -1378,7 +1379,8 @@ body:not(.landing-active) .language-screen {
 .profile-identity {
   min-height: 70px;
   padding: 12px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   border: 1px solid rgba(204, 83, 2, 0.16);
@@ -1389,7 +1391,6 @@ body:not(.landing-active) .language-screen {
 .profile-avatar {
   width: 46px;
   height: 46px;
-  flex: 0 0 auto;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -1400,11 +1401,13 @@ body:not(.landing-active) .language-screen {
 .profile-avatar .ui-icon {
   width: 20px;
   height: 20px;
+  display: block;
 }
 
 .profile-identity strong,
 .profile-identity span {
   display: block;
+  min-width: 0;
 }
 
 .profile-identity strong {

@@ -77,6 +77,10 @@ El registro de cliente debe crear automaticamente:
 - Cliente logeado: ve `Mis puntos`, QR, perfil e historial.
 - El frontend cliente no acredita puntos.
 - El QR identifica al cliente; la carga de consumos queda para panel empleado/admin.
+- `loyalty_accounts.public_qr_id` es unico, se genera automaticamente con
+  `gen_random_uuid()` y es el ID real que viaja dentro del QR.
+- El texto visible debajo del QR usa formato `Nombre-1234`; es solo un alias
+  legible derivado del `public_qr_id`, no una columna ni una credencial.
 
 ## 5. Emails de Auth con Resend
 

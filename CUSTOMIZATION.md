@@ -360,6 +360,11 @@ esta registrado o logeado. El icono QR abre un modal con el `public_qr_id` de la
 cuenta de fidelizacion del cliente. Si el proyecto se corre sin Supabase, puede
 existir un ID local solo como fallback de demostracion.
 
+Debajo del QR se muestra un alias legible para el cliente, con formato
+`Nombre-1234`. Ese alias se calcula en el frontend usando el nombre del perfil y
+un sufijo estable derivado del `public_qr_id`. No reemplaza al identificador real
+del backend y no debe usarse como fuente de verdad para acreditar puntos.
+
 El QR contiene un payload v1 con:
 
 - `type`: `sumi-loyalty-customer`

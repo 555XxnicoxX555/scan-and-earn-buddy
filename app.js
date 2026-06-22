@@ -104,7 +104,6 @@ const profilePoints = document.querySelector("#profilePoints");
 const profileLevel = document.querySelector("#profileLevel");
 const profileHistoryList = document.querySelector("#profileHistoryList");
 const profileQrButton = document.querySelector("#profileQrButton");
-const profileHistoryButton = document.querySelector("#profileHistoryButton");
 const profileLogoutButton = document.querySelector("#profileLogoutButton");
 let lastSignupTrigger = null;
 let lastQrTrigger = null;
@@ -150,8 +149,19 @@ function getCustomerId() {
   }
 }
 
-function shortCustomerId(customerId) {
-  return `${businessId.toUpperCase()}-${customerId.replace(/-/g, "").slice(0, 10).toUpperCase()}`;
+function numericCustomerSuffix(customerId) {
+  const normalized = String(customerId || "").replace(/-/g, "");
+  let hash = 0;
+  for (const character of normalized) {
+    hash = (hash * 31 + character.charCodeAt(0)) % 10000;
+  }
+  return String(hash).padStart(4, "0");
+}
+
+function visibleCustomerAlias(customerId) {
+  const profileName = currentCustomer?.profile?.name || currentSession?.user?.user_metadata?.name || "Cliente";
+  const firstName = String(profileName).trim().split(/\s+/)[0] || "Cliente";
+  return `${firstName}-${numericCustomerSuffix(customerId)}`;
 }
 
 function customerQrPayload(customerId) {
@@ -358,7 +368,6 @@ function updateProfileShell() {
   setText("#profileTitle", label.profileTitle || "Perfil de cliente");
   setText("#profilePointsLabel", label.profilePointsLabel || "Puntos disponibles");
   setText("#profileQrButton", label.profileQr || "QR de cliente recurrente");
-  setText("#profileHistoryButton", label.profileHistory || "Historial de puntos");
   setText("#profileLogoutButton", label.profileLogout || "Cerrar sesion");
   setText("#profileHistoryTitle", label.profileHistory || "Historial de puntos");
   profileClose?.setAttribute("aria-label", label.profileClose || "Cerrar perfil");
@@ -394,7 +403,7 @@ function updateQrShell() {
 async function renderCustomerQr() {
   const customerId = activeQrId();
   const label = labels[currentLang];
-  qrCustomerId.textContent = shortCustomerId(customerId);
+  qrCustomerId.textContent = visibleCustomerAlias(customerId);
   qrError.textContent = "";
 
   try {
@@ -829,10 +838,6 @@ profileModal.addEventListener("click", (event) => {
 profileQrButton.addEventListener("click", () => {
   closeProfileModal();
   openQrModal(profileQrButton);
-});
-
-profileHistoryButton.addEventListener("click", () => {
-  profileHistoryList.scrollIntoView({ block: "center", behavior: "smooth" });
 });
 
 profileLogoutButton.addEventListener("click", async () => {
