@@ -1,7 +1,8 @@
 {
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 8080",
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "check:supabase": "node scripts/check-supabase.mjs"
   },
   "devDependencies": {
     "vite": "^8.0.16"

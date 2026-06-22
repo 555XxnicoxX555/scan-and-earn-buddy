@@ -48,6 +48,15 @@ Despues de aplicar la migracion, estas tablas deben existir:
 - `point_events`
 - `reward_redemptions`
 
+Verificar desde el repo:
+
+```powershell
+npm run check:supabase
+```
+
+Si devuelve `missing (404)`, la migracion todavia no fue aplicada al proyecto
+configurado en `.env`.
+
 El registro de cliente debe crear automaticamente:
 
 - Un usuario en Supabase Auth.
