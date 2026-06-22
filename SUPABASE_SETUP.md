@@ -83,6 +83,7 @@ Secrets necesarios en Supabase:
 
 - `RESEND_API_KEY`
 - `RESEND_FROM_EMAIL`
+- `AUTH_HOOK_SECRET`
 
 Para pruebas se puede usar:
 
@@ -114,7 +115,9 @@ Activar manualmente en Supabase:
 https://<project-ref>.supabase.co/functions/v1/auth-email-hook
 ```
 
-5. Guardar y dejar el hook `Enabled`.
+5. Click en `Generate secret`.
+6. Guardar el secret generado como `AUTH_HOOK_SECRET` en Supabase secrets.
+7. Guardar y dejar el hook `Enabled`.
 
 La funcion maneja estos eventos:
 

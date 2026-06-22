@@ -1,6 +1,7 @@
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const RESEND_FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "Sumi <onboarding@resend.dev>";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const AUTH_HOOK_SECRET = Deno.env.get("AUTH_HOOK_SECRET");
 
 type EmailAction = "signup" | "recovery" | "invite" | "email_change" | string;
 
@@ -31,6 +32,66 @@ function escapeHtml(value: unknown) {
       "'": "&#39;"
     };
     return entities[character];
+  });
+}
+
+function base64ToBytes(value: string) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function bytesToBase64(bytes: ArrayBuffer) {
+  const byteArray = new Uint8Array(bytes);
+  let binary = "";
+  for (const byte of byteArray) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function timingSafeEqual(left: string, right: string) {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  if (leftBytes.length !== rightBytes.length) return false;
+
+  let diff = 0;
+  for (let index = 0; index < leftBytes.length; index += 1) {
+    diff |= leftBytes[index] ^ rightBytes[index];
+  }
+  return diff === 0;
+}
+
+function signingKey(secret: string) {
+  const value = secret.startsWith("v1,") ? secret.slice(3) : secret;
+  return value.startsWith("whsec_") ? value.slice(6) : value;
+}
+
+async function verifyWebhookSignature(req: Request, body: string) {
+  if (!AUTH_HOOK_SECRET) return true;
+
+  const webhookId = req.headers.get("webhook-id");
+  const timestamp = req.headers.get("webhook-timestamp");
+  const signatureHeader = req.headers.get("webhook-signature");
+  if (!webhookId || !timestamp || !signatureHeader) return false;
+
+  const timestampNumber = Number(timestamp);
+  if (!Number.isFinite(timestampNumber)) return false;
+
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - timestampNumber) > 300) return false;
+
+  const signedContent = `${webhookId}.${timestamp}.${body}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    base64ToBytes(signingKey(AUTH_HOOK_SECRET)),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = bytesToBase64(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signedContent)));
+  const candidates = signatureHeader.split(" ").map((item) => item.trim()).filter(Boolean);
+
+  return candidates.some((candidate) => {
+    const value = candidate.startsWith("v1,") ? candidate.slice(3) : candidate;
+    return timingSafeEqual(value, signature);
   });
 }
 
@@ -152,7 +213,16 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const payload = (await req.json()) as AuthEmailPayload;
+    const body = await req.text();
+    const isValidSignature = await verifyWebhookSignature(req, body);
+    if (!isValidSignature) {
+      return new Response(JSON.stringify({ error: "Invalid webhook signature" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    const payload = JSON.parse(body) as AuthEmailPayload;
     const email = payload.user?.email;
     const emailData = payload.email_data;
 
