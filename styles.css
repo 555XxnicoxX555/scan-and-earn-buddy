@@ -1389,6 +1389,7 @@ body:not(.landing-active) .language-screen {
 }
 
 .profile-avatar {
+  position: relative;
   width: 46px;
   height: 46px;
   display: grid;
@@ -1398,10 +1399,30 @@ body:not(.landing-active) .language-screen {
   color: var(--pumpkin-950);
 }
 
-.profile-avatar .ui-icon {
+.profile-avatar::before,
+.profile-avatar::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  box-sizing: border-box;
+  transform: translateX(-50%);
+}
+
+.profile-avatar::before {
+  top: 11px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.profile-avatar::after {
+  top: 24px;
   width: 20px;
-  height: 20px;
-  display: block;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
 }
 
 .profile-identity strong,
