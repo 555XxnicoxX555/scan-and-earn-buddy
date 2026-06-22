@@ -4,6 +4,13 @@ Este proyecto esta pensado como una app base replicable para varios negocios.
 La regla principal es simple: el motor de la app vive en `app.js`, `styles.css`
 e `index.html`; los datos de cada negocio viven en `businesses/<negocio>/`.
 
+Para una implementacion completa de cliente con Supabase, Resend, Auth Hooks,
+deploy y pruebas, leer primero:
+
+```text
+CLIENT_IMPLEMENTATION_RUNBOOK.md
+```
+
 ## Que editar para un nuevo negocio
 
 Para crear una nueva version:

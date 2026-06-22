@@ -3,6 +3,13 @@
 Esta plantilla usa Supabase Auth para clientes y tablas privadas para la tarjeta
 de puntos. El catalogo sigue siendo publico.
 
+Para implementar un cliente nuevo de punta a punta, incluyendo Resend, Auth
+Hooks, URLs publicas, deploy y checklist de pruebas, leer tambien:
+
+```text
+CLIENT_IMPLEMENTATION_RUNBOOK.md
+```
+
 ## 1. Variables requeridas
 
 Crear o actualizar `.env` con valores publicos del proyecto:
