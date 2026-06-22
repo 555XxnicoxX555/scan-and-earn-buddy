@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import QRCode from "qrcode";
 
 const businessConfig = window.SUMI_BUSINESS_CONFIG;
@@ -14,6 +15,16 @@ const nameTranslations = businessConfig.nameTranslations;
 const menuItems = businessConfig.menuItems;
 const rewardCatalog = businessConfig.rewardCatalog;
 const businessId = businessConfig.businessId || "business";
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true
+      }
+    })
+  : null;
 const brandSwitcher = businessConfig.brandSwitcher || Object.keys(categoryOrder).map((name) => ({ name, labels: {} }));
 const languages = businessConfig.languages || [
   { code: "es", label: "Espanol", helper: "Continuar en espanol", flag: "mx", dir: "ltr" },
@@ -27,6 +38,8 @@ let currentCategory = businessConfig.defaultCategory || categoryOrder[currentBra
 let currentDetailId = businessConfig.defaultDetailId || menuItems[0]?.id;
 let pointsBalance = businessConfig.initialPoints || 0;
 let selectedPresentationIndex = 0;
+let currentSession = null;
+let currentCustomer = null;
 const favoriteItems = new Set();
 const dishList = document.querySelector("#dishList");
 const searchInput = document.querySelector("#searchInput");
@@ -52,6 +65,8 @@ const searchToggle = document.querySelector("#searchToggle");
 const languageToggle = document.querySelector("#languageToggle");
 const currentLanguageFlag = document.querySelector("#currentLanguageFlag");
 const signupCta = document.querySelector("#signupCta");
+const profileToggle = document.querySelector("#profileToggle");
+const loyaltyCard = document.querySelector(".loyalty-card");
 const pointsBalanceEl = document.querySelector("#pointsBalance");
 const loyaltyKicker = document.querySelector("#loyaltyKicker");
 const levelName = document.querySelector("#levelName");
@@ -80,8 +95,19 @@ const qrClose = document.querySelector("#qrClose");
 const customerQrCanvas = document.querySelector("#customerQrCanvas");
 const qrError = document.querySelector("#qrError");
 const qrCustomerId = document.querySelector("#qrCustomerId");
+const profileModal = document.querySelector("#profileModal");
+const profileClose = document.querySelector("#profileClose");
+const profileName = document.querySelector("#profileName");
+const profileEmail = document.querySelector("#profileEmail");
+const profilePoints = document.querySelector("#profilePoints");
+const profileLevel = document.querySelector("#profileLevel");
+const profileHistoryList = document.querySelector("#profileHistoryList");
+const profileQrButton = document.querySelector("#profileQrButton");
+const profileHistoryButton = document.querySelector("#profileHistoryButton");
+const profileLogoutButton = document.querySelector("#profileLogoutButton");
 let lastSignupTrigger = null;
 let lastQrTrigger = null;
+let lastProfileTrigger = null;
 let signupMode = "register";
 const customerStorageKey = `sumi:loyalty:${businessId}:customerId`;
 
@@ -134,6 +160,121 @@ function customerQrPayload(customerId) {
     businessId,
     customerId
   });
+}
+
+function isAuthenticated() {
+  return Boolean(currentSession?.user && currentCustomer?.profile && currentCustomer?.account);
+}
+
+function displayError(error) {
+  if (!error) return labels[currentLang].authGenericError;
+  if (typeof error === "string") return error;
+  return error.message || labels[currentLang].authGenericError;
+}
+
+function tierLabel(tier) {
+  const normalized = String(tier || "bronze").toLowerCase();
+  const tierMap = {
+    bronze: labels[currentLang].bronze,
+    silver: labels[currentLang].silver,
+    gold: labels[currentLang].gold,
+    platinum: labels[currentLang].platinum || "Nivel Platino"
+  };
+  return tierMap[normalized] || tierMap.bronze;
+}
+
+function activeQrId() {
+  return currentCustomer?.account?.public_qr_id || getCustomerId();
+}
+
+function authRedirectUrl() {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function formatEventDate(dateValue) {
+  try {
+    return new Intl.DateTimeFormat(currentLang === "en" ? "en-US" : "es-MX", {
+      day: "2-digit",
+      month: "short"
+    }).format(new Date(dateValue));
+  } catch {
+    return "";
+  }
+}
+
+async function loadCustomerData(session = currentSession, options = {}) {
+  if (!supabase || !session?.user) {
+    currentCustomer = null;
+    pointsBalance = 0;
+    return null;
+  }
+
+  const retries = options.retries || 0;
+  let profile = null;
+  let profileError = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const result = await supabase
+      .from("customer_profiles")
+      .select("*")
+      .eq("auth_user_id", session.user.id)
+      .eq("business_id", businessId)
+      .maybeSingle();
+    profile = result.data;
+    profileError = result.error;
+    if (profile || profileError || attempt === retries) break;
+    await wait(350);
+  }
+
+  if (profileError) throw profileError;
+  if (!profile) {
+    currentCustomer = null;
+    pointsBalance = 0;
+    return null;
+  }
+
+  const [{ data: account, error: accountError }, { data: events, error: eventsError }] = await Promise.all([
+    supabase
+      .from("loyalty_accounts")
+      .select("*")
+      .eq("customer_id", profile.id)
+      .eq("business_id", businessId)
+      .maybeSingle(),
+    supabase
+      .from("point_events")
+      .select("*")
+      .eq("customer_id", profile.id)
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(6)
+  ]);
+
+  if (accountError) throw accountError;
+  if (eventsError) throw eventsError;
+
+  currentCustomer = {
+    profile,
+    account,
+    events: events || []
+  };
+  pointsBalance = account?.points_balance || 0;
+  return currentCustomer;
+}
+
+function renderAuthState() {
+  const authenticated = isAuthenticated();
+  if (loyaltyCard) loyaltyCard.hidden = !authenticated;
+  if (signupCta) signupCta.hidden = authenticated;
+  if (profileToggle) {
+    profileToggle.hidden = !authenticated;
+    profileToggle.setAttribute("aria-label", labels[currentLang].profileButtonLabel || "Abrir perfil");
+  }
 }
 
 function applyBusinessShell() {
@@ -207,6 +348,19 @@ function updateSignupShell() {
   signupClose?.setAttribute("aria-label", label.signupClose || "Cerrar registro");
 }
 
+function updateProfileShell() {
+  const label = labels[currentLang];
+  setText("#profileKicker", label.profileKicker || "Mi cuenta");
+  setText("#profileTitle", label.profileTitle || "Perfil de cliente");
+  setText("#profilePointsLabel", label.profilePointsLabel || "Puntos disponibles");
+  setText("#profileQrButton", label.profileQr || "QR de cliente recurrente");
+  setText("#profileHistoryButton", label.profileHistory || "Historial de puntos");
+  setText("#profileLogoutButton", label.profileLogout || "Cerrar sesion");
+  setText("#profileHistoryTitle", label.profileHistory || "Historial de puntos");
+  profileClose?.setAttribute("aria-label", label.profileClose || "Cerrar perfil");
+  profileToggle?.setAttribute("aria-label", label.profileButtonLabel || "Abrir perfil");
+}
+
 function setSignupMode(mode) {
   signupMode = mode;
   signupError.textContent = "";
@@ -234,7 +388,7 @@ function updateQrShell() {
 }
 
 async function renderCustomerQr() {
-  const customerId = getCustomerId();
+  const customerId = activeQrId();
   const label = labels[currentLang];
   qrCustomerId.textContent = shortCustomerId(customerId);
   qrError.textContent = "";
@@ -271,7 +425,8 @@ function currentItems() {
 }
 
 function currentLevel() {
-  if (pointsBalance >= 1000) return { name: labels[currentLang].gold, next: null, floor: 1000, target: 1000 };
+  if (pointsBalance >= 2000) return { name: labels[currentLang].platinum || "Nivel Platino", next: null, floor: 2000, target: 2000 };
+  if (pointsBalance >= 1000) return { name: labels[currentLang].gold, next: labels[currentLang].platinum || "Nivel Platino", floor: 1000, target: 2000 };
   if (pointsBalance >= 500) return { name: labels[currentLang].silver, next: labels[currentLang].gold, floor: 500, target: 1000 };
   return { name: labels[currentLang].bronze, next: labels[currentLang].silver, floor: 0, target: 500 };
 }
@@ -281,12 +436,6 @@ function showToast(message) {
   toast.classList.add("show");
   window.clearTimeout(showToast.timeout);
   showToast.timeout = window.setTimeout(() => toast.classList.remove("show"), 2200);
-}
-
-function addPoints(amount, reason) {
-  pointsBalance += amount;
-  renderLoyalty();
-  showToast(`${reason}: +${amount} pts`);
 }
 
 function openSignupModal(trigger = signupCta) {
@@ -307,6 +456,10 @@ function closeSignupModal() {
 }
 
 function openQrModal(trigger = scanQrButton) {
+  if (!isAuthenticated()) {
+    openSignupModal(trigger);
+    return;
+  }
   lastQrTrigger = trigger;
   qrModal.hidden = false;
   document.body.classList.add("qr-open");
@@ -320,6 +473,24 @@ function closeQrModal() {
   document.body.classList.remove("qr-open");
   qrError.textContent = "";
   lastQrTrigger?.focus();
+}
+
+function openProfileModal(trigger = profileToggle) {
+  if (!isAuthenticated()) {
+    openSignupModal(trigger);
+    return;
+  }
+  lastProfileTrigger = trigger;
+  renderProfile();
+  profileModal.hidden = false;
+  document.body.classList.add("profile-open");
+  window.requestAnimationFrame(() => profileClose.focus());
+}
+
+function closeProfileModal() {
+  profileModal.hidden = true;
+  document.body.classList.remove("profile-open");
+  lastProfileTrigger?.focus();
 }
 
 function trapModalFocus(modal, event) {
@@ -347,7 +518,14 @@ function trapQrFocus(event) {
   trapModalFocus(qrModal, event);
 }
 
+function trapProfileFocus(event) {
+  trapModalFocus(profileModal, event);
+}
+
 function renderLoyalty() {
+  renderAuthState();
+  if (!isAuthenticated()) return;
+  pointsBalance = currentCustomer.account?.points_balance || 0;
   const level = currentLevel();
   const progress = level.target === level.floor ? 100 : Math.min(100, ((pointsBalance - level.floor) / (level.target - level.floor)) * 100);
   loyaltyKicker.textContent = labels[currentLang].loyalty;
@@ -386,6 +564,7 @@ function updateHeader() {
     currentLanguageFlag.className = `header-flag flag ${language.flag}`;
   }
   languageToggle?.setAttribute("aria-label", `${labels[currentLang].changeLanguage || "Cambiar idioma"}: ${language?.label || currentLang}`);
+  renderAuthState();
 
   brandButtons.forEach((button) => {
     const active = button.dataset.brand === currentBrand;
@@ -434,6 +613,7 @@ function renderList() {
   renderCategories();
   renderRecommendation();
   renderLoyalty();
+  renderProfile();
   updateHeader();
 
   categoryTitle.textContent = query ? labels[currentLang].results : localCategory(currentCategory);
@@ -456,6 +636,84 @@ function renderList() {
         })
         .join("")
     : `<div class="empty-state" role="status">${escapeHtml(labels[currentLang].empty || "No hay productos para mostrar.")}</div>`;
+}
+
+function renderProfile() {
+  updateProfileShell();
+  renderAuthState();
+  if (!isAuthenticated()) return;
+
+  const profile = currentCustomer.profile;
+  const account = currentCustomer.account;
+  const level = currentLevel();
+  profileName.textContent = profile.name || labels[currentLang].profileTitle || "Cliente";
+  profileEmail.textContent = profile.email || currentSession.user.email || "";
+  profilePoints.textContent = account.points_balance || 0;
+  profileLevel.textContent = level.name;
+  profileHistoryList.innerHTML = currentCustomer.events.length
+    ? currentCustomer.events
+        .map((event) => {
+          const sign = event.points_delta > 0 ? "+" : "";
+          return `
+            <div class="profile-event">
+              <span>
+                <strong>${escapeHtml(event.description || event.event_type)}</strong>
+                <small>${escapeHtml(formatEventDate(event.created_at))}</small>
+              </span>
+              <b>${sign}${escapeHtml(event.points_delta)} pts</b>
+            </div>
+          `;
+        })
+        .join("")
+    : `<p class="profile-empty">${escapeHtml(labels[currentLang].profileHistoryEmpty || "Todavia no hay movimientos.")}</p>`;
+}
+
+async function refreshAuthenticatedCustomer() {
+  if (!currentSession?.user) {
+    currentCustomer = null;
+    pointsBalance = 0;
+    renderList();
+    return;
+  }
+
+  try {
+    await loadCustomerData(currentSession, { retries: 4 });
+  } catch (error) {
+    currentCustomer = null;
+    pointsBalance = 0;
+    showToast(displayError(error));
+  }
+  renderList();
+}
+
+async function handleSession(session) {
+  currentSession = session;
+  if (!session?.user) {
+    currentCustomer = null;
+    pointsBalance = 0;
+    renderAuthState();
+    renderList();
+    return;
+  }
+  await refreshAuthenticatedCustomer();
+}
+
+async function initializeAuth() {
+  if (!supabase) {
+    renderAuthState();
+    renderList();
+    return;
+  }
+
+  const { data, error } = await supabase.auth.getSession();
+  if (error) showToast(displayError(error));
+  await handleSession(data?.session || null);
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    window.setTimeout(() => {
+      handleSession(session);
+    }, 0);
+  });
 }
 
 function openDetail(id) {
@@ -515,6 +773,7 @@ languageOptions.addEventListener("click", (event) => {
   document.body.classList.remove("landing-active");
   updateSignupShell();
   updateQrShell();
+  updateProfileShell();
   renderList();
 });
 
@@ -529,13 +788,24 @@ signupModeToggle.addEventListener("click", () => {
   window.requestAnimationFrame(() => signupEmail.focus());
 });
 
-signupRecoveryButton.addEventListener("click", () => {
+signupRecoveryButton.addEventListener("click", async () => {
   const label = labels[currentLang];
   const email = signupEmail.value.trim().toLowerCase();
   signupError.textContent = "";
   if (!email.endsWith("@gmail.com")) {
     signupError.textContent = label.signupInvalidEmail;
     signupEmail.focus();
+    return;
+  }
+  if (!supabase) {
+    signupError.textContent = label.authGenericError;
+    return;
+  }
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: authRedirectUrl()
+  });
+  if (error) {
+    signupError.textContent = displayError(error);
     return;
   }
   showToast(label.loginRecoverySent || "Te enviaremos instrucciones para recuperar tu contrasena.");
@@ -546,7 +816,36 @@ qrModal.addEventListener("click", (event) => {
   if (event.target.closest("[data-qr-close]")) closeQrModal();
 });
 
-signupForm.addEventListener("submit", (event) => {
+profileToggle.addEventListener("click", () => openProfileModal(profileToggle));
+profileClose.addEventListener("click", closeProfileModal);
+profileModal.addEventListener("click", (event) => {
+  if (event.target.closest("[data-profile-close]")) closeProfileModal();
+});
+
+profileQrButton.addEventListener("click", () => {
+  closeProfileModal();
+  openQrModal(profileQrButton);
+});
+
+profileHistoryButton.addEventListener("click", () => {
+  profileHistoryList.scrollIntoView({ block: "center", behavior: "smooth" });
+});
+
+profileLogoutButton.addEventListener("click", async () => {
+  if (!supabase) return;
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    showToast(displayError(error));
+    return;
+  }
+  closeProfileModal();
+  currentSession = null;
+  currentCustomer = null;
+  renderList();
+  showToast(labels[currentLang].profileLoggedOut || "Sesion cerrada");
+});
+
+signupForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const label = labels[currentLang];
   const email = signupEmail.value.trim().toLowerCase();
@@ -558,7 +857,21 @@ signupForm.addEventListener("submit", (event) => {
     return;
   }
 
+  if (!supabase) {
+    signupError.textContent = label.authGenericError;
+    return;
+  }
+
   if (signupMode === "login") {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: signupPassword.value
+    });
+    if (error) {
+      signupError.textContent = displayError(error);
+      return;
+    }
+    await handleSession(data.session);
     closeSignupModal();
     showToast(label.loginWelcome || "Sesion iniciada");
     return;
@@ -570,10 +883,32 @@ signupForm.addEventListener("submit", (event) => {
     return;
   }
 
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password: signupPassword.value,
+    options: {
+      data: {
+        name: signupName.value.trim(),
+        business_id: businessId
+      },
+      emailRedirectTo: authRedirectUrl()
+    }
+  });
+
+  if (error) {
+    signupError.textContent = displayError(error);
+    return;
+  }
+
+  if (data.session) {
+    await handleSession(data.session);
+    showToast(label.signupWelcome || "Cuenta creada");
+  } else {
+    showToast(label.authSignupCheckEmail || "Revisa tu correo para confirmar la cuenta.");
+  }
+
   closeSignupModal();
   signupForm.reset();
-  renderList();
-  addPoints(40, label.signupWelcome);
 });
 
 function bindBrandButtons() {
@@ -618,28 +953,41 @@ detailOptions.addEventListener("click", (event) => {
 scanQrButton.addEventListener("click", () => openQrModal(scanQrButton));
 
 addPurchaseButton.addEventListener("click", () => {
-  addPoints(40, labels[currentLang].purchaseEarned);
+  showToast(labels[currentLang].loyaltyShowQrHint || "Muestra tu QR al empleado para acreditar tu consumo.");
+  openQrModal(addPurchaseButton);
 });
 
 earnDetailPoints.addEventListener("click", () => {
-  const dish = menuItems.find((item) => item.id === currentDetailId);
-  if (!dish) return;
-  const presentation = dish.presentations[selectedPresentationIndex] || dish.presentations[0];
-  const earned = Math.max(5, Math.round(presentation.price * 0.12));
-  addPoints(earned, labels[currentLang].purchaseEarned);
+  showToast(labels[currentLang].loyaltyShowQrHint || "Muestra tu QR al empleado para acreditar tu consumo.");
+  openQrModal(earnDetailPoints);
 });
 
-rewardStrip.addEventListener("click", (event) => {
+rewardStrip.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-reward]");
   if (!button) return;
+  if (!isAuthenticated()) {
+    openSignupModal(button);
+    return;
+  }
   const reward = rewardCatalog.find((item) => item.id === button.dataset.reward);
   if (!reward) return;
   if (pointsBalance < reward.cost) {
     showToast(`${reward.cost - pointsBalance} pts restantes`);
     return;
   }
-  pointsBalance -= reward.cost;
-  renderLoyalty();
+  if (supabase && currentCustomer?.profile) {
+    const { error } = await supabase.from("reward_redemptions").insert({
+      customer_id: currentCustomer.profile.id,
+      business_id: businessId,
+      reward_id: reward.id,
+      reward_name: reward.name,
+      points_cost: reward.cost
+    });
+    if (error) {
+      showToast(displayError(error));
+      return;
+    }
+  }
   showToast(`${labels[currentLang].redeemed}: ${reward.name}`);
 });
 
@@ -704,7 +1052,9 @@ languageToggle.addEventListener("click", () => {
   currentLang = langs[(langs.indexOf(currentLang) + 1) % langs.length];
   renderList();
   updateQrShell();
+  updateProfileShell();
   if (!qrModal.hidden) renderCustomerQr();
+  if (!profileModal.hidden) renderProfile();
   if (detailView.classList.contains("open")) openDetail(currentDetailId);
 });
 
@@ -717,8 +1067,13 @@ document.addEventListener("keydown", (event) => {
     closeQrModal();
     return;
   }
+  if (event.key === "Escape" && !profileModal.hidden) {
+    closeProfileModal();
+    return;
+  }
   trapSignupFocus(event);
   trapQrFocus(event);
+  trapProfileFocus(event);
   if (event.key === "Escape" && detailView.classList.contains("open")) {
     detailView.classList.remove("open");
   }
@@ -728,4 +1083,5 @@ applyBusinessShell();
 bindBrandButtons();
 updateSignupShell();
 updateQrShell();
-renderList();
+updateProfileShell();
+await initializeAuth();

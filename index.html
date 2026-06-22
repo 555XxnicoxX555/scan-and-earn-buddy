@@ -267,6 +267,9 @@
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
             <span id="signupCtaText">Ganar puntos</span>
           </button>
+          <button class="profile-toggle" id="profileToggle" type="button" aria-label="Abrir perfil" hidden>
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+          </button>
           <button id="languageToggle" aria-label="Cambiar idioma">
             <span class="header-flag flag mx" id="currentLanguageFlag" aria-hidden="true"></span>
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-language"></use></svg>
@@ -365,6 +368,38 @@
     </section>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <section class="profile-modal" id="profileModal" role="dialog" aria-modal="true" aria-labelledby="profileTitle" hidden>
+      <div class="signup-backdrop" data-profile-close></div>
+      <div class="profile-sheet">
+        <button class="signup-close profile-close" id="profileClose" type="button" aria-label="Cerrar perfil">
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+        </button>
+        <p class="profile-kicker" id="profileKicker">Mi cuenta</p>
+        <h1 id="profileTitle">Perfil de cliente</h1>
+        <div class="profile-identity">
+          <span class="profile-avatar" aria-hidden="true"><svg class="ui-icon"><use href="#icon-user"></use></svg></span>
+          <div>
+            <strong id="profileName">Cliente</strong>
+            <span id="profileEmail">cliente@gmail.com</span>
+          </div>
+        </div>
+        <div class="profile-points">
+          <span id="profilePointsLabel">Puntos disponibles</span>
+          <strong><span id="profilePoints">0</span> pts</strong>
+          <small id="profileLevel">Nivel Bronce</small>
+        </div>
+        <div class="profile-actions" aria-label="Accesos del perfil">
+          <button id="profileQrButton" type="button">QR de cliente recurrente</button>
+          <button id="profileHistoryButton" type="button">Historial de puntos</button>
+          <button id="profileLogoutButton" type="button">Cerrar sesion</button>
+        </div>
+        <section class="profile-history">
+          <h2 id="profileHistoryTitle">Historial reciente</h2>
+          <div id="profileHistoryList"></div>
+        </section>
+      </div>
+    </section>
 
     <section class="editor" id="editorPanel" aria-label="Editor de producto">
       <div class="editor-scroll">

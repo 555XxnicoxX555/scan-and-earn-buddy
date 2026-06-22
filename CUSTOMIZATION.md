@@ -348,17 +348,20 @@ operativo de la plantilla:
 
 #### Flujo QR de cliente
 
-En la plantilla estatica, el icono QR de la tarjeta de puntos abre un modal con
-un QR unico local del cliente. Ese QR contiene un payload v1 con:
+En la plantilla con Supabase, la tarjeta de puntos solo aparece si el cliente
+esta registrado o logeado. El icono QR abre un modal con el `public_qr_id` de la
+cuenta de fidelizacion del cliente. Si el proyecto se corre sin Supabase, puede
+existir un ID local solo como fallback de demostracion.
+
+El QR contiene un payload v1 con:
 
 - `type`: `sumi-loyalty-customer`
 - `version`: `1`
 - `businessId`: el `businessId` del negocio
-- `customerId`: ID local persistido en `localStorage`
+- `customerId`: `public_qr_id` de `loyalty_accounts` cuando hay backend
 
-Este QR sirve para demostrar el flujo al negocio: el cliente termina de consumir,
-muestra el QR al empleado, y el empleado lo escanea para identificar a quien debe
-acreditarse el consumo.
+El flujo esperado es: el cliente termina de consumir, muestra el QR al empleado,
+y el empleado lo escanea para identificar a quien debe acreditarse el consumo.
 
 Para produccion con backend, no se deben acreditar puntos desde el frontend del
 cliente. El flujo recomendado es:
@@ -369,9 +372,17 @@ cliente. El flujo recomendado es:
 4. El backend calcula creditos, guarda el movimiento y actualiza el saldo.
 5. El cliente ve sus puntos actualizados al sincronizar datos.
 
-Si se conecta Supabase, definir tablas para clientes, movimientos de puntos,
-consumos, reglas de acumulacion y canjes. El `business_id` debe separar los datos
-de cada negocio.
+Modelo minimo en Supabase:
+
+- `businesses`: negocios dueños del programa.
+- `customer_profiles`: perfil del cliente vinculado a `auth.users`.
+- `loyalty_accounts`: saldo, nivel y `public_qr_id`.
+- `point_events`: movimientos de puntos.
+- `reward_redemptions`: solicitudes/canjes de premios.
+
+El `business_id` debe separar los datos de cada negocio. El cliente solo puede
+leer su propio perfil, cuenta, QR e historial; no puede acreditarse puntos desde
+el frontend.
 
 ### 8. Datos, Supabase y persistencia
 

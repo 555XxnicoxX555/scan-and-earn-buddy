@@ -28,6 +28,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .icon-sprite {
   position: absolute;
   width: 0;
@@ -909,7 +913,8 @@ body {
 }
 
 body.signup-open,
-body.qr-open {
+body.qr-open,
+body.profile-open {
   overflow: hidden;
 }
 
@@ -928,6 +933,10 @@ body:not(.landing-active) .language-screen {
 }
 
 .qr-modal[hidden] {
+  display: none;
+}
+
+.profile-modal[hidden] {
   display: none;
 }
 
@@ -1179,6 +1188,18 @@ body:not(.landing-active) .language-screen {
   transform: translateX(-50%);
 }
 
+.profile-modal {
+  position: fixed;
+  inset: 0 auto 0 50%;
+  z-index: 74;
+  width: min(100vw, 430px);
+  display: grid;
+  align-items: end;
+  padding: 18px;
+  overflow: hidden;
+  transform: translateX(-50%);
+}
+
 .signup-backdrop {
   position: absolute;
   inset: 0;
@@ -1309,6 +1330,217 @@ body:not(.landing-active) .language-screen {
   color: #8c2f12;
   font-size: 12px;
   font-weight: 900;
+}
+
+.profile-sheet {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-height: min(680px, calc(100dvh - 34px));
+  padding: 18px;
+  overflow: auto;
+  border: 1px solid rgba(255, 137, 10, 0.34);
+  border-radius: 28px 28px 18px 18px;
+  background:
+    radial-gradient(circle at 86% 10%, rgba(255, 137, 10, 0.2), transparent 30%),
+    linear-gradient(180deg, var(--pumpkin-50), var(--pumpkin-100));
+  color: var(--pumpkin-950);
+  box-shadow: 0 -22px 58px rgba(0, 0, 0, 0.44);
+  scrollbar-width: none;
+}
+
+.profile-sheet::-webkit-scrollbar {
+  display: none;
+}
+
+.profile-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.profile-kicker {
+  margin: 4px 54px 8px 0;
+  color: var(--pumpkin-800);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.profile-sheet h1 {
+  margin: 0 54px 16px 0;
+  color: var(--pumpkin-950);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.profile-identity {
+  min-height: 70px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(204, 83, 2, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 249, 236, 0.72);
+}
+
+.profile-avatar {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--pumpkin-500);
+  color: var(--pumpkin-950);
+}
+
+.profile-avatar .ui-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.profile-identity strong,
+.profile-identity span {
+  display: block;
+}
+
+.profile-identity strong {
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.profile-identity span {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: var(--pumpkin-800);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.profile-points {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 137, 10, 0.26);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(255, 137, 10, 0.28), transparent 36%),
+    linear-gradient(145deg, #4a1704, #1c0702);
+  color: #fff3d8;
+}
+
+.profile-points span,
+.profile-points strong,
+.profile-points small {
+  display: block;
+}
+
+.profile-points > span {
+  color: var(--pumpkin-300);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.profile-points strong {
+  margin-top: 6px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 34px;
+  font-style: italic;
+  line-height: 1;
+}
+
+.profile-points small {
+  margin-top: 8px;
+  color: #ffe2ad;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.profile-actions {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.profile-actions button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(204, 83, 2, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 249, 236, 0.78);
+  color: var(--pumpkin-950);
+  font-size: 13px;
+  font-weight: 950;
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.profile-actions button:first-child {
+  border-color: transparent;
+  background: var(--pumpkin-500);
+  box-shadow: 0 12px 22px rgba(204, 83, 2, 0.18);
+}
+
+.profile-actions button:last-child {
+  color: #7e250d;
+}
+
+.profile-history {
+  margin-top: 16px;
+}
+
+.profile-history h2 {
+  margin: 0 0 8px;
+  color: var(--pumpkin-950);
+  font-size: 20px;
+}
+
+.profile-event {
+  min-height: 48px;
+  padding: 9px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgba(204, 83, 2, 0.12);
+}
+
+.profile-event strong,
+.profile-event small {
+  display: block;
+}
+
+.profile-event strong {
+  color: var(--pumpkin-950);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.profile-event small {
+  margin-top: 2px;
+  color: var(--pumpkin-800);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.profile-event b {
+  flex: 0 0 auto;
+  color: var(--pumpkin-700);
+  font-size: 13px;
+}
+
+.profile-empty {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(204, 83, 2, 0.12);
+  border-radius: 14px;
+  color: var(--pumpkin-800);
+  background: rgba(255, 249, 236, 0.66);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .signup-hero {
@@ -2547,6 +2779,7 @@ body.landing-active .detail-view {
   .loyalty-top button:hover,
   .loyalty-actions button:hover,
   .earn-points-button:hover,
+  .profile-actions button:hover,
   .signup-submit:hover {
     border-color: rgba(255, 137, 10, 0.78);
     background: rgba(255, 137, 10, 0.14);
@@ -2556,6 +2789,7 @@ body.landing-active .detail-view {
 
   .loyalty-actions button:first-child:hover,
   .earn-points-button:hover,
+  .profile-actions button:first-child:hover,
   .signup-submit:hover {
     background: var(--pumpkin-300);
     color: var(--pumpkin-950);
