@@ -2,6 +2,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const RESEND_FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "Sumi <onboarding@resend.dev>";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const AUTH_HOOK_SECRET = Deno.env.get("AUTH_HOOK_SECRET");
+const APP_PUBLIC_URL = Deno.env.get("APP_PUBLIC_URL");
 
 type EmailAction = "signup" | "recovery" | "invite" | "email_change" | string;
 
@@ -138,7 +139,7 @@ function actionCopy(type: EmailAction) {
 function verifyUrl(emailData: NonNullable<AuthEmailPayload["email_data"]>) {
   const tokenHash = emailData.token_hash || emailData.token;
   const type = emailData.email_action_type || "signup";
-  const redirectTo = emailData.redirect_to;
+  const redirectTo = publicRedirectTo(emailData.redirect_to);
 
   if (!SUPABASE_URL || !tokenHash) return redirectTo || "";
 
@@ -147,6 +148,21 @@ function verifyUrl(emailData: NonNullable<AuthEmailPayload["email_data"]>) {
   url.searchParams.set("type", type);
   if (redirectTo) url.searchParams.set("redirect_to", redirectTo);
   return url.toString();
+}
+
+function publicRedirectTo(redirectTo?: string) {
+  if (!APP_PUBLIC_URL) return redirectTo;
+  if (!redirectTo) return APP_PUBLIC_URL;
+
+  try {
+    const url = new URL(redirectTo);
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+      return APP_PUBLIC_URL;
+    }
+    return redirectTo;
+  } catch {
+    return APP_PUBLIC_URL;
+  }
 }
 
 function htmlTemplate(params: {

@@ -17,6 +17,7 @@ const rewardCatalog = businessConfig.rewardCatalog;
 const businessId = businessConfig.businessId || "business";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const publicAppUrl = import.meta.env.VITE_PUBLIC_APP_URL;
 const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -188,6 +189,9 @@ function activeQrId() {
 }
 
 function authRedirectUrl() {
+  if (publicAppUrl && !window.location.hostname.includes("localhost")) {
+    return publicAppUrl.replace(/\/$/, "");
+  }
   return `${window.location.origin}${window.location.pathname}`;
 }
 

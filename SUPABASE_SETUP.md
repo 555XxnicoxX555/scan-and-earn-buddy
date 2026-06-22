@@ -84,6 +84,7 @@ Secrets necesarios en Supabase:
 - `RESEND_API_KEY`
 - `RESEND_FROM_EMAIL`
 - `AUTH_HOOK_SECRET`
+- `APP_PUBLIC_URL`
 
 Para pruebas se puede usar:
 
@@ -97,6 +98,15 @@ Cuando el dominio del negocio este verificado en Resend, cambiar
 ```text
 Sumi <hola@dominio-del-negocio.com>
 ```
+
+`APP_PUBLIC_URL` debe ser la URL publicada del catalogo, sin slash final. Se usa
+para evitar que los emails de confirmacion redirijan a `localhost`.
+
+Tambien configurar en Supabase:
+
+1. Ir a `Authentication > URL Configuration`.
+2. Cambiar `Site URL` por la URL publicada.
+3. Agregar la misma URL en `Redirect URLs`.
 
 Desplegar la funcion:
 
