@@ -1472,6 +1472,36 @@ body:not(.landing-active) .language-screen {
   transition: background 180ms ease, box-shadow 180ms ease;
 }
 
+.signup-switch {
+  min-height: 28px;
+  margin: -2px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--pumpkin-800);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.signup-switch button {
+  min-height: 32px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--pumpkin-700);
+  font-size: 12px;
+  font-weight: 950;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.signup-recovery {
+  margin-top: -8px;
+}
+
 @media (max-width: 380px) {
   .signup-dialog {
     padding: 14px;
@@ -2472,6 +2502,10 @@ body.landing-active .detail-view {
     background: #fff9ec;
     color: var(--pumpkin-950);
     transform: translateY(-1px);
+  }
+
+  .signup-switch button:hover {
+    color: var(--pumpkin-950);
   }
 
   .menu-tools button:not(.signup-cta):hover,

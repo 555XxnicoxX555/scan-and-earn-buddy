@@ -1,15 +1,18 @@
-import { cpSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync } from "node:fs";
 import { join } from "node:path";
+import { build } from "vite";
 
 const root = process.cwd();
 const dist = join(root, "dist");
 
-rmSync(dist, { recursive: true, force: true });
-mkdirSync(dist, { recursive: true });
-
-for (const file of ["index.html", "styles.css", "app.js"]) {
-  cpSync(join(root, file), join(dist, file));
-}
+await build({
+  root,
+  base: "./",
+  build: {
+    outDir: dist,
+    emptyOutDir: true
+  }
+});
 
 cpSync(join(root, "assets"), join(dist, "assets"), { recursive: true });
 cpSync(join(root, "businesses"), join(dist, "businesses"), { recursive: true });

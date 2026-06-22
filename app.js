@@ -72,6 +72,9 @@ const signupName = document.querySelector("#signupName");
 const signupEmail = document.querySelector("#signupEmail");
 const signupPassword = document.querySelector("#signupPassword");
 const signupConfirm = document.querySelector("#signupConfirm");
+const signupModeToggle = document.querySelector("#signupModeToggle");
+const signupRecoveryButton = document.querySelector("#signupRecoveryButton");
+const signupRecoveryText = document.querySelector("#signupRecoveryText");
 const qrModal = document.querySelector("#qrModal");
 const qrClose = document.querySelector("#qrClose");
 const customerQrCanvas = document.querySelector("#customerQrCanvas");
@@ -79,6 +82,7 @@ const qrError = document.querySelector("#qrError");
 const qrCustomerId = document.querySelector("#qrCustomerId");
 let lastSignupTrigger = null;
 let lastQrTrigger = null;
+let signupMode = "register";
 const customerStorageKey = `sumi:loyalty:${businessId}:customerId`;
 
 function setText(selector, value) {
@@ -189,14 +193,34 @@ function updateSignupShell() {
   const label = labels[currentLang];
   setText("#signupCtaText", label.signupCta || label.signupKicker);
   setText("#signupKicker", label.signupKicker);
-  setText("#signupTitle", label.signupTitle);
-  setText("#signupText", label.signupText);
+  setText("#signupTitle", signupMode === "login" ? label.loginTitle : label.signupTitle);
+  setText("#signupText", signupMode === "login" ? label.loginText : label.signupText);
   setText("#signupNameLabel", label.signupName);
   setText("#signupEmailLabel", label.signupEmail);
   setText("#signupPasswordLabel", label.signupPassword);
   setText("#signupConfirmLabel", label.signupConfirm);
-  setText("#signupSubmit", label.signupSubmit);
+  setText("#signupSubmit", signupMode === "login" ? label.loginSubmit : label.signupSubmit);
+  setText("#signupSwitchPrompt", signupMode === "login" ? label.loginSwitchPrompt : label.signupSwitchPrompt);
+  setText("#signupModeToggle", signupMode === "login" ? label.loginSwitchCta : label.signupSwitchCta);
+  setText("#signupRecoveryPrompt", label.loginRecoveryPrompt);
+  setText("#signupRecoveryButton", label.loginRecoveryCta);
   signupClose?.setAttribute("aria-label", label.signupClose || "Cerrar registro");
+}
+
+function setSignupMode(mode) {
+  signupMode = mode;
+  signupError.textContent = "";
+  signupModal.dataset.mode = mode;
+  const isLogin = mode === "login";
+  signupModal.querySelectorAll("[data-signup-register-only]").forEach((element) => {
+    element.hidden = isLogin;
+    element.querySelectorAll("input").forEach((input) => {
+      input.required = !isLogin;
+      if (isLogin) input.value = "";
+    });
+  });
+  signupRecoveryText.hidden = !isLogin;
+  updateSignupShell();
 }
 
 function updateQrShell() {
@@ -267,17 +291,18 @@ function addPoints(amount, reason) {
 
 function openSignupModal(trigger = signupCta) {
   lastSignupTrigger = trigger;
-  signupError.textContent = "";
   signupModal.hidden = false;
   document.body.classList.add("signup-open");
-  updateSignupShell();
-  window.requestAnimationFrame(() => signupName.focus());
+  setSignupMode("register");
+  window.requestAnimationFrame(() => signupEmail.focus());
 }
 
 function closeSignupModal() {
   signupModal.hidden = true;
   document.body.classList.remove("signup-open");
   signupError.textContent = "";
+  signupForm.reset();
+  setSignupMode("register");
   lastSignupTrigger?.focus();
 }
 
@@ -499,6 +524,23 @@ signupModal.addEventListener("click", (event) => {
   if (event.target.closest("[data-signup-close]")) closeSignupModal();
 });
 
+signupModeToggle.addEventListener("click", () => {
+  setSignupMode(signupMode === "login" ? "register" : "login");
+  window.requestAnimationFrame(() => signupEmail.focus());
+});
+
+signupRecoveryButton.addEventListener("click", () => {
+  const label = labels[currentLang];
+  const email = signupEmail.value.trim().toLowerCase();
+  signupError.textContent = "";
+  if (!email.endsWith("@gmail.com")) {
+    signupError.textContent = label.signupInvalidEmail;
+    signupEmail.focus();
+    return;
+  }
+  showToast(label.loginRecoverySent || "Te enviaremos instrucciones para recuperar tu contrasena.");
+});
+
 qrClose.addEventListener("click", closeQrModal);
 qrModal.addEventListener("click", (event) => {
   if (event.target.closest("[data-qr-close]")) closeQrModal();
@@ -513,6 +555,12 @@ signupForm.addEventListener("submit", (event) => {
   if (!email.endsWith("@gmail.com")) {
     signupError.textContent = label.signupInvalidEmail;
     signupEmail.focus();
+    return;
+  }
+
+  if (signupMode === "login") {
+    closeSignupModal();
+    showToast(label.loginWelcome || "Sesion iniciada");
     return;
   }
 
