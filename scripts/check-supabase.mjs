@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 const requiredTables = [
   "businesses",
   "customer_profiles",
+  "business_admins",
   "loyalty_accounts",
   "point_events",
   "reward_redemptions"
