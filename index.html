@@ -223,24 +223,24 @@
       </div>
 
       <nav class="nav">
-        <a href="#" class="nav-item">
+        <a href="#" class="nav-item active" data-admin-nav="home">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>
           Inicio
         </a>
-        <a href="#" class="nav-item active">
+        <a href="#" class="nav-item" data-admin-nav="menu">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
           Mi menu
         </a>
-        <a href="#" class="nav-item">
+        <a href="#" class="nav-item" data-admin-nav="content">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
           Crear contenido
           <small>IA</small>
         </a>
-        <a href="#" class="nav-item">
+        <a href="#" class="nav-item" data-admin-nav="library">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-library"></use></svg>
           Mi biblioteca
         </a>
-        <a href="#" class="nav-item">
+        <a href="#" class="nav-item" data-admin-nav="settings">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-settings"></use></svg>
           Ajustes
         </a>
@@ -252,6 +252,66 @@
         <button>Abrir WhatsApp</button>
       </section>
     </aside>
+
+    <main class="shell admin-panel" id="adminPanel" hidden>
+      <section class="admin-section admin-home" id="adminHome">
+        <header class="admin-hero">
+          <p class="eyebrow" id="adminDate">Panel del dueno</p>
+          <h1 id="adminGreeting">Buenos dias, Karim</h1>
+          <p id="adminSummary">Tu menu se vio 347 veces ayer. Aqui esta el resumen.</p>
+        </header>
+
+        <section class="admin-stats" id="adminStats" aria-label="Resumen del negocio"></section>
+
+        <div class="admin-grid">
+          <section class="admin-card admin-actions-card">
+            <div>
+              <h2>Que hacemos hoy?</h2>
+              <p>Atajos a las tareas que mas usas.</p>
+            </div>
+            <div class="admin-actions" id="adminActions"></div>
+          </section>
+
+          <section class="admin-card admin-suggestion">
+            <p>Sugerencia de hoy</p>
+            <h2 id="adminSuggestionTitle">Es viernes en CDMX. Que tal empujar Argile para la noche?</h2>
+            <span id="adminSuggestionText">Llevas 3 semanas sin postear Argile y los viernes generan mas interes.</span>
+            <button class="primary" id="adminSuggestionButton" type="button">
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
+              Generar post de Argile
+            </button>
+          </section>
+        </div>
+      </section>
+
+      <section class="admin-section admin-menu-section" id="adminMenuSection" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Mi menu</p>
+            <h1><span id="adminMenuCount">0</span> platillos en la mesa</h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="search">
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+              <input id="adminSearchInput" type="search" placeholder="Busca por nombre, categoria o ingrediente..." />
+            </label>
+            <button class="primary" id="adminNewDishButton" type="button">Crear platillo</button>
+          </div>
+        </header>
+
+        <section class="menu-board" aria-label="Menu editable">
+          <div class="table-head">
+            <span>Platillo</span>
+            <span>Categoria</span>
+            <span>Marca</span>
+            <span>Precio</span>
+            <span>Estado</span>
+            <span></span>
+          </div>
+          <div id="adminDishRows"></div>
+        </section>
+      </section>
+    </main>
 
     <main class="shell menu-app" id="menuApp">
       <header class="menu-header">
@@ -390,6 +450,7 @@
           <small id="profileLevel">Nivel Bronce</small>
         </div>
         <div class="profile-actions" aria-label="Accesos del perfil">
+          <button id="profileAdminButton" type="button" hidden>Panel de admin</button>
           <button id="profileQrButton" type="button">QR de cliente recurrente</button>
           <button id="profileLogoutButton" type="button">Cerrar sesion</button>
         </div>

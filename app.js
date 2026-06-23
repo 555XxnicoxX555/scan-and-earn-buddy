@@ -41,6 +41,7 @@ let pointsBalance = businessConfig.initialPoints || 0;
 let selectedPresentationIndex = 0;
 let currentSession = null;
 let currentCustomer = null;
+let currentAdminView = "home";
 const favoriteItems = new Set();
 const dishList = document.querySelector("#dishList");
 const searchInput = document.querySelector("#searchInput");
@@ -104,8 +105,32 @@ const profilePoints = document.querySelector("#profilePoints");
 const profileLevel = document.querySelector("#profileLevel");
 const profileHistoryList = document.querySelector("#profileHistoryList");
 const profileHistoryCount = document.querySelector("#profileHistoryCount");
+const profileAdminButton = document.querySelector("#profileAdminButton");
 const profileQrButton = document.querySelector("#profileQrButton");
 const profileLogoutButton = document.querySelector("#profileLogoutButton");
+const adminPanel = document.querySelector("#adminPanel");
+const adminHome = document.querySelector("#adminHome");
+const adminMenuSection = document.querySelector("#adminMenuSection");
+const adminStats = document.querySelector("#adminStats");
+const adminActions = document.querySelector("#adminActions");
+const adminDishRows = document.querySelector("#adminDishRows");
+const adminSearchInput = document.querySelector("#adminSearchInput");
+const adminMenuCount = document.querySelector("#adminMenuCount");
+const adminNavItems = document.querySelectorAll("[data-admin-nav]");
+const adminGreeting = document.querySelector("#adminGreeting");
+const adminSummary = document.querySelector("#adminSummary");
+const adminSuggestionButton = document.querySelector("#adminSuggestionButton");
+const editorPanel = document.querySelector("#editorPanel");
+const backButton = document.querySelector("#backButton");
+const editorTitle = document.querySelector("#editorTitle");
+const dishNameInput = document.querySelector("#dishName");
+const dishDescriptionInput = document.querySelector("#dishDescription");
+const descCount = document.querySelector("#descCount");
+const dishPhoto = document.querySelector("#dishPhoto");
+const presentations = document.querySelector("#presentations");
+const brandSelect = document.querySelector("#brandSelect");
+const categorySelect = document.querySelector("#categorySelect");
+const visibleToggle = document.querySelector("#visibleToggle");
 let lastSignupTrigger = null;
 let lastQrTrigger = null;
 let lastProfileTrigger = null;
@@ -178,6 +203,10 @@ function isAuthenticated() {
   return Boolean(currentSession?.user && currentCustomer?.profile && currentCustomer?.account);
 }
 
+function isOwner() {
+  return currentCustomer?.adminMembership?.role === "owner";
+}
+
 function displayError(error) {
   if (!error) return labels[currentLang].authGenericError;
   if (typeof error === "string") return error;
@@ -228,6 +257,22 @@ function formatEventDate(dateValue) {
   }
 }
 
+function priceRange(dish) {
+  const prices = dish.presentations.map((presentation) => Number(presentation.price)).filter(Number.isFinite);
+  if (!prices.length) return "$0";
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  return min === max ? `$${min}` : `$${min} - $${max}`;
+}
+
+function visibleAdminItems() {
+  const query = adminSearchInput?.value.trim().toLowerCase() || "";
+  return menuItems.filter((dish) => {
+    const haystack = `${dish.name} ${dish.description} ${dish.category} ${dish.brand}`.toLowerCase();
+    return !query || haystack.includes(query);
+  });
+}
+
 async function loadCustomerData(session = currentSession, options = {}) {
   if (!supabase || !session?.user) {
     currentCustomer = null;
@@ -259,7 +304,11 @@ async function loadCustomerData(session = currentSession, options = {}) {
     return null;
   }
 
-  const [{ data: account, error: accountError }, { data: events, error: eventsError }] = await Promise.all([
+  const [
+    { data: account, error: accountError },
+    { data: events, error: eventsError },
+    { data: adminMembership, error: adminError }
+  ] = await Promise.all([
     supabase
       .from("loyalty_accounts")
       .select("*")
@@ -272,16 +321,25 @@ async function loadCustomerData(session = currentSession, options = {}) {
       .eq("customer_id", profile.id)
       .eq("business_id", businessId)
       .order("created_at", { ascending: false })
-      .limit(30)
+      .limit(30),
+    supabase
+      .from("business_admins")
+      .select("business_id, role")
+      .eq("auth_user_id", session.user.id)
+      .eq("business_id", businessId)
+      .eq("role", "owner")
+      .maybeSingle()
   ]);
 
   if (accountError) throw accountError;
   if (eventsError) throw eventsError;
+  if (adminError) throw adminError;
 
   currentCustomer = {
     profile,
     account,
-    events: events || []
+    events: events || [],
+    adminMembership
   };
   pointsBalance = account?.points_balance || 0;
   return currentCustomer;
@@ -373,6 +431,7 @@ function updateProfileShell() {
   setText("#profileKicker", label.profileKicker || "Mi cuenta");
   setText("#profileTitle", label.profileTitle || "Perfil de cliente");
   setText("#profilePointsLabel", label.profilePointsLabel || "Puntos disponibles");
+  setText("#profileAdminButton", label.profileAdminPanel || "Panel de admin");
   setText("#profileQrButton", label.profileQr || "QR de cliente recurrente");
   setText("#profileLogoutButton", label.profileLogout || "Cerrar sesion");
   setText("#profileHistoryTitle", label.profileHistory || "Historial de puntos");
@@ -633,6 +692,7 @@ function renderList() {
   renderRecommendation();
   renderLoyalty();
   renderProfile();
+  renderAdminPanel();
   updateHeader();
 
   categoryTitle.textContent = query ? labels[currentLang].results : localCategory(currentCategory);
@@ -669,6 +729,7 @@ function renderProfile() {
   profileEmail.textContent = profile.email || currentSession.user.email || "";
   profilePoints.textContent = account.points_balance || 0;
   profileLevel.textContent = level.name;
+  profileAdminButton.hidden = !isOwner();
   profileHistoryCount.textContent = currentCustomer.events.length;
   profileHistoryList.innerHTML = currentCustomer.events.length
     ? currentCustomer.events
@@ -686,6 +747,122 @@ function renderProfile() {
         })
         .join("")
     : `<p class="profile-empty">${escapeHtml(labels[currentLang].profileHistoryEmpty || "Todavia no hay movimientos.")}</p>`;
+}
+
+function renderAdminHome() {
+  if (!adminPanel) return;
+  const ownerName = currentCustomer?.profile?.name || "Owner";
+  const activeItems = menuItems.filter((dish) => dish.visible);
+  const hiddenItems = menuItems.length - activeItems.length;
+  const topDish = recommendedDish();
+  const generatedCount = Math.max(8, Math.round(menuItems.length / 3));
+
+  adminGreeting.textContent = `Buenos dias, ${ownerName}`;
+  adminSummary.innerHTML = `Tu menu se vio <strong>347 veces</strong> ayer. Aqui esta el resumen.`;
+  adminStats.innerHTML = `
+    <article class="admin-stat"><span>Vistas al menu</span><strong>2,184</strong><small>+18% esta semana</small></article>
+    <article class="admin-stat"><span>Platillo mas visto</span><strong>${escapeHtml(topDish?.name || "Sin datos")}</strong><small>412 vistas</small></article>
+    <article class="admin-stat"><span>Contenido generado</span><strong>${generatedCount} piezas</strong><small>este mes</small></article>
+    <article class="admin-stat"><span>Productos en menu</span><strong>${menuItems.length}</strong><small>${hiddenItems} ocultos o agotados</small></article>
+  `;
+  adminActions.innerHTML = `
+    <button type="button" data-admin-action="content"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg></span><strong>Crear post para Instagram</strong><small>Foto + copy con IA · 30s</small></button>
+    <button type="button" data-admin-action="soldout"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-menu"></use></svg></span><strong>Marcar un platillo como agotado</strong><small>Se oculta automaticamente</small></button>
+    <button type="button" data-admin-action="new"><span>+</span><strong>Agregar un producto nuevo</strong><small>Con traduccion automatica</small></button>
+    <button type="button" data-admin-action="prices"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-settings"></use></svg></span><strong>Cambiar precio masivo</strong><small>Toda una categoria a la vez</small></button>
+  `;
+}
+
+function renderAdminMenu() {
+  if (!adminDishRows) return;
+  const items = visibleAdminItems();
+  adminMenuCount.textContent = items.length;
+  adminDishRows.innerHTML = items
+    .map((dish) => `
+      <button class="dish-row admin-dish-row ${dish.visible ? "" : "is-hidden"}" data-admin-dish="${escapeAttribute(dish.id)}" type="button">
+        <span class="dish-title">
+          <span class="thumb" style="background-image:url('${dish.photo}')"></span>
+          <span class="dish-name">${escapeHtml(dish.name)}</span>
+        </span>
+        <span class="cell-muted">${escapeHtml(dish.category)}</span>
+        <span class="pill">${escapeHtml(dish.brand)}</span>
+        <span class="cell-muted">${escapeHtml(priceRange(dish))}</span>
+        <span class="status">${dish.visible ? "Visible" : "Oculto"}</span>
+        <span class="row-actions" aria-hidden="true">
+          <span class="icon-button"><span class="eye-icon"></span></span>
+          <span class="icon-button"><span class="pencil-icon"></span></span>
+        </span>
+      </button>
+    `)
+    .join("");
+}
+
+function renderAdminPanel() {
+  if (!isOwner()) return;
+  renderAdminHome();
+  renderAdminMenu();
+}
+
+function setAdminView(view) {
+  currentAdminView = view === "menu" ? "menu" : "home";
+  adminHome.hidden = currentAdminView !== "home";
+  adminMenuSection.hidden = currentAdminView !== "menu";
+  adminNavItems.forEach((item) => {
+    const active = item.dataset.adminNav === currentAdminView;
+    item.classList.toggle("active", active);
+    item.setAttribute("aria-current", active ? "page" : "false");
+  });
+}
+
+function openAdminPanel(view = "home") {
+  if (!isOwner()) {
+    showToast("Esta cuenta no tiene permisos de owner.");
+    return;
+  }
+  closeProfileModal();
+  detailView.classList.remove("open");
+  editorPanel.classList.remove("open");
+  document.body.classList.remove("landing-active");
+  document.body.classList.add("admin-active");
+  adminPanel.hidden = false;
+  setAdminView(view);
+  renderAdminPanel();
+  window.requestAnimationFrame(() => adminPanel.focus?.());
+}
+
+function closeAdminPanel() {
+  document.body.classList.remove("admin-active");
+  adminPanel.hidden = true;
+  editorPanel.classList.remove("open");
+  renderList();
+}
+
+function openAdminEditor(dishId) {
+  const dish = menuItems.find((item) => item.id === dishId) || menuItems[0];
+  if (!dish) return;
+  editorTitle.textContent = dish.name;
+  dishNameInput.value = dish.name;
+  dishDescriptionInput.value = dish.description;
+  descCount.textContent = dish.description.length;
+  dishPhoto.style.backgroundImage = `url('${dish.photo}')`;
+  visibleToggle.checked = Boolean(dish.visible);
+  brandSelect.innerHTML = brandSwitcher
+    .map((brand) => `<option value="${escapeAttribute(brand.name)}" ${brand.name === dish.brand ? "selected" : ""}>${escapeHtml(brand.name)}</option>`)
+    .join("");
+  categorySelect.innerHTML = Array.from(new Set(Object.values(categoryOrder).flat()))
+    .map((category) => `<option value="${escapeAttribute(category)}" ${category === dish.category ? "selected" : ""}>${escapeHtml(category)}</option>`)
+    .join("");
+  presentations.innerHTML = dish.presentations
+    .map((presentation) => `
+      <div class="presentation-row">
+        <span class="drag-handle">::</span>
+        <input type="text" value="${escapeAttribute(presentation.name)}" aria-label="Presentacion" />
+        <label><span>$</span><input type="number" value="${escapeAttribute(presentation.price)}" aria-label="Precio" /></label>
+        <button class="delete-presentation" type="button" aria-label="Eliminar presentacion">x</button>
+      </div>
+    `)
+    .join("");
+  editorPanel.classList.add("open");
 }
 
 async function refreshAuthenticatedCustomer() {
@@ -711,6 +888,7 @@ async function handleSession(session) {
   if (!session?.user) {
     currentCustomer = null;
     pointsBalance = 0;
+    closeAdminPanel();
     renderAuthState();
     renderList();
     return;
@@ -845,6 +1023,51 @@ profileModal.addEventListener("click", (event) => {
 profileQrButton.addEventListener("click", () => {
   closeProfileModal();
   openQrModal(profileQrButton);
+});
+
+profileAdminButton.addEventListener("click", () => openAdminPanel("home"));
+
+adminNavItems.forEach((item) => {
+  item.addEventListener("click", (event) => {
+    event.preventDefault();
+    const view = item.dataset.adminNav;
+    if (view === "home" || view === "menu") {
+      openAdminPanel(view);
+      return;
+    }
+    showToast("Seccion preparada para la siguiente fase.");
+  });
+});
+
+adminActions.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-admin-action]");
+  if (!button) return;
+  if (button.dataset.adminAction === "new" || button.dataset.adminAction === "soldout" || button.dataset.adminAction === "prices") {
+    openAdminPanel("menu");
+    return;
+  }
+  showToast("Generacion con IA preparada para la siguiente fase.");
+});
+
+adminSuggestionButton.addEventListener("click", () => {
+  showToast("Generacion con IA preparada para la siguiente fase.");
+});
+
+adminSearchInput.addEventListener("input", renderAdminMenu);
+
+adminDishRows.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-admin-dish]");
+  if (!row) return;
+  openAdminEditor(row.dataset.adminDish);
+});
+
+backButton.addEventListener("click", () => {
+  editorPanel.classList.remove("open");
+  openAdminPanel("menu");
+});
+
+dishDescriptionInput.addEventListener("input", () => {
+  descCount.textContent = dishDescriptionInput.value.length;
 });
 
 profileLogoutButton.addEventListener("click", async () => {
