@@ -8,13 +8,12 @@ lealtad y mantener datos del negocio.
 
 - `owner`: dueño del negocio. Puede ver clientes, cuentas, historial, canjes y
   actualizar saldos/canjes desde herramientas autorizadas.
-- `manager`: encargado. Reservado para una fase posterior con permisos similares
-  pero sin administrar miembros.
-- `staff`: empleado. Reservado para carga de consumos desde QR y operaciones
-  limitadas.
+- `customer`: cliente del negocio. Puede ver su propio perfil, puntos, QR,
+  historial y canjes.
 
-La tabla fuente es `business_admins`. Para asignar permisos se vincula
-`auth.users.id` con `business_id`.
+`owner` se guarda en `business_admins`, vinculando `auth.users.id` con
+`business_id`. `customer` se deriva de `customer_profiles`, por lo que no
+necesita una tabla de roles aparte.
 
 ## MVP del Panel
 
@@ -37,11 +36,11 @@ El dueño del negocio deberia poder:
 - El cliente no puede acreditarse puntos desde el frontend.
 - El QR identifica al cliente, no acredita puntos por si solo.
 - Los admins solo ven datos del `business_id` donde tienen membresia.
-- RLS permite a admins leer clientes/cuentas/eventos/canjes del negocio.
-- RLS permite a admins insertar `point_events`, actualizar `loyalty_accounts` y
+- RLS permite a owners leer clientes/cuentas/eventos/canjes del negocio.
+- RLS permite a owners insertar `point_events`, actualizar `loyalty_accounts` y
   actualizar `reward_redemptions`.
-- Crear o quitar admins debe hacerse con credenciales administrativas o un panel
-  de owner endurecido; no debe estar disponible para clientes.
+- Crear o quitar owners debe hacerse con credenciales administrativas o un panel
+  de owner endurecido; no debe estar disponible para customers.
 
 ## Flujo Recomendado Para Acreditar Consumo
 

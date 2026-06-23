@@ -2,7 +2,7 @@ create table if not exists public.business_admins (
   id uuid primary key default gen_random_uuid(),
   business_id text not null references public.businesses(id) on delete cascade,
   auth_user_id uuid not null references auth.users(id) on delete cascade,
-  role text not null default 'owner' check (role in ('owner', 'manager', 'staff')),
+  role text not null default 'owner' check (role = 'owner'),
   created_at timestamptz not null default now(),
   unique (business_id, auth_user_id)
 );
