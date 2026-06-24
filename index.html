@@ -227,6 +227,10 @@
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>
           Inicio
         </a>
+        <a href="#" class="nav-item" data-admin-nav="customers">
+          <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+          Clientes
+        </a>
         <a href="#" class="nav-item" data-admin-nav="menu">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
           Mi menu
@@ -234,17 +238,25 @@
         <a href="#" class="nav-item" data-admin-nav="content">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
           Crear contenido
-          <small>IA</small>
         </a>
         <a href="#" class="nav-item" data-admin-nav="library">
+          <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-image"></use></svg>
+          Biblioteca
+        </a>
+        <a href="#" class="nav-item" data-admin-nav="rewards">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-library"></use></svg>
-          Mi biblioteca
+          Premios
         </a>
         <a href="#" class="nav-item" data-admin-nav="settings">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-settings"></use></svg>
           Ajustes
         </a>
       </nav>
+
+      <button class="nav-item nav-exit" id="adminExitButton" type="button">
+        <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg>
+        Salir del panel
+      </button>
 
       <section class="help-box">
         <h3>Necesitas ayuda?</h3>
@@ -311,6 +323,180 @@
           <div id="adminDishRows"></div>
         </section>
       </section>
+
+      <section class="admin-section admin-customers-section" id="adminCustomersSection" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Clientes</p>
+            <h1>Clientes y puntos</h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="search">
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+              <input id="adminCustomerSearchInput" type="search" placeholder="Buscar por nombre, Gmail o ID..." />
+            </label>
+          </div>
+        </header>
+
+        <section class="admin-card admin-note-card">
+          <div>
+            <h2>Operacion por QR</h2>
+            <p>El QR identifica al cliente. La acreditacion de puntos debe ocurrir desde un flujo owner/backend, nunca desde el frontend del cliente.</p>
+          </div>
+        </section>
+
+        <section class="menu-board" aria-label="Clientes registrados">
+          <div class="table-head admin-customers-head">
+            <span>Cliente</span>
+            <span>Puntos</span>
+            <span>Nivel</span>
+            <span>QR visible</span>
+            <span>Alta</span>
+          </div>
+          <div id="adminCustomerRows"></div>
+        </section>
+      </section>
+
+      <section class="admin-section admin-content-section" id="adminContentSection" hidden>
+        <header class="admin-content-hero">
+          <div>
+            <p class="eyebrow">Crear contenido con IA</p>
+            <h1>Hagamos algo bonito para Instagram</h1>
+            <p>Tres pasos. Tu nos dices, nosotros lo hacemos.</p>
+          </div>
+        </header>
+
+        <div class="admin-content-steps" aria-label="Progreso para crear contenido">
+          <span class="is-done"><b>1</b> Elige platillo</span>
+          <span class="is-done"><b>2</b> Tipo de pieza</span>
+          <span class="is-current"><b>3</b> Instrucciones</span>
+        </div>
+
+        <div class="admin-ia-layout">
+          <div class="admin-ia-builder">
+            <section class="admin-ia-step-card">
+              <span class="admin-step-thumb" id="adminContentDishThumb"></span>
+              <div>
+                <p>Paso 1 &middot; Platillo</p>
+                <h2 id="adminContentDishTitle">Platillo</h2>
+                <small id="adminContentDishMeta">Marca &middot; precio</small>
+              </div>
+              <select id="adminContentDishSelect" aria-label="Elegir platillo"></select>
+            </section>
+
+            <section class="admin-ia-step-card">
+              <span class="admin-step-thumb admin-platform-thumb">IG</span>
+              <div>
+                <p>Paso 2 &middot; Tipo de pieza</p>
+                <h2 id="adminContentTypeTitle">Post cuadrado para Instagram</h2>
+                <small id="adminContentTypeMeta">1080 x 1080 &middot; Foto + copy + hashtags</small>
+              </div>
+              <select id="adminContentTypeSelect" aria-label="Elegir tipo de pieza"></select>
+            </section>
+
+            <section class="admin-ia-instructions">
+              <h2>Paso 3 &middot; Que quieres decir?</h2>
+              <p>Habla normal, como si nos contaras. Si quieres, dejalo en blanco y nosotros inventamos.</p>
+              <textarea id="adminContentInstructions" rows="5" placeholder='Ej: "promocion 2x1", "nuevo en el menu", "regreso del especial de viernes"'></textarea>
+
+              <div class="admin-tone-row" id="adminToneRow" aria-label="Tono del contenido">
+                <button class="tone-chip" type="button" data-admin-tone="casual">Tono casual</button>
+                <button class="tone-chip" type="button" data-admin-tone="elegante">Tono elegante</button>
+                <button class="tone-chip" type="button" data-admin-tone="divertido">Tono divertido</button>
+                <button class="tone-chip active" type="button" data-admin-tone="antojador">Antojador</button>
+                <button class="tone-chip" type="button" data-admin-tone="finde">Para fin de semana</button>
+              </div>
+
+              <div class="admin-advanced">
+                <span>Opciones avanzadas</span>
+                <label><input id="adminIncludePrice" type="checkbox" /> Incluir precio</label>
+                <label><input id="adminIncludeCta" type="checkbox" /> Incluir CTA "reservar"</label>
+                <label><input id="adminGenerateVariants" type="checkbox" /> Generar 3 variaciones</label>
+                <label><input id="adminEnglishVersion" type="checkbox" /> Version en ingles</label>
+              </div>
+
+              <button class="primary admin-generate-button" id="adminCreateContentButton" type="button">
+                <svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
+                Generar contenido
+              </button>
+            </section>
+
+            <section class="admin-card admin-generated-copy">
+              <div class="admin-card-head">
+                <div>
+                  <h2>Borrador</h2>
+                  <p>Texto base listo para ajustar o publicar.</p>
+                </div>
+                <span class="admin-count-pill" id="adminContentCount">1</span>
+              </div>
+              <div class="admin-content-list" id="adminContentRows"></div>
+            </section>
+          </div>
+
+          <aside class="admin-card admin-content-preview" id="adminContentPreview" aria-label="Vista previa del contenido"></aside>
+        </div>
+      </section>
+
+      <section class="admin-section admin-library-section" id="adminLibrarySection" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Biblioteca</p>
+            <h1>Fotos y activos del menu</h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="search">
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+              <input id="adminLibrarySearchInput" type="search" placeholder="Buscar por platillo, marca o categoria..." />
+            </label>
+          </div>
+        </header>
+
+        <section class="admin-library-grid" id="adminLibraryGrid" aria-label="Biblioteca de imagenes"></section>
+      </section>
+
+      <section class="admin-section admin-rewards-section" id="adminRewardsSection" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Premios</p>
+            <h1>Catalogo y canjes</h1>
+          </div>
+        </header>
+
+        <div class="admin-split-grid">
+          <section class="admin-card">
+            <div class="admin-card-head">
+              <div>
+                <h2>Premios activos</h2>
+                <p>Se leen desde el config estatico de la plantilla.</p>
+              </div>
+              <span class="admin-count-pill" id="adminRewardsCount">0</span>
+            </div>
+            <div class="admin-compact-list" id="adminRewardRows"></div>
+          </section>
+
+          <section class="admin-card">
+            <div class="admin-card-head">
+              <div>
+                <h2>Canjes recientes</h2>
+                <p>Solicitudes creadas por clientes registrados.</p>
+              </div>
+              <span class="admin-count-pill" id="adminRedemptionsCount">0</span>
+            </div>
+            <div class="admin-compact-list" id="adminRedemptionRows"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="admin-section admin-settings-section" id="adminSettingsSection" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Ajustes</p>
+            <h1>Configuracion del negocio</h1>
+          </div>
+        </header>
+
+        <div class="admin-settings-grid" id="adminSettingsGrid"></div>
+      </section>
     </main>
 
     <main class="shell menu-app" id="menuApp">
@@ -338,19 +524,6 @@
         </div>
       </header>
 
-      <section class="brand-switch" aria-label="Marca">
-        <button class="active" data-brand="Habibi Bites">
-          <strong>Habibi Bites</strong>
-          <span>Libanes</span>
-        </button>
-        <button data-brand="Croissant de Lune">
-          <strong>Croissant de Lune</strong>
-          <span>Cafe & Desayunos</span>
-        </button>
-      </section>
-
-      <nav class="category-strip" id="categoryStrip" aria-label="Categorias"></nav>
-
       <section class="loyalty-card" aria-label="Puntos Sumi">
         <div class="loyalty-top">
           <div class="loyalty-copy">
@@ -372,6 +545,19 @@
         </div>
         <div class="reward-strip" id="rewardStrip"></div>
       </section>
+
+      <section class="brand-switch" aria-label="Marca">
+        <button class="active" data-brand="Habibi Bites">
+          <strong>Habibi Bites</strong>
+          <span>Libanes</span>
+        </button>
+        <button data-brand="Croissant de Lune">
+          <strong>Croissant de Lune</strong>
+          <span>Cafe & Desayunos</span>
+        </button>
+      </section>
+
+      <nav class="category-strip" id="categoryStrip" aria-label="Categorias"></nav>
 
       <section class="recommendation">
         <p>Hoy te recomendamos</p>

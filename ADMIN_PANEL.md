@@ -1,62 +1,194 @@
 # Panel de Admin del Negocio
 
-El panel de admin es privado para el dueño/equipo del negocio. No reemplaza al
-catalogo publico ni al perfil del cliente: sirve para operar el programa de
-lealtad y mantener datos del negocio.
+El panel de admin es privado para cuentas `owner`. No reemplaza el catalogo
+publico ni el perfil del cliente: es la herramienta diaria del negocio para
+operar lealtad, menu y contenido.
+
+La regla de diseno del panel es simple: mostrar primero lo que el dueno necesita
+resolver hoy y dejar las configuraciones profundas en pantallas secundarias.
 
 ## Roles
 
-- `owner`: dueño del negocio. Puede ver clientes, cuentas, historial, canjes y
-  actualizar saldos/canjes desde herramientas autorizadas.
-- `customer`: cliente del negocio. Puede ver su propio perfil, puntos, QR,
+- `owner`: dueno o responsable del negocio. Puede ver clientes, cuentas,
+  historial, canjes y operaciones del `business_id` donde tiene permiso.
+- `customer`: cliente final. Puede ver solo su propio perfil, puntos, QR,
   historial y canjes.
 
-`owner` se guarda en `business_admins`, vinculando `auth.users.id` con
-`business_id`. `customer` se deriva de `customer_profiles`, por lo que no
-necesita una tabla de roles aparte.
+`owner` vive en `business_admins`. `customer` se deriva de
+`customer_profiles`. No debe existir un tercer rol para el MVP.
 
-## MVP del Panel
+## Navegacion Simplificada
 
-El dueño del negocio deberia poder:
+La navegacion principal queda en cinco secciones:
 
-- Ver resumen del negocio: clientes registrados, puntos emitidos, puntos
-  canjeados, premios pendientes y actividad reciente.
-- Buscar clientes por nombre, email o alias visible del QR.
-- Abrir ficha de cliente con datos basicos, puntos, nivel, QR publico,
-  historial y canjes.
-- Acreditar consumo escaneando o pegando el QR del cliente.
-- Cargar puntos manualmente con motivo obligatorio.
-- Restar puntos por canje, ajuste o expiracion con motivo obligatorio.
-- Ver solicitudes de premios y marcarlas como `approved`, `redeemed`,
-  `cancelled`.
-- Editar premios del catalogo de lealtad en una fase posterior.
+- Inicio
+- Clientes
+- Mi menu
+- Premios
+- Ajustes
 
-## Seguridad
+La generacion con IA no queda como seccion principal. Aparece como accion
+contextual dentro de Inicio o dentro del editor de producto, porque para el
+dueno es una tarea, no un destino.
 
-- El cliente no puede acreditarse puntos desde el frontend.
-- El QR identifica al cliente, no acredita puntos por si solo.
-- Los admins solo ven datos del `business_id` donde tienen membresia.
-- RLS permite a owners leer clientes/cuentas/eventos/canjes del negocio.
-- RLS permite a owners insertar `point_events`, actualizar `loyalty_accounts` y
-  actualizar `reward_redemptions`.
-- Crear o quitar owners debe hacerse con credenciales administrativas o un panel
-  de owner endurecido; no debe estar disponible para customers.
+## Inicio
 
-## Flujo Recomendado Para Acreditar Consumo
+Funcion: tablero operativo del dia.
 
-1. El cliente muestra su QR de cliente recurrente.
-2. El empleado/admin lo escanea desde el panel.
-3. El panel resuelve el `public_qr_id` a una cuenta loyalty.
-4. El empleado carga importe, productos o puntos.
-5. Backend inserta un `point_events` con tipo `purchase`.
-6. Backend actualiza `loyalty_accounts.points_balance` y `tier`.
-7. El cliente ve el saldo actualizado al refrescar o iniciar sesion.
+Debe mostrar:
 
-## Pendiente de UI
+- Resumen corto del negocio.
+- Productos visibles y productos ocultos/agostados.
+- Premios activos y canjes pendientes.
+- Producto recomendado o mas conveniente para destacar.
+- Atajos a las tareas frecuentes.
 
-- Crear ruta/vista privada de admin.
-- Detectar si la sesion actual tiene fila en `business_admins`.
-- Separar navegacion cliente/admin.
-- Agregar acciones con confirmacion para ajustes de puntos.
-- Agregar estados vacios, loading, errores y auditoria visible.
-- Agregar listado completo/paginado de clientes e historial.
+Acciones principales:
+
+- Cargar consumo por QR.
+- Revisar canjes.
+- Editar menu.
+- Crear contenido con IA.
+
+Diseno recomendado:
+
+- Maximo tres metricas visibles arriba.
+- Cuatro acciones grandes con icono, titulo y descripcion corta.
+- Una sugerencia del dia, con una unica accion.
+
+## Clientes
+
+Funcion: centro de control de clientes y cuentas de lealtad.
+
+Debe permitir:
+
+- Buscar por nombre, Gmail o alias visible del QR.
+- Abrir ficha de cliente.
+- Ver puntos, nivel, QR publico, historial y canjes.
+- Cargar consumo escaneando o pegando el QR.
+- Hacer ajustes manuales con motivo obligatorio.
+
+MVP visual:
+
+- Lista simple de clientes.
+- Ficha lateral o modal con los datos clave.
+- Boton primario: `Cargar consumo`.
+- Historial con movimientos recientes.
+
+Seguridad:
+
+- El cliente nunca se acredita puntos desde su frontend.
+- El owner solo ve clientes del mismo `business_id`.
+
+## Mi Menu
+
+Funcion: mantener el catalogo publico.
+
+Debe permitir:
+
+- Buscar por nombre, categoria o ingrediente.
+- Ver productos con foto, categoria, marca, precio y estado.
+- Abrir el editor de producto.
+- Crear producto nuevo.
+- Ocultar/agotar producto sin borrarlo.
+
+MVP actual:
+
+- Lista editable de productos.
+- Busqueda local.
+- Entrada al editor de producto.
+
+## Editor de Producto
+
+Funcion: editar un platillo sin tocar codigo.
+
+Debe permitir:
+
+- Nombre y descripcion por idioma.
+- Presentaciones y precios.
+- Marca/concepto interno.
+- Categoria.
+- Foto principal.
+- Visibilidad en el menu.
+- Vista previa.
+
+IA dentro del editor:
+
+- Traducir textos.
+- Mejorar copy.
+- Generar o mejorar imagen del producto.
+
+Regla de UX:
+
+- El owner edita un idioma principal y la IA ayuda con el resto.
+- Los controles avanzados no deben competir con los campos basicos.
+
+## Premios
+
+Funcion: administrar el catalogo de beneficios y canjes.
+
+Debe permitir:
+
+- Crear premios.
+- Definir costo en puntos.
+- Activar/desactivar premios.
+- Revisar solicitudes de canje.
+- Marcar canjes como `approved`, `redeemed` o `cancelled`.
+
+Fase siguiente:
+
+- Stock limitado de premios.
+- Vencimientos.
+- Premios por nivel.
+- Reglas por sucursal o marca interna.
+
+## Ajustes
+
+Funcion: configuracion estable del negocio.
+
+Debe incluir:
+
+- Nombre del negocio.
+- Logo, iniciales y colores.
+- Idiomas y banderas.
+- Horarios, direccion, telefono y redes.
+- Dominio publicado.
+- Supabase del cliente.
+- Resend/remitente de emails.
+- Owners autorizados.
+
+Regla:
+
+- Cambios de seguridad, owners y credenciales deben hacerse con cuidado y quedar
+  documentados en el runbook del cliente.
+
+## Seguridad y RLS
+
+- RLS debe estar activo en tablas privadas.
+- Owners solo operan el `business_id` donde tienen membresia.
+- Customers solo leen sus propios datos.
+- `point_events` se crea desde flujos owner/backend, no desde cliente.
+- `public_qr_id` identifica al cliente, pero no acredita puntos por si solo.
+
+## Estado Actual del MVP
+
+Implementado:
+
+- Acceso al panel desde el perfil si la cuenta es `owner`.
+- Inicio simplificado.
+- Vista `Clientes` con lectura owner de perfiles, puntos, nivel, alias QR,
+  movimientos y canjes pendientes.
+- Vista `Mi menu`.
+- Editor visual de producto.
+- Vista `Premios` con catalogo configurado y canjes recientes.
+- Vista `Ajustes` con resumen de negocio, idiomas, Supabase, dominio, email y
+  permisos.
+- RLS base para owner/customer.
+
+Preparado para siguiente fase:
+
+- Carga de consumo por QR.
+- Acciones reales para aprobar/entregar/cancelar canjes.
+- Premios administrables desde UI.
+- Ajustes editables desde UI.
+- Generacion IA conectada a backend.

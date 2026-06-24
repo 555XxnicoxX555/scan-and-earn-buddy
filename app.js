@@ -42,6 +42,17 @@ let selectedPresentationIndex = 0;
 let currentSession = null;
 let currentCustomer = null;
 let currentAdminView = "home";
+let selectedContentDishId = menuItems.find((dish) => dish.visible)?.id || menuItems[0]?.id || "";
+let selectedContentType = "instagram-square";
+let selectedContentTone = "antojador";
+let currentAdminData = {
+  customers: [],
+  accounts: [],
+  events: [],
+  redemptions: [],
+  loaded: false,
+  error: null
+};
 const favoriteItems = new Set();
 const dishList = document.querySelector("#dishList");
 const searchInput = document.querySelector("#searchInput");
@@ -111,12 +122,44 @@ const profileLogoutButton = document.querySelector("#profileLogoutButton");
 const adminPanel = document.querySelector("#adminPanel");
 const adminHome = document.querySelector("#adminHome");
 const adminMenuSection = document.querySelector("#adminMenuSection");
+const adminCustomersSection = document.querySelector("#adminCustomersSection");
+const adminContentSection = document.querySelector("#adminContentSection");
+const adminLibrarySection = document.querySelector("#adminLibrarySection");
+const adminRewardsSection = document.querySelector("#adminRewardsSection");
+const adminSettingsSection = document.querySelector("#adminSettingsSection");
 const adminStats = document.querySelector("#adminStats");
 const adminActions = document.querySelector("#adminActions");
 const adminDishRows = document.querySelector("#adminDishRows");
 const adminSearchInput = document.querySelector("#adminSearchInput");
 const adminMenuCount = document.querySelector("#adminMenuCount");
+const adminCustomerSearchInput = document.querySelector("#adminCustomerSearchInput");
+const adminCustomerRows = document.querySelector("#adminCustomerRows");
+const adminCreateContentButton = document.querySelector("#adminCreateContentButton");
+const adminContentCount = document.querySelector("#adminContentCount");
+const adminContentRows = document.querySelector("#adminContentRows");
+const adminContentPreview = document.querySelector("#adminContentPreview");
+const adminContentDishThumb = document.querySelector("#adminContentDishThumb");
+const adminContentDishTitle = document.querySelector("#adminContentDishTitle");
+const adminContentDishMeta = document.querySelector("#adminContentDishMeta");
+const adminContentDishSelect = document.querySelector("#adminContentDishSelect");
+const adminContentTypeTitle = document.querySelector("#adminContentTypeTitle");
+const adminContentTypeMeta = document.querySelector("#adminContentTypeMeta");
+const adminContentTypeSelect = document.querySelector("#adminContentTypeSelect");
+const adminContentInstructions = document.querySelector("#adminContentInstructions");
+const adminToneRow = document.querySelector("#adminToneRow");
+const adminIncludePrice = document.querySelector("#adminIncludePrice");
+const adminIncludeCta = document.querySelector("#adminIncludeCta");
+const adminGenerateVariants = document.querySelector("#adminGenerateVariants");
+const adminEnglishVersion = document.querySelector("#adminEnglishVersion");
+const adminLibrarySearchInput = document.querySelector("#adminLibrarySearchInput");
+const adminLibraryGrid = document.querySelector("#adminLibraryGrid");
+const adminRewardsCount = document.querySelector("#adminRewardsCount");
+const adminRewardRows = document.querySelector("#adminRewardRows");
+const adminRedemptionsCount = document.querySelector("#adminRedemptionsCount");
+const adminRedemptionRows = document.querySelector("#adminRedemptionRows");
+const adminSettingsGrid = document.querySelector("#adminSettingsGrid");
 const adminNavItems = document.querySelectorAll("[data-admin-nav]");
+const adminExitButton = document.querySelector("#adminExitButton");
 const adminGreeting = document.querySelector("#adminGreeting");
 const adminSummary = document.querySelector("#adminSummary");
 const adminSuggestionButton = document.querySelector("#adminSuggestionButton");
@@ -136,6 +179,32 @@ let lastQrTrigger = null;
 let lastProfileTrigger = null;
 let signupMode = "register";
 const customerStorageKey = `sumi:loyalty:${businessId}:customerId`;
+const contentTypes = [
+  {
+    id: "instagram-square",
+    title: "Post cuadrado para Instagram",
+    meta: "1080 x 1080 - Foto + copy + hashtags",
+    platform: "IG"
+  },
+  {
+    id: "instagram-story",
+    title: "Historia para Instagram",
+    meta: "1080 x 1920 - Foto vertical + sticker + CTA",
+    platform: "ST"
+  },
+  {
+    id: "whatsapp-promo",
+    title: "Promo para WhatsApp",
+    meta: "Imagen ligera - Copy corto + llamada a reservar",
+    platform: "WA"
+  },
+  {
+    id: "menu-highlight",
+    title: "Destacado del menu",
+    meta: "Foto + titulo + descripcion breve",
+    platform: "HB"
+  }
+];
 
 function setText(selector, value) {
   const element = document.querySelector(selector);
@@ -271,6 +340,154 @@ function visibleAdminItems() {
     const haystack = `${dish.name} ${dish.description} ${dish.category} ${dish.brand}`.toLowerCase();
     return !query || haystack.includes(query);
   });
+}
+
+function libraryItems() {
+  const query = adminLibrarySearchInput?.value.trim().toLowerCase() || "";
+  return menuItems.filter((dish) => {
+    const haystack = `${dish.name} ${dish.description} ${dish.category} ${dish.brand}`.toLowerCase();
+    return !query || haystack.includes(query);
+  });
+}
+
+function contentIdeas() {
+  return menuItems
+    .filter((dish) => dish.visible)
+    .slice(0, 6)
+    .map((dish, index) => {
+      const themes = ["Producto estrella", "Promo de la tarde", "Historia del plato", "Antojo rapido", "Post de fin de semana", "Combo sugerido"];
+      const hooks = [
+        `Hoy sale ${dish.name}: ${dish.description}`,
+        `${dish.name} listo para antojo serio, con precio desde ${priceRange(dish)}.`,
+        `Si buscas algo de ${dish.category}, ${dish.name} es la jugada.`
+      ];
+      return {
+        dish,
+        theme: themes[index % themes.length],
+        hook: hooks[index % hooks.length]
+      };
+    });
+}
+
+function selectedContentDish() {
+  return menuItems.find((dish) => dish.id === selectedContentDishId) || menuItems.find((dish) => dish.visible) || menuItems[0];
+}
+
+function selectedContentFormat() {
+  return contentTypes.find((type) => type.id === selectedContentType) || contentTypes[0];
+}
+
+function contentDraft(dish, format) {
+  const instructions = adminContentInstructions?.value.trim();
+  const toneLabels = {
+    casual: "casual",
+    elegante: "elegante",
+    divertido: "divertido",
+    antojador: "antojador",
+    finde: "de fin de semana"
+  };
+  const tone = toneLabels[selectedContentTone] || "antojador";
+  const price = adminIncludePrice?.checked ? ` Desde ${priceRange(dish)}.` : "";
+  const cta = adminIncludeCta?.checked ? " Reserva por WhatsApp y te lo preparamos." : " Ven por el tuyo hoy.";
+  const userBrief = instructions ? ` ${instructions}` : "";
+  const language = adminEnglishVersion?.checked ? "EN" : "ES";
+  const caption = language === "EN"
+    ? `${dish.name} is ready for your next craving.${price} ${dish.description}${cta}`
+    : `${dish.name} para un antojo ${tone}.${price} ${dish.description}${userBrief}${cta}`;
+  const hashtags = `#HabibiBites #Condesa #${dish.category.replace(/\s+/g, "")} #${dish.name.replace(/\s+/g, "")}`;
+  const variants = adminGenerateVariants?.checked
+    ? [
+        caption,
+        `${dish.name}: sabor de casa, foto bonita y ganas de volver.${price}${cta}`,
+        `Hoy toca ${dish.name}. ${dish.description}${price}${cta}`
+      ]
+    : [caption];
+  return {
+    caption,
+    hashtags,
+    variants,
+    overlay: format.id === "whatsapp-promo" ? "Promo lista para compartir" : "Vista previa"
+  };
+}
+
+function shortQrAlias(profile, account) {
+  const name = (profile?.name || "Cliente").split(/\s+/)[0].replace(/[^\w-]/g, "") || "Cliente";
+  const digits = String(account?.public_qr_id || account?.id || profile?.id || "")
+    .replace(/\D/g, "")
+    .slice(-4)
+    .padStart(4, "0");
+  return `${name}-${digits}`;
+}
+
+function accountForCustomer(customerId) {
+  return currentAdminData.accounts.find((account) => account.customer_id === customerId);
+}
+
+function eventsForCustomer(customerId) {
+  return currentAdminData.events.filter((event) => event.customer_id === customerId);
+}
+
+function redemptionsForCustomer(customerId) {
+  return currentAdminData.redemptions.filter((redemption) => redemption.customer_id === customerId);
+}
+
+function customerSearchMatches(profile, account) {
+  const query = adminCustomerSearchInput?.value.trim().toLowerCase() || "";
+  if (!query) return true;
+  const haystack = `${profile.name} ${profile.email} ${shortQrAlias(profile, account)} ${account?.public_qr_id || ""}`.toLowerCase();
+  return haystack.includes(query);
+}
+
+async function loadAdminData() {
+  if (!supabase || !isOwner()) {
+    currentAdminData = { customers: [], accounts: [], events: [], redemptions: [], loaded: false, error: null };
+    return currentAdminData;
+  }
+
+  const [
+    customersResult,
+    accountsResult,
+    eventsResult,
+    redemptionsResult
+  ] = await Promise.all([
+    supabase
+      .from("customer_profiles")
+      .select("*")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("loyalty_accounts")
+      .select("*")
+      .eq("business_id", businessId)
+      .order("updated_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("point_events")
+      .select("*")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("reward_redemptions")
+      .select("*")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(100)
+  ]);
+
+  const error = customersResult.error || accountsResult.error || eventsResult.error || redemptionsResult.error;
+  if (error) throw error;
+
+  currentAdminData = {
+    customers: customersResult.data || [],
+    accounts: accountsResult.data || [],
+    events: eventsResult.data || [],
+    redemptions: redemptionsResult.data || [],
+    loaded: true,
+    error: null
+  };
+  return currentAdminData;
 }
 
 async function loadCustomerData(session = currentSession, options = {}) {
@@ -754,23 +971,25 @@ function renderAdminHome() {
   const ownerName = currentCustomer?.profile?.name || "Owner";
   const activeItems = menuItems.filter((dish) => dish.visible);
   const hiddenItems = menuItems.length - activeItems.length;
-  const topDish = recommendedDish();
-  const generatedCount = Math.max(8, Math.round(menuItems.length / 3));
+  const activeRewards = rewardCatalog.length;
+  const customerCount = currentAdminData.loaded ? currentAdminData.customers.length : "—";
 
   adminGreeting.textContent = `Buenos dias, ${ownerName}`;
-  adminSummary.innerHTML = `Tu menu se vio <strong>347 veces</strong> ayer. Aqui esta el resumen.`;
+  adminSummary.innerHTML = `Gestiona clientes, puntos y menu desde un panel simple. Hoy conviene revisar <strong>${activeRewards} premios</strong> y <strong>${activeItems.length} productos visibles</strong>.`;
   adminStats.innerHTML = `
-    <article class="admin-stat"><span>Vistas al menu</span><strong>2,184</strong><small>+18% esta semana</small></article>
-    <article class="admin-stat"><span>Platillo mas visto</span><strong>${escapeHtml(topDish?.name || "Sin datos")}</strong><small>412 vistas</small></article>
-    <article class="admin-stat"><span>Contenido generado</span><strong>${generatedCount} piezas</strong><small>este mes</small></article>
-    <article class="admin-stat"><span>Productos en menu</span><strong>${menuItems.length}</strong><small>${hiddenItems} ocultos o agotados</small></article>
+    <article class="admin-stat"><span>Clientes</span><strong>${escapeHtml(customerCount)}</strong><small>registrados en loyalty</small></article>
+    <article class="admin-stat"><span>Productos visibles</span><strong>${activeItems.length}</strong><small>${hiddenItems} ocultos o agotados</small></article>
+    <article class="admin-stat"><span>Premios activos</span><strong>${activeRewards}</strong><small>catalogo de lealtad</small></article>
   `;
   adminActions.innerHTML = `
-    <button type="button" data-admin-action="content"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg></span><strong>Crear post para Instagram</strong><small>Foto + copy con IA · 30s</small></button>
-    <button type="button" data-admin-action="soldout"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-menu"></use></svg></span><strong>Marcar un platillo como agotado</strong><small>Se oculta automaticamente</small></button>
-    <button type="button" data-admin-action="new"><span>+</span><strong>Agregar un producto nuevo</strong><small>Con traduccion automatica</small></button>
-    <button type="button" data-admin-action="prices"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-settings"></use></svg></span><strong>Cambiar precio masivo</strong><small>Toda una categoria a la vez</small></button>
+    <button type="button" data-admin-action="customers"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-qr"></use></svg></span><strong>Cargar consumo por QR</strong><small>Escanear cliente y acreditar desde backend</small></button>
+    <button type="button" data-admin-action="rewards"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-library"></use></svg></span><strong>Revisar canjes</strong><small>Aprobar, entregar o cancelar premios</small></button>
+    <button type="button" data-admin-action="menu"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-menu"></use></svg></span><strong>Editar menu</strong><small>Productos, precios, fotos y visibilidad</small></button>
+    <button type="button" data-admin-action="content"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg></span><strong>Crear contenido IA</strong><small>Post, copy e imagenes desde platillos</small></button>
   `;
+  document.querySelector("#adminSuggestionTitle").textContent = "Mantene el panel enfocado en las tareas del dia.";
+  document.querySelector("#adminSuggestionText").textContent = "Clientes, canjes y menu son las tres areas que el dueno necesita resolver sin perderse en configuraciones.";
+  adminSuggestionButton.innerHTML = `<svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg> Preparar contenido IA`;
 }
 
 function renderAdminMenu() {
@@ -797,16 +1016,223 @@ function renderAdminMenu() {
     .join("");
 }
 
+function renderAdminCustomers() {
+  if (!adminCustomerRows) return;
+  if (currentAdminData.error) {
+    adminCustomerRows.innerHTML = `<div class="admin-empty">No se pudieron cargar clientes: ${escapeHtml(displayError(currentAdminData.error))}</div>`;
+    return;
+  }
+
+  const customers = currentAdminData.customers
+    .filter((profile) => customerSearchMatches(profile, accountForCustomer(profile.id)));
+
+  adminCustomerRows.innerHTML = customers.length
+    ? customers
+        .map((profile) => {
+          const account = accountForCustomer(profile.id);
+          const recentEvents = eventsForCustomer(profile.id);
+          const pending = redemptionsForCustomer(profile.id).filter((redemption) => redemption.status === "requested").length;
+          return `
+            <article class="admin-customer-row">
+              <span>
+                <strong>${escapeHtml(profile.name)}</strong>
+                <small>${escapeHtml(profile.email)}</small>
+              </span>
+              <b>${escapeHtml(account?.points_balance ?? 0)} pts</b>
+              <span class="pill">${escapeHtml(account?.tier || "bronze")}</span>
+              <code>${escapeHtml(shortQrAlias(profile, account))}</code>
+              <span>
+                <strong>${escapeHtml(formatEventDate(profile.created_at))}</strong>
+                <small>${recentEvents.length} movimientos · ${pending} canjes pendientes</small>
+              </span>
+            </article>
+          `;
+        })
+        .join("")
+    : `<div class="admin-empty">Todavia no hay clientes para este negocio.</div>`;
+}
+
+function renderAdminContent() {
+  if (!adminContentRows || !adminContentPreview || !adminContentDishSelect || !adminContentTypeSelect) return;
+  const dish = selectedContentDish();
+  const format = selectedContentFormat();
+  if (!dish) {
+    adminContentPreview.innerHTML = `<div class="admin-empty">Agrega productos al menu para preparar previews.</div>`;
+    adminContentRows.innerHTML = `<div class="admin-empty">No hay productos visibles para generar contenido.</div>`;
+    return;
+  }
+  const draft = contentDraft(dish, format);
+
+  adminContentDishSelect.innerHTML = menuItems
+    .filter((item) => item.visible)
+    .map((item) => `<option value="${escapeAttribute(item.id)}" ${item.id === dish.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`)
+    .join("");
+  adminContentTypeSelect.innerHTML = contentTypes
+    .map((type) => `<option value="${escapeAttribute(type.id)}" ${type.id === format.id ? "selected" : ""}>${escapeHtml(type.title)}</option>`)
+    .join("");
+
+  adminContentDishThumb.style.backgroundImage = `url('${dish.photo}')`;
+  adminContentDishTitle.textContent = dish.name;
+  adminContentDishMeta.textContent = `${dish.brand} - ${priceRange(dish)}`;
+  adminContentTypeTitle.textContent = format.title;
+  adminContentTypeMeta.textContent = format.meta;
+  adminContentCount.textContent = draft.variants.length;
+
+  adminToneRow.querySelectorAll("[data-admin-tone]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.adminTone === selectedContentTone);
+  });
+
+  adminContentRows.innerHTML = draft.variants
+    .map((variant, index) => `
+      <article class="admin-copy-card">
+        <span>Variacion ${index + 1}</span>
+        <p>${escapeHtml(variant)}</p>
+        <small>${escapeHtml(draft.hashtags)}</small>
+      </article>
+    `)
+    .join("");
+
+  adminContentPreview.innerHTML = `
+    <div class="admin-preview-shell">
+      <div class="admin-preview-account">
+        <span>HB</span>
+        <div>
+          <strong>habibi_bites_mx</strong>
+          <small>Hipodromo Condesa</small>
+        </div>
+      </div>
+      <div class="admin-post-preview ${format.id === "instagram-story" ? "is-story" : ""}" style="background-image:linear-gradient(to bottom, rgba(0,0,0,0.05), rgba(0,0,0,0.72)), url('${dish.photo}')">
+        <div class="admin-preview-overlay">
+          <span>${escapeHtml(draft.overlay)}</span>
+          <strong>${escapeHtml(dish.name)}</strong>
+          <small>${escapeHtml(format.id === "whatsapp-promo" ? draft.caption : "La IA va a componer el anuncio completo con foto, titulo y texto integrado.")}</small>
+        </div>
+      </div>
+      <p><strong>habibi_bites_mx</strong> ${escapeHtml(draft.caption)}</p>
+      <small>${escapeHtml(draft.hashtags)}</small>
+    </div>
+  `;
+}
+
+function renderAdminLibrary() {
+  if (!adminLibraryGrid) return;
+  const items = libraryItems();
+  adminLibraryGrid.innerHTML = items.length
+    ? items
+        .map((dish) => `
+          <article class="admin-asset-card">
+            <span class="admin-asset-image" style="background-image:url('${dish.photo}')"></span>
+            <span>
+              <strong>${escapeHtml(dish.name)}</strong>
+              <small>${escapeHtml(dish.brand)} &middot; ${escapeHtml(dish.category)}</small>
+            </span>
+            <button class="icon-button" type="button" data-admin-copy-photo="${escapeAttribute(dish.photo)}" aria-label="Copiar URL de ${escapeAttribute(dish.name)}">
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-image"></use></svg>
+            </button>
+          </article>
+        `)
+        .join("")
+    : `<div class="admin-empty">No encontramos activos con esa busqueda.</div>`;
+}
+
+function renderAdminRewards() {
+  if (!adminRewardRows || !adminRedemptionRows) return;
+  adminRewardsCount.textContent = rewardCatalog.length;
+  adminRewardRows.innerHTML = rewardCatalog.length
+    ? rewardCatalog
+        .map((reward) => `
+          <article class="admin-list-row">
+            <span>
+              <strong>${escapeHtml(reward.name)}</strong>
+              <small>${escapeHtml(reward.description || "Premio activo")}</small>
+            </span>
+            <b>${escapeHtml(reward.cost)} pts</b>
+          </article>
+        `)
+        .join("")
+    : `<div class="admin-empty">No hay premios configurados.</div>`;
+
+  adminRedemptionsCount.textContent = currentAdminData.redemptions.length;
+  adminRedemptionRows.innerHTML = currentAdminData.redemptions.length
+    ? currentAdminData.redemptions
+        .map((redemption) => {
+          const customer = currentAdminData.customers.find((profile) => profile.id === redemption.customer_id);
+          return `
+            <article class="admin-list-row">
+              <span>
+                <strong>${escapeHtml(redemption.reward_name)}</strong>
+                <small>${escapeHtml(customer?.name || "Cliente")} · ${escapeHtml(formatEventDate(redemption.created_at))}</small>
+              </span>
+              <span class="status">${escapeHtml(redemption.status)}</span>
+            </article>
+          `;
+        })
+        .join("")
+    : `<div class="admin-empty">Todavia no hay solicitudes de canje.</div>`;
+}
+
+function renderAdminSettings() {
+  if (!adminSettingsGrid) return;
+  const languageSummary = languages.map((language) => `${language.code.toUpperCase()} / ${language.flag}`).join(", ");
+  const supabaseStatus = supabase ? "Conectado" : "Sin credenciales publicas";
+  const appUrlStatus = publicAppUrl || window.location.origin;
+  const ownerStatus = isOwner() ? "Owner activo" : "Sin permiso owner";
+
+  adminSettingsGrid.innerHTML = `
+    <article class="admin-setting-card">
+      <span>Negocio</span>
+      <strong>${escapeHtml(businessConfig.businessName || businessConfig.landing?.primaryName || businessId)}</strong>
+      <small>ID: ${escapeHtml(businessId)}</small>
+    </article>
+    <article class="admin-setting-card">
+      <span>Idiomas</span>
+      <strong>${escapeHtml(languages.length)} activos</strong>
+      <small>${escapeHtml(languageSummary)}</small>
+    </article>
+    <article class="admin-setting-card">
+      <span>Supabase</span>
+      <strong>${escapeHtml(supabaseStatus)}</strong>
+      <small>${escapeHtml(supabaseUrl || "Agregar VITE_SUPABASE_URL")}</small>
+    </article>
+    <article class="admin-setting-card">
+      <span>Dominio</span>
+      <strong>${escapeHtml(appUrlStatus)}</strong>
+      <small>Debe coincidir con Auth redirect URLs.</small>
+    </article>
+    <article class="admin-setting-card">
+      <span>Email</span>
+      <strong>Resend via Auth Hook</strong>
+      <small>Configurar remitente verificado y secret en Supabase.</small>
+    </article>
+    <article class="admin-setting-card">
+      <span>Permisos</span>
+      <strong>${escapeHtml(ownerStatus)}</strong>
+      <small>Owners se administran en business_admins.</small>
+    </article>
+  `;
+}
+
 function renderAdminPanel() {
   if (!isOwner()) return;
   renderAdminHome();
   renderAdminMenu();
+  renderAdminCustomers();
+  renderAdminContent();
+  renderAdminLibrary();
+  renderAdminRewards();
+  renderAdminSettings();
 }
 
 function setAdminView(view) {
-  currentAdminView = view === "menu" ? "menu" : "home";
+  const validViews = new Set(["home", "customers", "menu", "content", "library", "rewards", "settings"]);
+  currentAdminView = validViews.has(view) ? view : "home";
   adminHome.hidden = currentAdminView !== "home";
+  adminCustomersSection.hidden = currentAdminView !== "customers";
   adminMenuSection.hidden = currentAdminView !== "menu";
+  adminContentSection.hidden = currentAdminView !== "content";
+  adminLibrarySection.hidden = currentAdminView !== "library";
+  adminRewardsSection.hidden = currentAdminView !== "rewards";
+  adminSettingsSection.hidden = currentAdminView !== "settings";
   adminNavItems.forEach((item) => {
     const active = item.dataset.adminNav === currentAdminView;
     item.classList.toggle("active", active);
@@ -814,7 +1240,7 @@ function setAdminView(view) {
   });
 }
 
-function openAdminPanel(view = "home") {
+async function openAdminPanel(view = "home") {
   if (!isOwner()) {
     showToast("Esta cuenta no tiene permisos de owner.");
     return;
@@ -826,6 +1252,20 @@ function openAdminPanel(view = "home") {
   document.body.classList.add("admin-active");
   adminPanel.hidden = false;
   setAdminView(view);
+  renderAdminPanel();
+  try {
+    await loadAdminData();
+  } catch (error) {
+    currentAdminData = {
+      customers: [],
+      accounts: [],
+      events: [],
+      redemptions: [],
+      loaded: true,
+      error
+    };
+    showToast(displayError(error));
+  }
   renderAdminPanel();
   window.requestAnimationFrame(() => adminPanel.focus?.());
 }
@@ -1031,29 +1471,73 @@ adminNavItems.forEach((item) => {
   item.addEventListener("click", (event) => {
     event.preventDefault();
     const view = item.dataset.adminNav;
-    if (view === "home" || view === "menu") {
-      openAdminPanel(view);
-      return;
-    }
-    showToast("Seccion preparada para la siguiente fase.");
+    openAdminPanel(view);
   });
 });
+
+adminExitButton.addEventListener("click", closeAdminPanel);
 
 adminActions.addEventListener("click", (event) => {
   const button = event.target.closest("[data-admin-action]");
   if (!button) return;
-  if (button.dataset.adminAction === "new" || button.dataset.adminAction === "soldout" || button.dataset.adminAction === "prices") {
-    openAdminPanel("menu");
+  if (button.dataset.adminAction === "menu" || button.dataset.adminAction === "customers" || button.dataset.adminAction === "rewards" || button.dataset.adminAction === "content") {
+    openAdminPanel(button.dataset.adminAction);
     return;
   }
-  showToast("Generacion con IA preparada para la siguiente fase.");
+  showToast("Seccion preparada para la siguiente fase.");
 });
 
 adminSuggestionButton.addEventListener("click", () => {
-  showToast("Generacion con IA preparada para la siguiente fase.");
+  openAdminPanel("content");
 });
 
 adminSearchInput.addEventListener("input", renderAdminMenu);
+adminCustomerSearchInput.addEventListener("input", renderAdminCustomers);
+adminLibrarySearchInput.addEventListener("input", renderAdminLibrary);
+
+adminCreateContentButton.addEventListener("click", () => {
+  showToast("Propuesta de contenido preparada con productos visibles.");
+  renderAdminContent();
+});
+
+adminContentDishSelect.addEventListener("change", () => {
+  selectedContentDishId = adminContentDishSelect.value;
+  renderAdminContent();
+});
+
+adminContentTypeSelect.addEventListener("change", () => {
+  selectedContentType = adminContentTypeSelect.value;
+  renderAdminContent();
+});
+
+adminContentInstructions.addEventListener("input", renderAdminContent);
+
+adminToneRow.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-admin-tone]");
+  if (!button) return;
+  selectedContentTone = button.dataset.adminTone;
+  renderAdminContent();
+});
+
+[adminIncludePrice, adminIncludeCta, adminGenerateVariants, adminEnglishVersion].forEach((checkbox) => {
+  checkbox.addEventListener("change", renderAdminContent);
+});
+
+adminContentRows.addEventListener("click", (event) => {
+  const dish = selectedContentDish();
+  if (dish) openAdminEditor(dish.id);
+});
+
+adminLibraryGrid.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-admin-copy-photo]");
+  if (!button) return;
+  try {
+    await navigator.clipboard.writeText(button.dataset.adminCopyPhoto);
+    showToast("URL de imagen copiada.");
+  } catch {
+    showToast("No se pudo copiar la URL.");
+  }
+});
 
 adminDishRows.addEventListener("click", (event) => {
   const row = event.target.closest("[data-admin-dish]");
