@@ -59,6 +59,8 @@ Este catalogo ordena las skills disponibles para trabajar la plantilla Sumi. No 
 |---|---|---|
 | `marketing-skills-collection` | Copy, marketing, tono comercial y contenido para negocio. | Recomendada |
 | `reportes` | Reportes internos o documentacion de avance. | Recomendada |
+| `ux-work-report-generator` | Reportes visuales estaticos con evidencia, capturas, decisiones UX y proximos pasos. | Recomendada |
+| `live-section-preview` | Previsualizar cambios de una seccion en una URL local aislada antes de tocar el proyecto principal. | Recomendada |
 
 ## Candidatas externas auditadas
 
@@ -92,3 +94,5 @@ Para la plantilla Sumi actual, que sigue estatica con Vite, CSS y JS:
 3. Para animaciones: empezar con CSS o `animejs`; usar GSAP solo si el movimiento justifica la dependencia.
 4. Para registro, datos o Supabase: mantener la plantilla estatica hasta validar el flujo; usar skills de seguridad antes de conectar base de datos real.
 5. Antes de mostrar a un cliente: revisar desktop en ancho tipo telefono, mobile real, detalle de producto, panel editor, idiomas, iconos y hover de todo lo clickeable.
+6. Para probar una idea visual sin tocar la app: usar `live-section-preview`, compartir la URL local, iterar y aplicar al proyecto solo despues de aprobacion explicita.
+7. Para documentar una sesion larga de trabajo: usar `ux-work-report-generator` y guardar el reporte en una carpeta hermana fuera del repo si es para entrega.

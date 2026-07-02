@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{REPORT_TITLE}}</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <p class="eyebrow">{{PROJECT_NAME}}</p>
+      <h1>{{REPORT_TITLE}}</h1>
+      <p>{{SUMMARY}}</p>
+    </header>
+    <main>
+      <section class="section">
+        <h2>Resumen ejecutivo</h2>
+        <div class="cards">
+          <article><b>Objetivo</b><p>{{OBJECTIVE}}</p></article>
+          <article><b>Impacto</b><p>{{IMPACT}}</p></article>
+        </div>
+      </section>
+      <section class="section">
+        <h2>Evidencia</h2>
+        <pre><code>{{VALIDATION}}</code></pre>
+      </section>
+    </main>
+  </body>
+</html>

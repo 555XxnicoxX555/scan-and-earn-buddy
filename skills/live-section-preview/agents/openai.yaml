@@ -1,0 +1,4 @@
+interface:
+  display_name: "Live Section Preview"
+  short_description: "Previsualiza cambios aislados antes de aplicar"
+  default_prompt: "Use $live-section-preview to show an isolated live preview of this UI change before implementing it."

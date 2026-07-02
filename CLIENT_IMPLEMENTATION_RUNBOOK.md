@@ -261,7 +261,53 @@ No guardar `AUTH_HOOK_SECRET` en archivos del repo.
    npm run build
    ```
 
-## 10. Pruebas obligatorias
+7. Revisar el editor admin en:
+
+   ```text
+   #/admin/menu
+   #/admin/menu/<id-del-producto>/edit
+   #/admin/menu/<id-del-producto>/preview
+   ```
+
+8. Probar carga de imagen desde el editor. La plantilla comprime la imagen antes
+   de guardarla, pero para produccion las fotos versionadas en `assets/menu/`
+   deben entregarse ya optimizadas.
+
+## 10. Traduccion IA del menu
+
+Si el negocio usara traduccion IA, configurar el secret remoto:
+
+```powershell
+$env:SUPABASE_ACCESS_TOKEN="<token-temporal>"
+npx supabase secrets set OPENAI_API_KEY="<openai-api-key>" --project-ref <project-ref>
+npx supabase functions deploy translate-menu-item --project-ref <project-ref>
+```
+
+No guardar `OPENAI_API_KEY` en `.env`, `config.js` ni documentacion.
+
+La traduccion se ejecuta desde las opciones del producto:
+
+- Ruta: `#/admin/menu/<id>/edit`.
+- Seccion: `Nombre y descripcion`.
+- Boton: `Traducir con IA`.
+- Modelo: `gpt-5-nano`.
+- Fuente: ultimo idioma editado por el owner.
+- Salida: `es`, `en` y `ar`.
+
+La funcion remota valida que el usuario logeado sea admin del negocio en
+`business_admins`. Si el boton falla aunque el secret este configurado, revisar
+permisos owner para ese usuario y que la app apunte al Supabase correcto.
+
+Prueba esperada:
+
+1. Entrar como owner.
+2. Abrir `#/admin/menu/<id>/edit`.
+3. Editar nombre o descripcion en cualquier idioma.
+4. Tocar `Traducir con IA`.
+5. Confirmar que se autocompletan `es`, `en` y `ar`.
+6. Guardar y revisar que el menu publico cambie al alternar idioma.
+
+## 11. Pruebas obligatorias
 
 Antes de mostrar al cliente:
 
@@ -277,10 +323,65 @@ Antes de mostrar al cliente:
 - Perfil: muestra nombre, Gmail, puntos, nivel, QR, historial y logout.
 - Logout: vuelve al estado invitado.
 - Recuperar contrasena: envia email por Resend.
+- Admin menu: solo el icono de lapiz abre el editor.
+- Editor: tabs de idioma cambian texto sin perder cambios.
+- Editor: `Marcar agotado` persiste y aparece en preview/menu publico.
+- Editor: `+ Agregar` suma presentaciones hasta el limite de tres.
+- Editor: subir foto grande la optimiza y no rompe el menu.
+- Traduccion IA: completa idiomas si `OPENAI_API_KEY` esta configurada.
+- `npm run audit:ui`: confirma que no haya botones activos sin handler obvio.
+- `npm run smoke:ui`: prueba en navegador menu publico, detalle, guard admin,
+  crear platillo, guardar y preview. Requiere el dev server activo en
+  `http://127.0.0.1:8080` o definir `SUMI_SMOKE_URL`.
 - `npm run check:supabase`: todas las tablas `ok`.
 - `npm run build`: termina sin errores.
 
-## 11. Errores comunes
+### Owner local para QA
+
+La app incluye un bypass solo para pruebas locales del panel admin. Se activa
+unicamente cuando Vite corre en modo desarrollo, el host es `localhost` o
+`127.0.0.1`, y existe esta bandera en `localStorage`:
+
+```js
+localStorage.setItem("sumi:dev-owner", "true")
+```
+
+No funciona en build de produccion. `npm run smoke:ui` usa esta bandera dentro
+de un contexto de navegador temporal para verificar `Crear platillo`, `Guardar`
+y `Vista previa` sin depender de una cuenta owner real. Para validar permisos
+reales de cliente, siempre probar tambien con una cuenta incluida en
+`business_admins`.
+
+## 12. Imagenes y performance
+
+Recomendaciones para fotos finales:
+
+- Lado largo entre 1200 y 1600 px.
+- Peso ideal por producto: 300-500 KB o menos.
+- Preferir WebP o JPEG optimizado.
+- Evitar PNG para fotos, salvo transparencia real.
+- Nombrar cada archivo igual al `id` del producto cuando se use
+  `productImage(id)`.
+
+El compresor del editor sirve para pruebas y cambios rapidos del owner. Para un
+sitio final, no reemplaza una carpeta `assets/menu/` curada y versionada.
+
+Proceso recomendado:
+
+1. Durante la implementacion, usar el editor admin para probar fotos rapido.
+2. Validar encuadre en lista, detalle y preview admin.
+3. Cuando la foto queda aprobada, exportarla como WebP/JPEG optimizado.
+4. Guardarla en `assets/menu/<id-del-producto>.<ext>` o en Storage.
+5. Actualizar `businesses/<cliente>/config.js` para que esa URL/asset sea la
+   fuente definitiva.
+6. Limpiar `localStorage` y probar de nuevo para confirmar que el sitio no
+   depende de datos locales del navegador.
+
+Si el cliente necesita administrar fotos desde el panel en produccion, la mejora
+pendiente es subir la imagen optimizada a Supabase Storage y guardar su URL en
+base de datos. No usar Data URLs en `localStorage` como persistencia final.
+
+## 13. Errores comunes
 
 El email redirige a `localhost`:
 
@@ -307,13 +408,28 @@ El hook devuelve `502`:
 - Revisar `RESEND_FROM_EMAIL`.
 - Si se usa dominio propio, confirmar que este verificado en Resend.
 
+`Traducir con IA` devuelve error:
+
+- Falta `OPENAI_API_KEY` como Supabase secret.
+- La funcion `translate-menu-item` no fue desplegada.
+- El usuario logeado no existe en `business_admins` para ese `business_id`.
+- El navegador esta usando `.env` de otro proyecto Supabase.
+
+Las fotos cargan lento:
+
+- Revisar peso real de archivos en `assets/menu/`.
+- Usar WebP/JPEG optimizado.
+- Evitar subir fotos originales de celular directo a assets.
+- Si la foto fue cargada desde el editor, borrar cache/localStorage viejo y
+  volver a cargarla para que pase por el compresor nuevo.
+
 Registro creado pero login dice email no confirmado:
 
 - Es normal si Supabase exige confirmacion.
 - El usuario debe abrir el email y confirmar.
 - Para pruebas automatizadas, no depender de cuentas reales si hay rate limit.
 
-## 12. Entrega
+## 14. Entrega
 
 Al finalizar:
 

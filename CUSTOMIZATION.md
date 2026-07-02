@@ -47,6 +47,70 @@ Para crear una nueva version:
    npm run build
    ```
 
+## Mapa de archivos de la plantilla
+
+Esta app funciona como plantilla y tambien como lugar de pruebas. Antes de
+adaptarla para un negocio, separar mentalmente estos niveles:
+
+- `businesses/<negocio>/config.js`: datos editables del negocio. Es el archivo
+  principal para marca, menu, categorias, traducciones, premios y textos.
+- `assets/menu/`: imagenes locales de productos. Cada archivo debe coincidir
+  con el `id` del producto cuando se usa el helper `productImage(id)`.
+- `index.html`: estructura base, iconos SVG, carga de la config activa y
+  superficies principales de la app.
+- `styles.css`: sistema visual compartido. Tocar solo si la mejora debe quedar
+  para toda la plantilla.
+- `app.js`: comportamiento compartido: router, menu publico, panel admin,
+  editor, traducciones, carga de fotos, persistencia local y Supabase.
+- `supabase/functions/`: Edge Functions compartidas, por ejemplo emails y
+  traduccion IA.
+- `supabase/migrations/`: tablas y politicas para clientes, puntos y owners.
+- `ADMIN_PANEL.md`, `SUPABASE_SETUP.md` y este archivo: documentacion viva de
+  la plantilla.
+
+Regla practica: si cambia contenido de un negocio, editar `businesses/` y
+`assets/`. Si cambia una capacidad reusable para todos los negocios, editar
+`app.js`, `styles.css`, `index.html` y documentarlo.
+
+## Flujo de adaptacion de la plantilla
+
+Esta repo debe servir para dos cosas al mismo tiempo:
+
+- Plantilla base: funcionalidades compartidas que se reutilizan en cada negocio.
+- Lugar de pruebas: negocio demo `sumi` donde se validan cambios antes de
+  replicarlos.
+
+Para adaptar un negocio sin romper la plantilla:
+
+1. Mantener `businesses/sumi/` como demo y banco de pruebas.
+2. Crear `businesses/<cliente>/config.js` copiando `businesses/sumi/config.js`.
+3. Cambiar solo datos del cliente en esa config: identidad, categorias, menu,
+   traducciones, premios y textos del panel.
+4. Guardar fotos finales en `assets/menu/` con nombres estables.
+5. Cambiar temporalmente el `<script src="businesses/.../config.js">` de
+   `index.html` para probar ese cliente.
+6. Ejecutar `npm run dev` durante ajustes y `npm run build` antes de entregar.
+7. Si durante un cliente aparece una mejora reusable, implementarla en la
+   plantilla base y documentarla aqui.
+
+Donde editar segun el tipo de cambio:
+
+- Nuevo producto, precio, categoria o premio: `businesses/<cliente>/config.js`.
+- Foto final versionada: `assets/menu/<id-del-producto>.<ext>`.
+- Texto de navegacion, CTA o mensajes por idioma: `labels` dentro de
+  `businesses/<cliente>/config.js`.
+- Marca visual especifica del cliente: primero `businesses/<cliente>/config.js`;
+  tocar `styles.css` solo si la plantilla necesita soportar un nuevo patron.
+- Nueva seccion o comportamiento comun del panel: `index.html`, `styles.css`,
+  `app.js` y documentacion.
+- Nueva tabla, politica o backend compartido: `supabase/migrations/`,
+  `supabase/functions/` y `SUPABASE_SETUP.md`.
+
+No usar el editor admin como fuente final unica para entregar un cliente. El
+editor guarda cambios en `localStorage` para pruebas rapidas. Antes de entregar
+un negocio nuevo, pasar los cambios definitivos a `businesses/<cliente>/config.js`
+o a la capa backend que se decida para ese cliente.
+
 ## Que contiene la config
 
 En `businesses/<negocio>/config.js` se editan:
@@ -70,6 +134,96 @@ En `businesses/<negocio>/config.js` se editan:
 - `descriptionTranslations`: traducciones de descripciones.
 - `menuItems`: productos, precios, categorias y fotos.
 - `rewardCatalog`: premios del sistema de puntos.
+
+`recommendedByBrand` es el fallback versionado de la plantilla. En produccion,
+el owner puede cambiar `Hoy te recomendamos` desde el panel admin; ese override
+se guarda en Supabase (`business_menu_settings`) sin editar `config.js`.
+
+El producto `Popular` funciona igual: la plantilla puede inferirlo por likes,
+pero el owner puede fijarlo desde `#/admin/menu`. Solo hay un Popular activo por
+negocio y el resto de productos muestran contador normal.
+
+## Navegacion por secciones
+
+La plantilla usa hash routes para no depender de rewrites del servidor:
+
+- `#/menu`: menu publico.
+- `#/menu/:dishId`: detalle publico de producto.
+- `#/admin`: inicio del panel.
+- `#/admin/menu`: lista editable del menu.
+- `#/admin/menu/:dishId/edit`: editor de producto.
+- `#/admin/menu/:dishId/preview`: vista previa admin del producto.
+- `#/admin/customers`, `#/admin/content`, `#/admin/library`,
+  `#/admin/rewards`, `#/admin/analytics`, `#/admin/settings`: secciones internas.
+
+El router vive en `app.js`:
+
+- `navigate(route, params)`: cambia la URL.
+- `parseRoute()`: interpreta el hash actual.
+- `renderRoute()`: decide que superficie se muestra.
+- `showPublicMenu()` y `showPublicDetail(dishId)`: menu cliente.
+- `showAdminSection(view)`, `showAdminEditor(dishId)` y
+  `showAdminPreview(dishId)`: panel admin.
+
+No conviene abrir pantallas agregando clases manualmente desde botones nuevos.
+La regla es: un click navega con `navigate(...)` y `renderRoute()` decide que se
+ve. Esto evita bugs de "volver" entre preview, editor y menu.
+
+## QR, staff y carga de consumo
+
+La plantilla diferencia tres experiencias:
+
+- Cliente: ve puntos, premios y su QR de fidelidad.
+- `employee`: no ve la tarjeta de puntos; puede escanear QR y cargar consumos.
+- `owner`: puede cargar consumos y tambien administrar menu, clientes, premios,
+  contenido, ajustes y estadisticas.
+
+El QR del cliente usa `public_qr_id` como identificador publico. El payload
+incluye `qrId` y el QR se renderiza con correccion alta para permitir una marca
+al centro (`businessConfig.admin.brandMark` o iniciales del negocio). Para
+negocios futuros, mantener el logo del centro simple, con fondo claro y sin
+ocupar demasiado area, para no afectar la lectura.
+
+El flujo de caja es:
+
+1. El cliente muestra el QR al empleado.
+2. El staff escanea o pega el codigo manualmente.
+3. La app resuelve el cliente con `lookup_loyalty_customer_by_qr`.
+4. La pantalla de escaneo se repliega y queda la carga de consumo.
+5. El empleado ingresa el monto total y toca productos del catalogo visual.
+6. Si un producto tiene una sola presentacion se suma directo.
+7. Si tiene varias, aparece un selector contextual debajo de la tarjeta.
+8. El empleado confirma con `Registrar consumo`.
+
+Los productos seleccionados son auditoria simple, no POS. El precio de cada
+presentacion no afecta los puntos: la unica fuente para puntos es el monto total
+ingresado por el empleado. El payload de productos se guarda como:
+
+```js
+{ dishId, name, presentationName, quantity }
+```
+
+El registro se guarda en `point_events` mediante la RPC
+`record_customer_consumption`. Esa fila conserva:
+
+- `purchase_total`: monto total cargado.
+- `purchase_items`: productos y cantidades.
+- `recorded_by_auth_user_id`: usuario staff/owner que cargo el consumo.
+- `qr_id`: QR publico usado.
+- `earn_rate`: regla aplicada en ese momento.
+- `request_id`: identificador unico de la carga para evitar doble submit.
+
+El resultado devuelve tambien `eventId`, que es el identificador interno de esa
+compra/evento de puntos. Para reportes futuros, usar `point_events.id` como ID
+interno principal y `request_id` como llave idempotente del intento desde la UI.
+
+Regla visual importante: evitar problemas de superposicion o `overlap` entre el
+catalogo, el selector de presentaciones y la lista de productos seleccionados.
+El catalogo debe tener su propio alto con scroll, la lista de seleccionados debe
+tener su propio contenedor, y los popovers no deben salir hacia controles
+superiores como monto o encabezados. En CSS esto suele ser un problema de
+`layout overlap`, `stacking context` y `z-index` mal combinado con contenedores
+con `overflow`.
 
 ## Como editar productos
 
@@ -101,6 +255,290 @@ assets/menu/shawarma-carne.png
 
 Si el negocio no tiene foto aun, se puede dejar una foto generica o copiar una
 imagen existente con el nuevo nombre.
+
+## Editor de productos del panel admin
+
+El editor de producto se abre desde `#/admin/menu/:dishId/edit`. Las filas del
+menu admin no abren el editor completo; se entra desde el icono de lapiz para
+evitar clicks accidentales.
+
+Desde el editor se puede cambiar:
+
+- Nombre y descripcion por idioma (`es`, `en`, `ar` en la plantilla actual).
+- Presentaciones y precios, hasta tres variantes.
+- Foto principal, haciendo click o arrastrando una imagen.
+- Catalogo/marca interna.
+- Categoria.
+- Visibilidad en el menu publico.
+- Estado agotado/reactivado.
+
+Regla importante: el editor trabaja sobre un borrador local. Ningun cambio se
+aplica al producto real ni al menu publico hasta tocar `Guardar`. `Vista previa`
+puede mostrar el borrador sin persistirlo; si se vuelve al listado sin guardar,
+los cambios se descartan.
+
+Crear un producto nuevo:
+
+1. Ir a `#/admin/menu`.
+2. Tocar `Crear platillo`.
+3. La app abre `#/admin/menu/new/edit` con un borrador nuevo.
+4. Completar nombre, descripcion, foto, categoria y presentaciones.
+5. Tocar `Guardar`; recien ahi el producto se agrega a `menuItems`, queda
+   persistido en `localStorage` y la URL cambia al ID real del producto.
+
+Los cambios se guardan en memoria y en `localStorage` con la clave
+`sumi:menu:<businessId>:state` cuando la app corre sin Supabase. Si Supabase esta
+configurado, el catalogo editado se guarda en `business_menu_catalog` por
+`business_id`, y esa version remota es la unica fuente que leen clientes,
+empleados, owners, pestanas nuevas e incognito.
+
+Cuando existe una fila en `business_menu_catalog`, su lista de productos es
+autoritativa para ese negocio. Para volver al menu original de `config.js`, se
+debe borrar esa fila en Supabase. En modo sin Supabase, la clave de
+`localStorage` sigue siendo autoritativa para la sesion de pruebas.
+
+## Idiomas y traduccion IA
+
+Los idiomas disponibles se definen en `businesses/<negocio>/config.js` dentro
+de `languages`. La UI actual del editor espera tres tabs:
+
+- `es`
+- `en`
+- `ar`
+
+El editor guarda traducciones por producto en:
+
+```js
+dish.translations = {
+  es: { name: "...", description: "..." },
+  en: { name: "...", description: "..." },
+  ar: { name: "...", description: "..." }
+}
+```
+
+Cuando el owner escribe en cualquier tab, ese idioma queda como ultimo idioma
+editado. Al tocar `Traducir con IA`, la app envia ese texto fuente a la Edge
+Function:
+
+```txt
+supabase/functions/translate-menu-item/index.ts
+```
+
+La funcion usa el modelo `gpt-5-nano`, devuelve `es`, `en` y `ar`, y exige que
+el usuario autenticado exista en `business_admins` para el `businessId`
+solicitado.
+
+Mapa de implementacion:
+
+- Boton del editor: `#translateButton` en `index.html`.
+- Tabs de idioma: `.tab[data-lang]` en `index.html`.
+- Estado del ultimo idioma editado: `lastEditedEditorLang` en `app.js`.
+- Funcion frontend: `translateEditorDish()` en `app.js`.
+- Funcion backend segura: `translate-menu-item` en Supabase Edge Functions.
+
+Para activar esa funcion en un proyecto real:
+
+```powershell
+npx supabase secrets set OPENAI_API_KEY="<openai-api-key>" --project-ref <project-ref>
+npx supabase functions deploy translate-menu-item --project-ref <project-ref>
+```
+
+La API key de OpenAI nunca debe ir en `.env` de Vite ni en `config.js`, porque
+eso la publicaria en el navegador.
+
+## Imagenes del menu y compresion
+
+La plantilla soporta dos tipos de imagen:
+
+- Imagenes versionadas en `assets/menu/`, buenas para entregar un sitio final.
+- Imagenes subidas desde el editor admin, buenas para pruebas y cambios rapidos.
+
+Cuando el owner sube una imagen desde el editor, `app.js` la optimiza en el
+navegador antes de guardarla:
+
+- Lado maximo: `editorImageMaxSize` en `app.js`.
+- Calidad: `editorImageQuality` en `app.js`.
+- Formato preferido: WebP, con fallback a JPEG.
+- Peso maximo aceptado antes de comprimir: 8 MB.
+- Persistencia: `localStorage`, como Data URL optimizada.
+
+Esto reduce mucho las fotos de celular antes de guardarlas en `localStorage`.
+Para imagenes finales en `assets/menu/`, conviene exportar manualmente versiones
+WebP/JPEG entre 1200 y 1600 px de lado largo y evitar archivos mayores a 300-500
+KB por producto.
+
+Si se quiere cambiar la politica global de compresion, editar estas constantes
+en `app.js`:
+
+```js
+const editorImageMaxSize = 1400;
+const editorImageQuality = 0.78;
+```
+
+Donde esta implementado:
+
+- `compressEditorImage(file)`: redimensiona y convierte la imagen.
+- `updateEditorPhoto(file)`: valida tipo/peso, guarda la imagen optimizada y
+  refresca menu, biblioteca, contenido y detalle.
+- `dishPhotoInput` y eventos de drag/drop: conectan click y arrastre de imagen.
+- `.dish-photo.is-loading` en `styles.css`: muestra estado visual mientras
+  comprime.
+
+Limitaciones actuales:
+
+- La imagen optimizada subida desde el editor vive solo en el navegador actual.
+- Si se borra `localStorage`, se vuelve a usar la foto definida en
+  `businesses/<cliente>/config.js`.
+- Para entregar a un cliente, las fotos aprobadas deben quedar versionadas en
+  `assets/menu/` o subidas a storage con URL estable.
+
+Para negocios con muchas fotos, la siguiente mejora natural es guardar la imagen
+optimizada en Supabase Storage y persistir solo la URL publica en el producto.
+
+## Generacion de publicaciones con Kie.ai
+
+La seccion `Crear contenido` genera una pieza de marketing desde el producto,
+formato, tono e instrucciones seleccionadas. El boton principal `Generar`:
+
+1. Construye el caption y hashtags.
+2. Construye un prompt visual para la imagen.
+3. Llama a la Edge Function segura:
+
+```txt
+supabase/functions/generate-content-image/index.ts
+```
+
+4. Recibe un `taskId`, mantiene la vista en estado de carga y consulta
+   `generated_content_assets` hasta que la pieza aparezca.
+5. Muestra el resultado en la interfaz y lo deja guardado automaticamente en
+   Biblioteca cuando la generacion fue exitosa.
+
+Desde julio de 2026, el flujo no guarda fallbacks locales ni fotos originales
+como si fueran piezas generadas. La Edge Function solo crea el registro en
+`generated_content_assets` cuando Kie.ai devolvio una imagen real y esa imagen
+quedo copiada en Supabase Storage.
+
+La generacion corre en segundo plano dentro de Supabase Edge Functions usando
+`EdgeRuntime.waitUntil`. Eso permite que el owner cierre la pagina despues de
+tocar `Generar`; si la tarea termina bien, la pieza aparece luego en Biblioteca.
+
+La API key de Kie.ai no debe ir en `app.js`, `.env` de Vite ni `config.js`.
+Debe configurarse como secreto de Supabase:
+
+```powershell
+npx supabase secrets set KIE_API_KEY="<kie-api-key>" --project-ref <project-ref>
+npx supabase functions deploy generate-content-image --project-ref <project-ref>
+```
+
+La funcion usa la API de Kie.ai con modelos `gpt-image-2`:
+
+- Crear tarea: `POST https://api.kie.ai/api/v1/jobs/createTask`
+- Consultar resultado: `GET https://api.kie.ai/api/v1/jobs/recordInfo?taskId=...`
+- Autenticacion: `Authorization: Bearer <KIE_API_KEY>`
+- Modelo con referencia visual: `gpt-image-2-image-to-image`
+- Modelo sin referencia visual valida: `gpt-image-2-text-to-image`
+
+El prompt se arma en `buildContentImagePrompt(dish, format, draft)` dentro de
+`app.js`. Debe respetar estas reglas de plantilla:
+
+- La imagen debe tener al producto en el centro o como protagonista visual.
+- Todas las piezas deben incluir el nombre del producto arriba del plato, con
+  tipografia script estilo `New Berolina`, grande, legible y sin tapar comida.
+- Por defecto se usa la foto del producto del menu como referencia.
+- El owner puede subir una referencia manual desde `Crear contenido`.
+- La referencia manual para generacion no se comprime ni redimensiona en el
+  navegador. Se envia a la Edge Function como Data URL original para que Kie.ai
+  reciba la mayor cantidad de detalle posible.
+- La compresion con `compressEditorImage(file)` aplica solo a fotos subidas al
+  menu desde el editor de producto.
+- El centro de la imagen queda reservado para el producto. Badges, precios,
+  promociones, direcciones o CTAs nunca deben ir centrados; deben vivir en
+  esquinas, margenes o zonas laterales.
+- Cada tono de `Crear contenido` tiene reglas propias de escena, paleta,
+  ubicacion de badges y estilo de texto en `contentToneProfile()`.
+- El badge principal debe llamar la atencion con buen contraste, pero seguir
+  siendo minimalista. Puede haber un micro-chip secundario si hay aire visual.
+- El texto completo que escribe el usuario es contexto para la IA, no debe
+  copiarse entero dentro de la imagen. La imagen debe tener como maximo dos
+  bloques de texto: titulo del producto y badge promocional.
+- Si el texto contiene `2x1`, precio o descuento, `promotionHighlights()` lo
+  convierte en el badge principal y debe tener alto protagonismo visual.
+- La foto del producto no debe forzarse a un estilo minimalista; debe seguir
+  siendo rica, apetitosa y realista.
+- Los badges con promocion, precio, direccion o CTA si deben ser minimalistas:
+  poco texto, buen contraste, bordes suaves y sin tapar el producto.
+- El resultado se adapta al formato elegido:
+  - `instagram-square`: relacion `1:1`.
+  - `instagram-story`: relacion `9:16`.
+  - `instagram-reel`: relacion `9:16` para portada de reel.
+- El paso 2 de `Crear contenido` debe mantenerse limitado a tres formatos:
+  `Post cuadrado para Instagram`, `Story vertical` y `Reel cover`.
+- Si Kie.ai no esta configurado o falla, se muestra error controlado y no se
+  guarda la foto original como si fuera una generacion.
+- Si Kie.ai falla, no se descuentan creditos.
+- Si la UI deja de esperar antes de que Kie.ai termine, se muestra un estado de
+  segundo plano. La pieza puede aparecer luego en Biblioteca sin mantener la
+  pestana abierta.
+
+Creditos:
+
+- Cada negocio tiene 150 creditos por mes.
+- Cada generacion consume 2 creditos.
+- El saldo se restablece a 150 al cambiar de mes; no se acumula.
+- El control real ocurre en Supabase mediante
+  `business_ai_credit_balances`, `business_ai_credit_events` y la Edge Function.
+
+Referencias de diseno usadas para loading states:
+
+- `crutchcorn/sync-skeleton`: shimmer CSS-only sincronizado.
+- `samuelli/progress-bar`: barra indeterminada vanilla liviana.
+- `russmaxdesign/loading-button`: patron simple de boton en loading.
+
+Donde editar la experiencia:
+
+- Boton principal: `#adminCreateContentButton` en `index.html`.
+- Click y estado de carga: listener de `adminCreateContentButton` en `app.js`.
+- Tonos y copy base: `contentToneProfile()` y `contentDraft()` en `app.js`.
+- Extraccion de promos/precios para badges: `promotionHighlights()` en `app.js`.
+- Prompt visual: `buildContentImagePrompt()` en `app.js`.
+- Referencia manual sin compresion: `readContentReferenceImage()` en `app.js`.
+- Persistencia de biblioteca: `insertGeneratedContentAsset()` en
+  `supabase/functions/generate-content-image/index.ts`.
+- Trabajo en segundo plano: `processGeneratedImageTask()` y `runInBackground()`
+  en `supabase/functions/generate-content-image/index.ts`.
+- Descarga de piezas: `downloadAsset()` en `app.js`, que convierte la imagen a
+  blob para forzar descarga sin abrir una ventana nueva.
+- Visual del boton: `.admin-generate-button` en `styles.css`.
+
+## Mejora de fotos de producto con IA
+
+El editor de producto incluye `Mejorar con IA` debajo de la foto. Este flujo no
+publica cambios automaticamente:
+
+1. El owner abre el modal desde el editor.
+2. Describe el fondo o sube una imagen de referencia.
+3. La Edge Function `supabase/functions/improve-product-photo/index.ts` llama a
+   Kie.ai con `gpt-image-2-image-to-image`.
+4. La IA debe conservar producto, ingredientes, porcion, plato y detalles.
+5. Solo puede ajustar fondo, iluminacion, sombra, color grading y encuadre.
+6. Al terminar, el modal muestra un comparador interactivo antes/despues con
+   una linea arrastrable.
+7. El owner puede descargar la version de maxima calidad cuando quiera,
+   generar otra variante o tocar `Conservar`.
+8. Al tocar `Conservar`, la app mantiene la URL de alta calidad para descarga y
+   comprime una copia liviana para aplicarla al borrador del editor.
+9. El menu solo cambia cuando el owner toca `Guardar`.
+
+Donde editar:
+
+- Modal: `#photoAiModal` en `index.html`.
+- Apertura/generacion/aplicacion: `openPhotoAiModal()`,
+  `improveEditorPhotoWithAi()` y `applyImprovedEditorPhoto()` en `app.js`.
+- Comparador: `showPhotoAiComparison()` y `setPhotoAiComparePosition()` en
+  `app.js`.
+- Prompt de preservacion del producto: `buildPrompt()` en
+  `supabase/functions/improve-product-photo/index.ts`.
+- Estilos: `.photo-ai-*` y `.photo-ai-trigger` en `styles.css`.
 
 ## Que no tocar normalmente
 

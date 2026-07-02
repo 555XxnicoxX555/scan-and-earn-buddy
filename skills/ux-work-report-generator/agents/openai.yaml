@@ -1,0 +1,4 @@
+interface:
+  display_name: "UX Work Report Generator"
+  short_description: "Genera reportes visuales de trabajo UX"
+  default_prompt: "Use $ux-work-report-generator to create a visual static report for the completed UX work."

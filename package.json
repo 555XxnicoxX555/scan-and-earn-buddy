@@ -2,13 +2,17 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 8080",
     "build": "node scripts/build.mjs",
+    "audit:ui": "node scripts/audit-ui.mjs",
+    "smoke:ui": "node scripts/smoke-ui.mjs",
     "check:supabase": "node scripts/check-supabase.mjs"
   },
   "devDependencies": {
+    "playwright": "^1.61.1",
     "vite": "^8.0.16"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
+    "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4"
   }
 }

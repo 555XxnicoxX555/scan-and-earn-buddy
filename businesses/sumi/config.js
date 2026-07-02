@@ -442,7 +442,8 @@ const rewardCatalog = [
       ownerLabel: "Panel del dueno",
       helpTitle: "Necesitas ayuda?",
       helpText: "Te respondemos en WhatsApp en menos de una hora.",
-      helpButton: "Abrir WhatsApp"
+      helpButton: "Abrir WhatsApp",
+      helpUrl: "https://wa.me/?text=Hola%2C%20necesito%20ayuda%20con%20Sumi"
     },
     photos,
     categoryOrder,

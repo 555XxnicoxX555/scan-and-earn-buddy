@@ -17,6 +17,10 @@ resolver hoy y dejar las configuraciones profundas en pantallas secundarias.
 `owner` vive en `business_admins`. `customer` se deriva de
 `customer_profiles`. No debe existir un tercer rol para el MVP.
 
+Para QA local existe la bandera `localStorage["sumi:dev-owner"] = "true"`.
+Solo funciona en `import.meta.env.DEV` y en `localhost`/`127.0.0.1`; no debe
+considerarse un permiso real ni reemplaza la prueba con `business_admins`.
+
 ## Navegacion Simplificada
 
 La navegacion principal queda en cinco secciones:
@@ -48,7 +52,7 @@ Acciones principales:
 - Cargar consumo por QR.
 - Revisar canjes.
 - Editar menu.
-- Crear contenido con IA.
+- Crear contenido.
 
 Diseno recomendado:
 
@@ -91,12 +95,25 @@ Debe permitir:
 - Abrir el editor de producto.
 - Crear producto nuevo.
 - Ocultar/agotar producto sin borrarlo.
+- Elegir el producto de `Hoy te recomendamos`.
+- Marcar un unico producto como `Popular`.
 
 MVP actual:
 
 - Lista editable de productos.
 - Busqueda local.
-- Entrada al editor de producto.
+- Entrada al editor de producto desde el icono de lapiz.
+- Acciones por fila para recomendar, marcar popular, ocultar/mostrar, editar y
+  borrar.
+
+Regla de destacado:
+
+- `Hoy te recomendamos` se guarda por negocio en `business_menu_settings`.
+- `Popular` tambien se guarda por negocio y solo puede haber uno activo.
+- Si se marca otro producto como Popular, el anterior conserva sus likes reales
+  pero pierde el badge de fuego.
+- En el menu publico el contador se muestra abajo a la derecha con icono y
+  numero; no debe mostrarse texto visible tipo `me gusta`.
 
 ## Editor de Producto
 
@@ -110,18 +127,82 @@ Debe permitir:
 - Categoria.
 - Foto principal.
 - Visibilidad en el menu.
+- Estado agotado sin ocultar el producto.
 - Vista previa.
 
 IA dentro del editor:
 
-- Traducir textos.
-- Mejorar copy.
-- Generar o mejorar imagen del producto.
+- Traducir textos con `gpt-5-nano` desde el ultimo idioma editado.
+- Autocompletar `es`, `en` y `ar` para nombre y descripcion.
+- Cualquier mejora/generacion de imagen debe agregarse como una funcion nueva,
+  con backend y storage definidos, antes de mostrar un boton en la UI.
 
 Regla de UX:
 
 - El owner edita un idioma principal y la IA ayuda con el resto.
+- Las traducciones se guardan por producto y se usan en el menu publico segun el idioma activo.
+- Dentro del editor, ningun cambio se aplica al producto real hasta tocar
+  `Guardar`. Foto, traducciones, agotado, visibilidad, categoria y precios
+  viven primero como borrador.
 - Los controles avanzados no deben competir con los campos basicos.
+
+## Crear Contenido y Biblioteca
+
+`Crear contenido` prepara piezas de marketing a partir de un producto visible,
+formato, tono e instrucciones del owner. Al tocar el boton principal, la pieza
+genera una imagen para la publicacion y la muestra en la misma interfaz. El
+resultado se guarda automaticamente en Biblioteca cuando Kie.ai devuelve una
+imagen real.
+
+La generacion de imagen se resuelve con `generate-content-image`, una Edge
+Function de Supabase que llama a Kie.ai con la API key guardada como secreto
+`KIE_API_KEY`. Usa `gpt-image-2-image-to-image` cuando hay foto del producto o
+referencia manual, y `gpt-image-2-text-to-image` como fallback si no hay una
+referencia visual valida. Si la funcion o la key todavia no estan configuradas,
+la app muestra un error controlado y no guarda la foto original como si fuera
+una generacion.
+
+La seccion permite subir dos referencias distintas:
+
+- `Subir imagen`: reemplaza la imagen base del producto para esa publicacion.
+- `Subir fondo`: aporta ambiente, superficie, luz o contexto. La IA debe usarlo
+  como fondo/escena y conservar el producto como protagonista.
+
+Por defecto no hay tono avanzado seleccionado. Los chips `Tono casual`,
+`Tono elegante`, `Tono divertido`, `Antojador` y `Para fin de semana` son
+opcionales; solo se aplican si el owner los toca.
+
+Si Kie.ai tarda mas de lo esperado, la tarea queda guardada localmente por
+`taskId`. Al volver a `Crear contenido` o `Biblioteca`, la app intenta finalizar
+esa tarea con la Edge Function y guardar la imagen generada en Storage. Esto
+evita que una imagen creada correctamente en Kie.ai se pierda por un timeout de
+polling en la interfaz.
+
+Cada negocio tiene 150 creditos mensuales. Cada generacion usa 2 creditos. Al
+cambiar el mes, el saldo vuelve a 150 y no se acumula.
+
+Regla visual para publicaciones:
+
+- La comida debe verse rica, realista y protagonista.
+- La IA no debe cambiar el producto del menu: no modificar ingredientes,
+  forma, toppings, cantidad, textura, plato ni presentacion del alimento.
+- Sobre el producto solo se permiten ajustes fotograficos: enfoque,
+  iluminacion, nitidez, sombras, color natural, recorte o perspectiva leve.
+- Los badges de promocion, precio, direccion o CTA deben ser simples,
+  minimalistas y de poco texto.
+- El badge no debe tapar el producto ni imponer un estilo minimalista sobre la
+  foto del producto.
+- El titulo del producto debe aparecer arriba del producto con estilo script
+  tipo `New Berolina`.
+- Si el brief incluye `2x1`, descuentos, tiempo limitado o stock, eso debe
+  convertirse en badges cortos de alta jerarquia, no en parrafos largos.
+
+`Biblioteca` no debe listar fotos o productos del menu. Debe mostrar solamente
+contenido creado desde `Crear contenido`, con fecha, formato, imagen generada,
+accion para descargar imagen y accion para copiar el texto. Los nuevos assets
+viven en Supabase Storage y en la tabla `generated_content_assets`. Registros
+viejos de `localStorage` pueden mostrarse como legacy, pero no deben parecer
+generaciones IA verificadas.
 
 ## Premios
 
