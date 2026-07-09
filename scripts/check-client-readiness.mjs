@@ -106,6 +106,16 @@ async function main() {
   if (Number(config.aiCredits?.generationCreditCost) <= 0) {
     add(blockers, "ai_generation_cost_invalid", "aiCredits.generationCreditCost debe ser mayor a 0.");
   }
+  const staffSecurity = config.operations?.staffSecurity || {};
+  if (Number(staffSecurity.maxEmployeePurchaseTotal || 250000) <= 0) {
+    add(blockers, "staff_purchase_limit_invalid", "operations.staffSecurity.maxEmployeePurchaseTotal debe ser mayor a 0.");
+  }
+  if (Number(staffSecurity.maxEmployeeDailyTotal || 1000000) <= 0) {
+    add(blockers, "staff_daily_total_limit_invalid", "operations.staffSecurity.maxEmployeeDailyTotal debe ser mayor a 0.");
+  }
+  if (Number(staffSecurity.maxEmployeeDailyCount || 80) <= 0) {
+    add(blockers, "staff_daily_count_limit_invalid", "operations.staffSecurity.maxEmployeeDailyCount debe ser mayor a 0.");
+  }
 
   if (!allowTemplate) {
     [
@@ -129,6 +139,12 @@ async function main() {
     aiCredits: {
       monthlyLimit: Number(config.aiCredits?.monthlyLimit || 0),
       generationCreditCost: Number(config.aiCredits?.generationCreditCost || 0)
+    },
+    staffSecurity: {
+      maxEmployeePurchaseTotal: Number(staffSecurity.maxEmployeePurchaseTotal || 250000),
+      maxEmployeeDailyTotal: Number(staffSecurity.maxEmployeeDailyTotal || 1000000),
+      maxEmployeeDailyCount: Number(staffSecurity.maxEmployeeDailyCount || 80),
+      requireQrForEmployee: Boolean(staffSecurity.requireQrForEmployee)
     },
     blockers,
     warnings,

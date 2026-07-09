@@ -23,7 +23,13 @@
     "businessType": "restaurante",
     "serviceModes": ["local", "take-away"],
     "adminOwnerEmail": "",
-    "employeeEmails": []
+    "employeeEmails": [],
+    "staffSecurity": {
+      "maxEmployeePurchaseTotal": 250000,
+      "maxEmployeeDailyTotal": 1000000,
+      "maxEmployeeDailyCount": 80,
+      "requireQrForEmployee": false
+    }
   },
   "defaultLang": "es",
   "languages": [

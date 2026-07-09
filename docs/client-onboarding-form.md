@@ -120,6 +120,15 @@ Estos datos no se usan para diseno; sirven para estimar soporte y costos.
 - Necesita soporte por WhatsApp: si / no.
 - Horarios criticos del negocio:
 
+## Seguridad operativa
+
+- Monto maximo que puede cargar un empleado por consumo:
+- Monto maximo diario que puede cargar un empleado:
+- Cantidad maxima diaria de consumos por empleado:
+- Empleados deben usar QR obligatoriamente para cargar consumo: si / no.
+- Owner puede corregir consumos: si / no.
+- Quien revisa consumos sospechosos:
+
 ## Llamada de identidad visual
 
 Resolver en llamada:

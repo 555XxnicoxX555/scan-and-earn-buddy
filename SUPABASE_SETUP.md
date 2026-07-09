@@ -173,6 +173,22 @@ categoria, nota, empleado, metodo y estado. Al cancelar, usar
 `cancel_customer_consumption` para marcar el consumo y revertir puntos/racha sin
 borrar la fila original.
 
+Guardrails anti-abuso para empleados:
+
+- `business_staff_security_settings` define limites por negocio.
+- `max_employee_purchase_total`: maximo permitido por consumo cargado por un
+  employee.
+- `max_employee_daily_total`: maximo diario acumulado por employee.
+- `max_employee_daily_count`: cantidad maxima diaria de consumos por employee.
+- `require_qr_for_employee`: si esta activo, los employees no pueden cargar
+  consumos manuales sin QR.
+- Owners pueden operar como bypass, pero cada consumo guarda snapshot en
+  `point_events.staff_limit_snapshot`.
+
+Cada compra guarda `staff_role_at_recording`, `staff_daily_total_after`,
+`staff_daily_count_after` y `staff_review_status`. El detalle de consumo del
+admin muestra esos campos para auditoria operativa.
+
 Correccion de errores operativos:
 
 - `point_event_corrections` guarda historial antes/despues de cada correccion.

@@ -92,6 +92,9 @@ validos en entornos de prueba.
 - Empleado carga consumo manual.
 - Employee no puede entrar al admin completo, pero si puede operar consumos y
   canjes.
+- Employee no puede cargar consumos por encima de los limites definidos en
+  `operations.staffSecurity`.
+- El detalle de un consumo muestra rol, revision staff y acumulados diarios.
 - Canje queda pendiente.
 - Empleado aprueba/rechaza canje.
 - Solicitar dos veces el mismo premio deja una sola solicitud pendiente.

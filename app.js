@@ -5100,7 +5100,11 @@ function renderAdminConsumptionDetail() {
           { label: "QR usado", value: event.qr_id || "Sin dato" },
           { label: "Fecha exacta", value: formatFullDateTime(event.created_at) || "Sin dato" },
           { label: "Cliente", value: profile?.email || profile?.name || "Sin dato" },
-          { label: "Nota interna", value: note || "Sin observacion" }
+          { label: "Nota interna", value: note || "Sin observacion" },
+          { label: "Rol al cargar", value: event.staff_role_at_recording || "Sin dato" },
+          { label: "Revision staff", value: event.staff_review_status || "Sin dato" },
+          { label: "Total diario staff", value: event.staff_daily_total_after ? formatCurrency(event.staff_daily_total_after) : "Sin dato" },
+          { label: "Cargas diarias staff", value: event.staff_daily_count_after || "Sin dato" }
         ])}
       </dl>
     </div>

@@ -143,6 +143,16 @@ function aiCreditsFromConfig(config) {
   };
 }
 
+function staffSecurityFromConfig(config) {
+  const security = config.operations?.staffSecurity || {};
+  return {
+    maxEmployeePurchaseTotal: Math.max(1, Number(security.maxEmployeePurchaseTotal || 250000)),
+    maxEmployeeDailyTotal: Math.max(1, Number(security.maxEmployeeDailyTotal || 1000000)),
+    maxEmployeeDailyCount: Math.max(1, Math.floor(Number(security.maxEmployeeDailyCount || 80))),
+    requireQrForEmployee: Boolean(security.requireQrForEmployee)
+  };
+}
+
 function normalizedEmails(values = []) {
   return [...new Set(
     values
@@ -274,6 +284,7 @@ function seedSql(config, rewards) {
   const streak = loyalty.streak || {};
   const tierThresholds = loyalty.tierThresholds || loyalty.tiers || {};
   const aiCredits = aiCreditsFromConfig(config);
+  const staffSecurity = staffSecurityFromConfig(config);
   const rewardRows = rewards.map((reward) => `insert into public.business_rewards (
   business_id, reward_key, name, description, points_cost, stock, image_url, min_tier, active, valid_until
 ) values (
@@ -344,6 +355,25 @@ insert into public.business_ai_settings (
   generation_credit_cost = excluded.generation_credit_cost,
   updated_at = now();
 
+insert into public.business_staff_security_settings (
+  business_id,
+  max_employee_purchase_total,
+  max_employee_daily_total,
+  max_employee_daily_count,
+  require_qr_for_employee
+) values (
+  ${sqlString(businessId)},
+  ${sqlNumber(staffSecurity.maxEmployeePurchaseTotal, 250000)},
+  ${sqlNumber(staffSecurity.maxEmployeeDailyTotal, 1000000)},
+  ${sqlNumber(staffSecurity.maxEmployeeDailyCount, 80)},
+  ${sqlBoolean(staffSecurity.requireQrForEmployee)}
+) on conflict (business_id) do update set
+  max_employee_purchase_total = excluded.max_employee_purchase_total,
+  max_employee_daily_total = excluded.max_employee_daily_total,
+  max_employee_daily_count = excluded.max_employee_daily_count,
+  require_qr_for_employee = excluded.require_qr_for_employee,
+  updated_at = now();
+
 ${rewardRows || "-- Sin premios iniciales configurados."}
 
 ${ownerEmail ? `-- Ejecutar despues de crear/confirmar el usuario owner en Auth.
@@ -375,6 +405,7 @@ async function main() {
   const rewards = rewardCatalogFromConfig(config);
   const categoryOrder = categoryOrderFromConfig(config, products);
   const aiCredits = aiCreditsFromConfig(config);
+  const staffSecurity = staffSecurityFromConfig(config);
   const languages = languagesFromConfig(config);
   const missingFlags = languages
     .map((language) => language.flag)
@@ -396,6 +427,7 @@ async function main() {
     languages,
     missingFlags,
     aiCredits,
+    staffSecurity,
     dryRun
   };
 

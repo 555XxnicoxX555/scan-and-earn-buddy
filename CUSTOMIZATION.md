@@ -966,6 +966,19 @@ Esa funcion valida puntos, nivel, stock, vigencia y duplicados pendientes antes
 de insertar. Cada solicitud vence a los 15 minutos para que una captura vieja no
 pueda aprobarse como si el cliente siguiera en caja.
 
+#### Seguridad operativa de empleados
+
+Configurable desde `operations.staffSecurity` en `business.config.json`:
+
+- `maxEmployeePurchaseTotal`: monto maximo de una carga individual de employee.
+- `maxEmployeeDailyTotal`: monto maximo diario acumulado por employee.
+- `maxEmployeeDailyCount`: cantidad maxima diaria de consumos por employee.
+- `requireQrForEmployee`: obliga a employees a cargar consumos desde QR.
+
+La RPC `record_customer_consumption_v2` aplica esos limites en Supabase. Owners
+pueden operar como bypass, pero cada consumo guarda rol, limites aplicados y
+acumulados diarios en `point_events` para auditoria.
+
 En Supabase, los umbrales se guardan en `business_loyalty_settings` como
 `tier_silver_points`, `tier_gold_points` y `tier_platinum_points`. La funcion
 `loyalty_tier_for_points()` y los triggers de `loyalty_accounts` mantienen el
