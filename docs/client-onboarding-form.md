@@ -115,8 +115,10 @@ Estos datos no se usan para diseno; sirven para estimar soporte y costos.
 - Cantidad de empleados que usaran caja:
 - Quiere generaciones IA incluidas: si / no.
 - Cantidad estimada de piezas de contenido por mes:
+- Nombre del plan de IA:
 - Creditos IA incluidos por mes:
 - Creditos por generacion:
+- Avisar cuando queden menos de X creditos:
 - Necesita soporte por WhatsApp: si / no.
 - Horarios criticos del negocio:
 

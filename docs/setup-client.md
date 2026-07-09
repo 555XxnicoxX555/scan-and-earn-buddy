@@ -141,14 +141,18 @@ Configurar esos limites en `business.config.json`:
 ```json
 {
   "aiCredits": {
+    "planName": "Plan base",
     "monthlyLimit": 150,
-    "generationCreditCost": 2
+    "generationCreditCost": 2,
+    "lowBalanceWarningThreshold": 20
   }
 }
 ```
 
 `npm run prepare:client` copia esos valores al frontend y al seed de
 `business_ai_settings`. La Edge Function usa esa tabla para descontar creditos.
+El admin muestra uso mensual, creditos restantes, generaciones disponibles y el
+ultimo movimiento para que el owner entienda el costo antes de generar.
 
 ## 6. Entrega y operacion
 

@@ -138,8 +138,10 @@ function rewardCatalogFromConfig(config) {
 function aiCreditsFromConfig(config) {
   const credits = config.aiCredits || config.content?.aiCredits || {};
   return {
+    planName: String(credits.planName || "Plan base"),
     monthlyLimit: Math.max(1, Number(credits.monthlyLimit || 150)),
-    generationCreditCost: Math.max(1, Number(credits.generationCreditCost || 2))
+    generationCreditCost: Math.max(1, Number(credits.generationCreditCost || 2)),
+    lowBalanceWarningThreshold: Math.max(1, Number(credits.lowBalanceWarningThreshold || 20))
   };
 }
 

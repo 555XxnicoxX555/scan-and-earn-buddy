@@ -96,8 +96,10 @@
     "blockedProducts": []
   },
   "aiCredits": {
+    "planName": "Plan base",
     "monthlyLimit": 150,
-    "generationCreditCost": 2
+    "generationCreditCost": 2,
+    "lowBalanceWarningThreshold": 20
   },
   "qr": {
     "defaultTarget": "https://tu-dominio.com/",

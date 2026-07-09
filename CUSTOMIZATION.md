@@ -637,6 +637,11 @@ Creditos:
 - La plantilla demo usa 150 creditos por mes.
 - Cada generacion consume `aiCredits.generationCreditCost`; la plantilla demo
   usa 2 creditos.
+- `aiCredits.planName` nombra el paquete comercial visible para el owner.
+- `aiCredits.lowBalanceWarningThreshold` define desde cuando el panel muestra
+  alerta de saldo bajo.
+- La seccion Crear contenido muestra uso mensual, creditos restantes,
+  generaciones disponibles y ultimo movimiento.
 - El saldo se restablece al limite mensual configurado al cambiar de mes; no se
   acumula.
 - El control real ocurre en Supabase mediante

@@ -106,6 +106,9 @@ async function main() {
   if (Number(config.aiCredits?.generationCreditCost) <= 0) {
     add(blockers, "ai_generation_cost_invalid", "aiCredits.generationCreditCost debe ser mayor a 0.");
   }
+  if (Number(config.aiCredits?.lowBalanceWarningThreshold || 20) <= 0) {
+    add(blockers, "ai_low_balance_threshold_invalid", "aiCredits.lowBalanceWarningThreshold debe ser mayor a 0.");
+  }
   const staffSecurity = config.operations?.staffSecurity || {};
   if (Number(staffSecurity.maxEmployeePurchaseTotal || 250000) <= 0) {
     add(blockers, "staff_purchase_limit_invalid", "operations.staffSecurity.maxEmployeePurchaseTotal debe ser mayor a 0.");
@@ -137,8 +140,10 @@ async function main() {
     rewards: rewards.length,
     languages: languages.map((language) => language.code),
     aiCredits: {
+      planName: text(config.aiCredits?.planName || "Plan base"),
       monthlyLimit: Number(config.aiCredits?.monthlyLimit || 0),
-      generationCreditCost: Number(config.aiCredits?.generationCreditCost || 0)
+      generationCreditCost: Number(config.aiCredits?.generationCreditCost || 0),
+      lowBalanceWarningThreshold: Number(config.aiCredits?.lowBalanceWarningThreshold || 20)
     },
     staffSecurity: {
       maxEmployeePurchaseTotal: Number(staffSecurity.maxEmployeePurchaseTotal || 250000),

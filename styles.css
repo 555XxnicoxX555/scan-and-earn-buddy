@@ -5482,6 +5482,81 @@ body.admin-active .admin-content-preview {
   white-space: nowrap;
 }
 
+.admin-ai-credit-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.4fr) repeat(2, minmax(180px, 0.8fr));
+  gap: 12px;
+  align-items: stretch;
+  margin: 0 0 14px;
+}
+
+.ai-credit-summary,
+.ai-credit-detail {
+  min-width: 0;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(95, 43, 15, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.ai-credit-summary {
+  border-left: 5px solid var(--accent);
+}
+
+.ai-credit-summary.tone-warn {
+  border-left-color: #b65b25;
+}
+
+.ai-credit-summary.tone-danger {
+  border-left-color: #a33224;
+}
+
+.ai-credit-summary span,
+.ai-credit-detail span {
+  color: #00746f;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ai-credit-summary strong,
+.ai-credit-detail strong {
+  color: var(--ink);
+  font-size: 1.35rem;
+  line-height: 1.05;
+  word-break: break-word;
+}
+
+.ai-credit-detail strong {
+  font-size: 1rem;
+}
+
+.ai-credit-summary small,
+.ai-credit-detail small {
+  color: rgba(43, 26, 16, 0.72);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.ai-credit-meter {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(95, 43, 15, 0.12);
+}
+
+.ai-credit-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #00746f, #ff8a00);
+}
+
 .admin-content-section .admin-content-steps {
   width: max-content;
   max-width: 100%;
@@ -6002,6 +6077,10 @@ body.admin-active .admin-content-preview {
   .admin-library-shortcut {
     width: 100%;
     justify-content: center;
+  }
+
+  .admin-ai-credit-panel {
+    grid-template-columns: 1fr;
   }
 
   .admin-content-section .admin-ia-layout,

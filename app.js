@@ -64,6 +64,9 @@ const editorImageQuality = 0.78;
 const aiCreditConfig = businessConfig.aiCredits || businessConfig.content?.aiCredits || {};
 const aiMonthlyCreditLimit = Math.max(1, Number(aiCreditConfig.monthlyLimit || 150));
 const aiGenerationCreditCost = Math.max(1, Number(aiCreditConfig.generationCreditCost || 2));
+const aiCreditPlanName = aiCreditConfig.planName || "Plan base";
+const aiLowBalanceWarningThreshold = Math.max(aiGenerationCreditCost, Number(aiCreditConfig.lowBalanceWarningThreshold || aiGenerationCreditCost * 5));
+let aiCreditEvents = [];
 
 applyBusinessTheme();
 
@@ -487,6 +490,7 @@ const adminConsumptionDetailClose = document.querySelector("#adminConsumptionDet
 const adminConsumptionDetailContent = document.querySelector("#adminConsumptionDetailContent");
 const adminViewLibraryButton = document.querySelector("#adminViewLibraryButton");
 const adminAiCreditPill = document.querySelector("#adminAiCreditPill");
+const adminAiCreditPanel = document.querySelector("#adminAiCreditPanel");
 const adminCreateContentButton = document.querySelector("#adminCreateContentButton");
 const adminContentCount = document.querySelector("#adminContentCount");
 const adminContentRows = document.querySelector("#adminContentRows");
@@ -1350,6 +1354,7 @@ async function loadGeneratedContentLibrary() {
 async function loadAiCreditBalance() {
   if (!supabase || !isOwner() || (isLocalDevOwner() && !isRemoteOwner())) {
     aiCreditBalance = { remaining: aiMonthlyCreditLimit, monthlyLimit: aiMonthlyCreditLimit, periodMonth: new Date().toISOString().slice(0, 7) };
+    aiCreditEvents = [];
     return aiCreditBalance;
   }
 
@@ -1363,7 +1368,30 @@ async function loadAiCreditBalance() {
     monthlyLimit: data?.monthly_limit ?? aiMonthlyCreditLimit,
     periodMonth: data?.period_month || new Date().toISOString().slice(0, 7)
   };
+  await loadAiCreditEvents();
   return aiCreditBalance;
+}
+
+async function loadAiCreditEvents() {
+  if (!supabase || !isOwner() || (isLocalDevOwner() && !isRemoteOwner())) {
+    aiCreditEvents = [];
+    return aiCreditEvents;
+  }
+  const period = aiCreditBalance.periodMonth || new Date().toISOString().slice(0, 7);
+  const { data, error } = await supabase
+    .from("business_ai_credit_events")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq("period_month", period)
+    .order("created_at", { ascending: false })
+    .limit(12);
+  if (error) {
+    if (import.meta.env.DEV) console.warn("[Sumi credits] events unavailable", displayError(error));
+    aiCreditEvents = [];
+    return aiCreditEvents;
+  }
+  aiCreditEvents = Array.isArray(data) ? data : [];
+  return aiCreditEvents;
 }
 
 function updateAiCreditBalanceFromGeneration(result) {
@@ -6001,8 +6029,45 @@ function renderAdminAnalytics() {
   `;
 }
 
+function renderAiCreditPanel() {
+  if (!adminAiCreditPanel) return;
+  const monthlyLimit = Number(aiCreditBalance.monthlyLimit || aiMonthlyCreditLimit);
+  const remaining = Number(aiCreditBalance.remaining ?? monthlyLimit);
+  const used = Math.max(0, monthlyLimit - remaining);
+  const usagePercent = monthlyLimit > 0 ? Math.min(100, Math.round((used / monthlyLimit) * 100)) : 0;
+  const generationsLeft = Math.floor(remaining / aiGenerationCreditCost);
+  const tone = remaining < aiGenerationCreditCost ? "danger" : remaining <= aiLowBalanceWarningThreshold || usagePercent >= 80 ? "warn" : "good";
+  const lastEvent = aiCreditEvents[0];
+  const lastEventText = lastEvent
+    ? `${Math.abs(Number(lastEvent.credits_delta || 0))} creditos - ${lastEvent.reason || "generacion"} - ${relativeTimeLabel(lastEvent.created_at)}`
+    : "Sin movimientos este mes";
+  adminAiCreditPanel.innerHTML = `
+    <article class="ai-credit-summary tone-${tone}">
+      <div>
+        <span>${escapeHtml(aiCreditPlanName)}</span>
+        <strong>${escapeHtml(`${remaining}/${monthlyLimit}`)}</strong>
+        <small>${escapeHtml(`${generationsLeft} generaciones disponibles · ${aiGenerationCreditCost} creditos por generacion`)}</small>
+      </div>
+      <div class="ai-credit-meter" aria-label="${escapeAttribute(`${usagePercent}% usado`)}">
+        <span style="width:${usagePercent}%"></span>
+      </div>
+    </article>
+    <article class="ai-credit-detail">
+      <span>Uso del mes</span>
+      <strong>${escapeHtml(`${used} creditos usados`)}</strong>
+      <small>${escapeHtml(`Periodo ${aiCreditBalance.periodMonth || new Date().toISOString().slice(0, 7)}`)}</small>
+    </article>
+    <article class="ai-credit-detail">
+      <span>Ultimo movimiento</span>
+      <strong>${escapeHtml(lastEventText)}</strong>
+      <small>${escapeHtml(remaining < aiGenerationCreditCost ? "Compra creditos extra o sube el limite mensual." : "El descuento se registra solo si la IA inicia correctamente.")}</small>
+    </article>
+  `;
+}
+
 function renderAdminContent() {
   if (!adminContentRows || !adminContentPreview || !adminContentDishSelect || !adminContentTypeSelect) return;
+  renderAiCreditPanel();
   const dish = selectedContentDish();
   const format = selectedContentFormat();
   if (!dish) {
@@ -8180,6 +8245,7 @@ adminCreateContentButton.addEventListener("click", async () => {
       generatedContentLibrary = [item, ...generatedContentLibrary.filter((existing) => existing.id !== item.id)];
     }
     await loadGeneratedContentLibrary().catch(() => generatedContentLibrary);
+    await loadAiCreditEvents().catch(() => aiCreditEvents);
     renderAdminLibrary();
     showToast("Imagen generada y guardada en Biblioteca.");
     renderAdminContent();
