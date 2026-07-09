@@ -961,6 +961,11 @@ operativo de la plantilla:
 - Niveles deseados: Bronce, Plata, Oro u otros:
 - Umbrales de cada nivel:
 
+Las solicitudes de premio se crean con la RPC `request_reward_redemption`.
+Esa funcion valida puntos, nivel, stock, vigencia y duplicados pendientes antes
+de insertar. Cada solicitud vence a los 15 minutos para que una captura vieja no
+pueda aprobarse como si el cliente siguiera en caja.
+
 En Supabase, los umbrales se guardan en `business_loyalty_settings` como
 `tier_silver_points`, `tier_gold_points` y `tier_platinum_points`. La funcion
 `loyalty_tier_for_points()` y los triggers de `loyalty_accounts` mantienen el

@@ -94,6 +94,8 @@ validos en entornos de prueba.
   canjes.
 - Canje queda pendiente.
 - Empleado aprueba/rechaza canje.
+- Solicitar dos veces el mismo premio deja una sola solicitud pendiente.
+- Una solicitud vencida no se puede aprobar; el cliente debe pedirla de nuevo.
 - Con el panel owner abierto, crear un canje desde otra sesion y confirmar que
   aparece solo en `Necesita atencion` sin recargar la pagina.
 - Owner edita reglas de fidelizacion.

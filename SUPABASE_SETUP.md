@@ -63,9 +63,12 @@ Despues de aplicar la migracion, estas tablas deben existir:
 - `business_menu_events`
 
 `business_rewards.min_tier` acepta `bronze`, `silver`, `gold`, `platinum` o
-`null`. La RPC `manage_reward_redemption_status` vuelve a validar `active`,
-`stock`, `valid_until`, puntos disponibles y nivel minimo al aprobar un canje,
-para que la regla no dependa solo del frontend.
+`null`. La RPC `request_reward_redemption` crea solicitudes de canje desde el
+cliente y valida premio activo, vigencia, stock, nivel minimo, puntos
+disponibles y duplicados pendientes antes de insertar. La RPC
+`manage_reward_redemption_status` vuelve a validar `active`, `stock`,
+`valid_until`, puntos disponibles y nivel minimo al aprobar un canje, para que
+la regla no dependa solo del frontend.
 
 Seeds separados:
 
@@ -153,6 +156,13 @@ El panel de tareas tambien lee:
 - `point_events` para consumos cargados hoy y puntos entregados hoy.
 - `customer_profiles` y `loyalty_accounts` para clientes nuevos y nombres.
 - `reward_redemptions` para canjes pendientes.
+
+Los canjes se piden desde el cliente con `request_reward_redemption`, no con un
+insert directo desde la interfaz. Cada solicitud pendiente vence a los 15
+minutos (`requested_expires_at`) para reducir abuso por capturas viejas. Si el
+cliente vuelve a pedir el mismo premio despues del vencimiento, la RPC cancela
+automaticamente la solicitud vieja y crea una nueva. Un indice parcial impide
+que haya dos solicitudes `requested` simultaneas para el mismo cliente y premio.
 
 La seccion owner `Consumos` usa `point_events.event_type = 'purchase'` como
 fuente de verdad. La RPC `record_customer_consumption_v2` debe recibir y guardar

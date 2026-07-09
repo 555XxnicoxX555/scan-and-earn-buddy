@@ -2373,7 +2373,7 @@ async function loadAdminData() {
 
 function pendingRedemptionIdSet(data = currentAdminData) {
   return new Set((data.redemptions || [])
-    .filter((redemption) => redemption.status === "requested")
+    .filter(redemptionIsActionableRequest)
     .map((redemption) => redemption.id)
     .filter(Boolean));
 }
@@ -3783,6 +3783,10 @@ function redemptionStatusLabel(status) {
   return labelsMap[status] || status || "Pendiente";
 }
 
+function redemptionDisplayStatusLabel(redemption) {
+  return redemptionIsExpired(redemption) ? "Vencido" : redemptionStatusLabel(redemption?.status);
+}
+
 function redemptionStatusTone(status) {
   const tones = {
     requested: "warn",
@@ -3799,8 +3803,17 @@ function redemptionsByReward(rewardId) {
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 
+function redemptionIsExpired(redemption) {
+  if (!redemption?.requested_expires_at || redemption.status !== "requested") return false;
+  return new Date(redemption.requested_expires_at).getTime() < Date.now();
+}
+
+function redemptionIsActionableRequest(redemption) {
+  return redemption?.status === "requested" && !redemptionIsExpired(redemption);
+}
+
 function pendingRewardRedemption(rewardId) {
-  return redemptionsByReward(rewardId).find((redemption) => redemption.status === "requested");
+  return redemptionsByReward(rewardId).find(redemptionIsActionableRequest);
 }
 
 function activeRewardRedemption(rewardId) {
@@ -3808,7 +3821,7 @@ function activeRewardRedemption(rewardId) {
 }
 
 function closedRewardRedemption(rewardId) {
-  return redemptionsByReward(rewardId).find((redemption) => redemption.status !== "requested") || null;
+  return redemptionsByReward(rewardId).find((redemption) => redemption.status !== "requested" || redemptionIsExpired(redemption)) || null;
 }
 
 function showToast(message) {
@@ -4036,7 +4049,7 @@ function renderLoyalty() {
     rewardStatusNote.hidden = !latestRedemption;
     rewardStatusNote.className = `reward-status-note tone-${redemptionStatusTone(latestRedemption?.status)}`;
     rewardStatusNote.textContent = latestRedemption
-      ? `Ultimo canje: ${latestRedemption.reward_name} - ${redemptionStatusLabel(latestRedemption.status)}.`
+      ? `Ultimo canje: ${latestRedemption.reward_name} - ${redemptionDisplayStatusLabel(latestRedemption)}.`
       : "";
   }
   rewardStrip.innerHTML = rewardCatalog
@@ -4223,7 +4236,7 @@ function renderProfile() {
     ...(currentCustomer.redemptions || []).map((redemption) => ({
       kind: "redemption",
       created_at: redemption.created_at,
-      title: `Canje ${redemptionStatusLabel(redemption.status)}: ${redemption.reward_name}`,
+      title: `Canje ${redemptionDisplayStatusLabel(redemption)}: ${redemption.reward_name}`,
       meta: formatEventDate(redemption.created_at),
       value: `${redemption.points_cost || 0} pts`
     }))
@@ -4414,7 +4427,7 @@ function filteredCustomerAnalytics() {
 function customerRowMarkup(customer) {
   const points = Number(customer.account?.points_balance || 0);
   const tier = tierLabel(customer.account?.tier || "bronze");
-  const pending = redemptionsForCustomer(customer.profile.id).filter((redemption) => redemption.status === "requested").length;
+  const pending = redemptionsForCustomer(customer.profile.id).filter(redemptionIsActionableRequest).length;
   const activeClass = activeAdminCustomerId === customer.profile.id ? "is-active" : "";
   const streakProgress = streakProgressModel(customer.streak, customer.lastVisit);
   return `
@@ -4534,11 +4547,11 @@ function renderAdminCustomerDetail() {
             <article class="customer-redemption-row">
               <span>
                 <strong>${escapeHtml(redemption.reward_name || "Premio")}</strong>
-                <small>${escapeHtml(formatFullDateTime(redemption.created_at))} - ${escapeHtml(redemptionStatusLabel(redemption.status))}</small>
+                <small>${escapeHtml(formatFullDateTime(redemption.created_at))} - ${escapeHtml(redemptionDisplayStatusLabel(redemption))}</small>
               </span>
               <b>${escapeHtml(redemption.points_cost || 0)} pts</b>
               <span class="redemption-actions">
-                ${redemption.status === "requested" ? `<button class="mini-action" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}">Aprobar</button>` : ""}
+                ${redemptionIsActionableRequest(redemption) ? `<button class="mini-action" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}">Aprobar</button>` : ""}
                 ${redemption.status === "approved" ? `<button class="mini-action" type="button" data-redemption-action="redeemed" data-redemption-id="${escapeAttribute(redemption.id)}">Entregado</button>` : ""}
                 ${redemption.status !== "cancelled" && redemption.status !== "redeemed" ? `<button class="mini-action danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}">Rechazar</button>` : ""}
               </span>
@@ -5404,7 +5417,7 @@ function buildAnalyticsModel() {
   const riskCustomers = customerStats.filter((customer) => customer.status.tone === "warn");
   const inactiveCustomers = customerStats.filter((customer) => customer.status.tone === "bad");
   const newCustomersThisMonth = currentAdminData.customers.filter((customer) => new Date(customer.created_at) >= monthStart);
-  const pendingRedemptions = currentAdminData.redemptions.filter((redemption) => redemption.status === "requested");
+  const pendingRedemptions = currentAdminData.redemptions.filter(redemptionIsActionableRequest);
 
   const productMap = new Map();
   const categoryMap = new Map();
@@ -5623,7 +5636,7 @@ function recentHomeActivity(model) {
     id: `redemption:${redemption.id}`,
     kind: "redemption",
     sourceId: redemption.id,
-    type: redemption.status === "requested" ? "Canje pendiente" : "Canje",
+    type: redemptionIsActionableRequest(redemption) ? "Canje pendiente" : "Canje",
     title: `${customerName(redemption.customer_id)} - ${redemption.reward_name}`,
     meta: `${timeLabel(redemption.created_at)} - ${redemption.status}`,
     date: redemption.created_at
@@ -5766,8 +5779,9 @@ function signupActivityDetail(profile) {
 }
 
 function redemptionActivityDetail(redemption) {
-  const requested = redemption.status === "requested";
+  const requested = redemptionIsActionableRequest(redemption);
   const approved = redemption.status === "approved";
+  const expiresAt = redemption.requested_expires_at ? formatFullDateTime(redemption.requested_expires_at) : "";
   return {
     kicker: "Canje",
     title: `${customerName(redemption.customer_id)} · ${redemption.reward_name}`,
@@ -5780,10 +5794,11 @@ function redemptionActivityDetail(redemption) {
       <section class="activity-detail-section">
         <h2>Detalle del canje</h2>
         ${detailRows([
-          { label: "Estado", value: redemption.status },
+          { label: "Estado", value: redemptionDisplayStatusLabel(redemption) },
           { label: "Costo", value: `${redemption.points_cost} pts` },
           { label: "Premio ID", value: redemption.reward_id },
-          { label: "Solicitado", value: formatFullDateTime(redemption.created_at) }
+          { label: "Solicitado", value: formatFullDateTime(redemption.created_at) },
+          { label: redemptionIsExpired(redemption) ? "Vencio" : "Vence", value: expiresAt || "Sin vencimiento" }
         ])}
       </section>
       ${activityCustomerSummary(redemption.customer_id)}
@@ -6239,7 +6254,7 @@ function renderAdminRewards() {
     ? currentAdminData.redemptions
         .map((redemption) => {
           const customer = currentAdminData.customers.find((profile) => profile.id === redemption.customer_id);
-          const requested = redemption.status === "requested";
+          const requested = redemptionIsActionableRequest(redemption);
           const approved = redemption.status === "approved";
           return `
             <article class="admin-list-row admin-redemption-row">
@@ -6247,7 +6262,7 @@ function renderAdminRewards() {
                 <strong>${escapeHtml(redemption.reward_name)}</strong>
                 <small>${escapeHtml(customer?.name || "Cliente")} &middot; ${escapeHtml(formatEventDate(redemption.created_at))}</small>
               </span>
-              <span class="status">${escapeHtml(redemption.status)}</span>
+              <span class="status">${escapeHtml(redemptionDisplayStatusLabel(redemption))}</span>
               <span class="redemption-actions">
                 <button class="mini-action" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}" ${requested ? "" : "disabled"}>Aprobar</button>
                 <button class="mini-action" type="button" data-redemption-action="redeemed" data-redemption-id="${escapeAttribute(redemption.id)}" ${approved ? "" : "disabled"}>Entregado</button>
@@ -8856,19 +8871,20 @@ rewardStrip.addEventListener("click", async (event) => {
   button.disabled = true;
   try {
     if (supabase && currentCustomer?.profile) {
-      const { data, error } = await supabase.from("reward_redemptions").insert({
-        customer_id: currentCustomer.profile.id,
-        business_id: businessId,
-        reward_id: reward.id,
-        reward_name: reward.name,
-        points_cost: reward.cost,
-        status: "requested"
-      }).select("*").single();
+      const { data, error } = await supabase.rpc("request_reward_redemption", {
+        target_business_id: businessId,
+        target_reward_id: reward.id,
+        request_context: {
+          source: "customer_card",
+          language: currentLang,
+          path: window.location.hash || "#/menu"
+        }
+      });
       if (error) {
         showToast(displayError(error));
         return;
       }
-      createdRedemption = data;
+      createdRedemption = data?.redemption || data;
     } else if (currentCustomer?.profile) {
       createdRedemption = {
         id: fallbackId(),
@@ -8878,6 +8894,7 @@ rewardStrip.addEventListener("click", async (event) => {
         reward_name: reward.name,
         points_cost: reward.cost,
         status: "requested",
+        requested_expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
         created_at: new Date().toISOString()
       };
     }
