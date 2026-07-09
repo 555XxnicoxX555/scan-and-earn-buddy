@@ -228,9 +228,22 @@ No guardar `AUTH_HOOK_SECRET` en archivos del repo.
 
 ## 9. Personalizar el negocio
 
-1. Copiar `businesses/sumi/` a `businesses/<cliente>/`.
-2. Editar `businesses/<cliente>/config.js`.
-3. Cambiar en `index.html`:
+1. Completar `business.config.json` desde el formulario del cliente.
+2. Validar:
+
+   ```powershell
+   npm run prepare:client -- --config business.config.json --dry-run
+   ```
+
+3. Generar configuracion y seed:
+
+   ```powershell
+   npm run prepare:client -- --config business.config.json
+   ```
+
+4. Revisar `businesses/<cliente>/config.js` y
+   `supabase/seed.client.generated.sql`.
+5. Cambiar en `index.html`:
 
    ```html
    <script src="businesses/sumi/config.js"></script>
@@ -242,26 +255,26 @@ No guardar `AUTH_HOOK_SECRET` en archivos del repo.
    <script src="businesses/<cliente>/config.js"></script>
    ```
 
-4. Colocar fotos en:
+6. Colocar fotos en:
 
    ```text
    assets/menu/<id-del-producto>.png
    ```
 
-5. Revisar banderas en:
+7. Revisar banderas en:
 
    ```text
    assets/flags/<codigo>.svg
    ```
 
-6. Ejecutar:
+8. Ejecutar:
 
    ```powershell
    npm run dev
    npm run build
    ```
 
-7. Revisar el editor admin en:
+9. Revisar el editor admin en:
 
    ```text
    #/admin/menu
@@ -269,7 +282,7 @@ No guardar `AUTH_HOOK_SECRET` en archivos del repo.
    #/admin/menu/<id-del-producto>/preview
    ```
 
-8. Probar carga de imagen desde el editor. La plantilla comprime la imagen antes
+10. Probar carga de imagen desde el editor. La plantilla comprime la imagen antes
    de guardarla, pero para produccion las fotos versionadas en `assets/menu/`
    deben entregarse ya optimizadas.
 
@@ -284,6 +297,36 @@ npx supabase functions deploy translate-menu-item --project-ref <project-ref>
 ```
 
 No guardar `OPENAI_API_KEY` en `.env`, `config.js` ni documentacion.
+
+## 11. Modelo operativo por cliente
+
+Para los primeros clientes usar un proyecto Supabase por negocio. Sumi administra
+la infraestructura y el cliente no necesita gestionar cuentas tecnicas.
+
+Checklist antes de entregar:
+
+1. Proyecto Supabase nuevo, sin `seed.demo.sql`.
+2. Migraciones aplicadas.
+3. `supabase/seed.client.generated.sql` revisado y ejecutado.
+4. Owner creado y vinculado en `business_admins`.
+5. Employees creados solo si el negocio ya los necesita.
+6. Auth URLs apuntando al dominio publico.
+7. `.env` local y variables de hosting apuntando al proyecto correcto.
+8. QR del menu apuntando a `VITE_PUBLIC_APP_URL`.
+9. Flujo completo probado: registro, consumo, canje, premios, QR y contenido.
+
+Politica comercial inicial:
+
+- No pedir Supabase, API keys ni hosting al cliente.
+- Incluir infraestructura y uso razonable en la mensualidad.
+- Definir creditos mensuales de IA por plan en `business.config.json`
+  (`aiCredits.monthlyLimit`) y costo por generacion
+  (`aiCredits.generationCreditCost`).
+- Vender creditos extra o plan superior si supera el limite.
+- Registrar internamente costos, errores de Edge Functions y uso de IA.
+
+Si mas adelante Sumi pasa a SaaS multi-tenant, revisar RLS, RPCs y monitoreo
+antes de mezclar negocios en una misma base.
 
 La traduccion se ejecuta desde las opciones del producto:
 

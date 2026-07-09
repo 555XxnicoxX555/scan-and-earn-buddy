@@ -8,7 +8,7 @@ declare const Deno: {
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-const CREDIT_COST = 2;
+const DEFAULT_CREDIT_COST = 2;
 const STORAGE_BUCKET = "generated-content";
 
 type EdgeRuntimeGlobal = typeof globalThis & {
@@ -348,7 +348,24 @@ async function ensureCredits(authHeader: string, businessId: string) {
   });
 }
 
-async function consumeCredits(authHeader: string, businessId: string, taskId: string) {
+async function creditSettings(authHeader: string, businessId: string) {
+  const body = await callSupabaseRpc<Array<{
+    monthly_limit: number;
+    generation_credit_cost: number;
+  }> | {
+    monthly_limit: number;
+    generation_credit_cost: number;
+  }>(authHeader, "business_ai_credit_settings", {
+    target_business_id: businessId
+  });
+  const settings = Array.isArray(body) ? body[0] : body;
+  return {
+    monthlyLimit: Number(settings?.monthly_limit || 150),
+    generationCreditCost: Math.max(1, Number(settings?.generation_credit_cost || DEFAULT_CREDIT_COST))
+  };
+}
+
+async function consumeCredits(authHeader: string, businessId: string, taskId: string, creditCost: number) {
   return await callSupabaseRpc<{
     business_id: string;
     period_month: string;
@@ -356,7 +373,7 @@ async function consumeCredits(authHeader: string, businessId: string, taskId: st
     credits_remaining: number;
   }>(authHeader, "consume_business_ai_credits", {
     target_business_id: businessId,
-    credits_to_consume: CREDIT_COST,
+    credits_to_consume: creditCost,
     event_reason: "content_image_generation",
     kie_task_id: taskId
   });
@@ -404,7 +421,8 @@ async function insertGeneratedContentAsset(
   userId: string,
   input: ImageInput,
   storedImage: { storagePath: string; publicUrl: string },
-  task: { taskId: string; model: string }
+  task: { taskId: string; model: string },
+  creditCost: number
 ) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error("Missing Supabase environment");
@@ -429,7 +447,7 @@ async function insertGeneratedContentAsset(
     model: task.model,
     task_id: task.taskId,
     request_key: safeString(input.brief?.requestKey) || null,
-    credits_used: CREDIT_COST
+    credits_used: creditCost
   };
 
   const insertUrl = new URL(`${SUPABASE_URL}/rest/v1/generated_content_assets`);
@@ -480,7 +498,8 @@ async function processGeneratedImageTask(
   authHeader: string,
   userId: string,
   input: ImageInput,
-  task: { taskId: string; imageUrl: string; model: string }
+  task: { taskId: string; imageUrl: string; model: string },
+  creditCost: number
 ) {
   try {
     const businessId = safeString(input.businessId);
@@ -494,9 +513,9 @@ async function processGeneratedImageTask(
     await insertGeneratedContentAsset(authHeader, userId, input, storedImage, {
       taskId: task.taskId,
       model: task.model
-    });
+    }, creditCost);
     // Credits are consumed only after Kie.ai returns a real image and Storage keeps a copy.
-    await consumeCredits(authHeader, businessId, task.taskId);
+    await consumeCredits(authHeader, businessId, task.taskId, creditCost);
   } catch (error) {
     console.error("Background image generation failed", error);
   }
@@ -506,7 +525,8 @@ async function finalizeGeneratedImageTask(
   authHeader: string,
   userId: string,
   input: ImageInput,
-  task: { taskId: string; model: string }
+  task: { taskId: string; model: string },
+  creditCost: number
 ) {
   const businessId = safeString(input.businessId);
   const existing = await findGeneratedContentAssetByTask(authHeader, businessId, task.taskId);
@@ -528,8 +548,8 @@ async function finalizeGeneratedImageTask(
   const asset = await insertGeneratedContentAsset(authHeader, userId, input, storedImage, {
     taskId: task.taskId,
     model: task.model
-  });
-  await consumeCredits(authHeader, businessId, task.taskId);
+  }, creditCost);
+  await consumeCredits(authHeader, businessId, task.taskId, creditCost);
   return asset;
 }
 
@@ -580,10 +600,11 @@ Deno.serve(async (req) => {
     if (action === "finalize") {
       const taskId = safeString(input.task?.taskId);
       if (!taskId) return jsonResponse({ error: "Missing taskId" }, 400);
+      const settings = await creditSettings(authHeader, businessId);
       const asset = await finalizeGeneratedImageTask(authHeader, user.id, input, {
         taskId,
         model: safeString(input.task?.model) || "gpt-image-2-image-to-image"
-      });
+      }, settings.generationCreditCost);
       if (!asset) {
         return jsonResponse({
           status: "processing",
@@ -603,8 +624,9 @@ Deno.serve(async (req) => {
       });
     }
 
+    const settings = await creditSettings(authHeader, businessId);
     let creditBalance = await ensureCredits(authHeader, businessId);
-    if (creditBalance.credits_remaining < CREDIT_COST) {
+    if (creditBalance.credits_remaining < settings.generationCreditCost) {
       return jsonResponse({
         error: "Insufficient AI credits",
         code: "insufficient_credits",
@@ -634,12 +656,12 @@ Deno.serve(async (req) => {
       throw error;
     }
 
-    runInBackground(processGeneratedImageTask(authHeader, user.id, input, task));
+    runInBackground(processGeneratedImageTask(authHeader, user.id, input, task, settings.generationCreditCost));
     return jsonResponse({
       status: "processing",
       taskId: task.taskId,
       model: task.model,
-      creditsReserved: CREDIT_COST,
+      creditsReserved: settings.generationCreditCost,
       creditsRemaining: creditBalance.credits_remaining,
       monthlyLimit: creditBalance.monthly_limit,
       periodMonth: creditBalance.period_month,

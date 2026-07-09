@@ -54,6 +54,16 @@ adaptarla para un negocio, separar mentalmente estos niveles:
 
 - `businesses/<negocio>/config.js`: datos editables del negocio. Es el archivo
   principal para marca, menu, categorias, traducciones, premios y textos.
+- `business.config.example.json`: esquema maestro recomendado para recolectar
+  marca, menu, premios, reglas de puntos, QRs e idiomas antes de adaptar.
+  `brand.colors.primary`, `brand.colors.ink` y `brand.colors.cream` se aplican
+  a las variables CSS principales de la app y tambien al QR estilo marca.
+- `docs/client-onboarding-form.md`: formulario para el negocio. La llamada se
+  reserva para identidad visual y decisiones subjetivas.
+- `docs/setup-client.md`: pasos para crear una instancia real, aplicar
+  migraciones, seeds, variables y dominio.
+- `docs/codex-client-prompt.md`: prompt operativo para pedir una adaptacion
+  completa sin adivinar archivos.
 - `assets/menu/`: imagenes locales de productos. Cada archivo debe coincidir
   con el `id` del producto cuando se usa el helper `productImage(id)`.
 - `index.html`: estructura base, iconos SVG, carga de la config activa y
@@ -64,7 +74,10 @@ adaptarla para un negocio, separar mentalmente estos niveles:
   editor, traducciones, carga de fotos, persistencia local y Supabase.
 - `supabase/functions/`: Edge Functions compartidas, por ejemplo emails y
   traduccion IA.
-- `supabase/migrations/`: tablas y politicas para clientes, puntos y owners.
+- `supabase/migrations/`: tablas y politicas para clientes, puntos, premios,
+  QRs, contenido y owners.
+- `supabase/seed.client.sql` y `supabase/seed.demo.sql`: semillas separadas
+  para clientes reales y pruebas internas.
 - `ADMIN_PANEL.md`, `SUPABASE_SETUP.md` y este archivo: documentacion viva de
   la plantilla.
 
@@ -83,15 +96,22 @@ Esta repo debe servir para dos cosas al mismo tiempo:
 Para adaptar un negocio sin romper la plantilla:
 
 1. Mantener `businesses/sumi/` como demo y banco de pruebas.
-2. Crear `businesses/<cliente>/config.js` copiando `businesses/sumi/config.js`.
-3. Cambiar solo datos del cliente en esa config: identidad, categorias, menu,
-   traducciones, premios y textos del panel.
-4. Guardar fotos finales en `assets/menu/` con nombres estables.
-5. Cambiar temporalmente el `<script src="businesses/.../config.js">` de
+2. Copiar `business.config.example.json` como `business.config.json`.
+3. Completar marca, contacto, menu, premios, QRs, creditos IA y roles iniciales
+   en ese JSON. `operations.adminOwnerEmail` genera el owner y
+   `operations.employeeEmails` genera empleados de caja cuando esos usuarios ya
+   existen en Auth.
+4. Ejecutar `npm run prepare:client -- --config business.config.json --dry-run`.
+5. Si el resumen es correcto, ejecutar
+   `npm run prepare:client -- --config business.config.json`.
+6. Revisar `businesses/<cliente>/config.js` y
+   `supabase/seed.client.generated.sql` antes de publicar o correr SQL.
+7. Guardar fotos finales en `assets/menu/` con nombres estables.
+8. Cambiar temporalmente el `<script src="businesses/.../config.js">` de
    `index.html` para probar ese cliente.
-6. Ejecutar `npm run dev` durante ajustes y `npm run build` antes de entregar.
-7. Si durante un cliente aparece una mejora reusable, implementarla en la
-   plantilla base y documentarla aqui.
+9. Ejecutar `npm run dev` durante ajustes y `npm run build` antes de entregar.
+10. Si durante un cliente aparece una mejora reusable, implementarla en la
+    plantilla base y documentarla aqui.
 
 Donde editar segun el tipo de cambio:
 
@@ -116,6 +136,10 @@ o a la capa backend que se decida para ese cliente.
 En `businesses/<negocio>/config.js` se editan:
 
 - `businessId`: identificador interno del negocio.
+- `publicAppUrl` / `VITE_PUBLIC_APP_URL`: URL publica raiz del negocio para
+  emails y QRs, por ejemplo `https://sumi.business/` o `https://tu-dominio.com/`.
+  En runtime, `VITE_PUBLIC_APP_URL` tiene prioridad; si no existe, la app usa
+  `businessConfig.publicAppUrl` y luego `businessConfig.qr.defaultTarget`.
 - `appTitle`: titulo del navegador.
 - `defaultLang`: idioma inicial.
 - `defaultBrand`: marca/concepto inicial.
@@ -133,10 +157,14 @@ En `businesses/<negocio>/config.js` se editan:
 - `nameTranslations`: traducciones de nombres.
 - `descriptionTranslations`: traducciones de descripciones.
 - `menuItems`: productos, precios, categorias y fotos.
-- `rewardCatalog`: premios del sistema de puntos.
+- `rewardCatalog`: premios del sistema de puntos. Cada premio puede tener
+  `imageUrl`; si Supabase esta activo, el panel owner guarda ese valor como
+  `business_rewards.image_url`.
+- Los premios pueden definir `stock`, `validUntil`, `active` y `minTier`.
+  Supabase valida esas reglas al aprobar el canje, no solo en la interfaz.
 
 `recommendedByBrand` es el fallback versionado de la plantilla. En produccion,
-el owner puede cambiar `Hoy te recomendamos` desde el panel admin; ese override
+el owner puede cambiar `Producto destacado` desde el panel admin; ese override
 se guarda en Supabase (`business_menu_settings`) sin editar `config.js`.
 
 El producto `Popular` funciona igual: la plantilla puede inferirlo por likes,
@@ -154,7 +182,7 @@ La plantilla usa hash routes para no depender de rewrites del servidor:
 - `#/admin/menu/:dishId/edit`: editor de producto.
 - `#/admin/menu/:dishId/preview`: vista previa admin del producto.
 - `#/admin/customers`, `#/admin/content`, `#/admin/library`,
-  `#/admin/rewards`, `#/admin/analytics`, `#/admin/settings`: secciones internas.
+  `#/admin/rewards`, `#/admin/settings`: secciones internas.
 
 El router vive en `app.js`:
 
@@ -168,6 +196,36 @@ El router vive en `app.js`:
 No conviene abrir pantallas agregando clases manualmente desde botones nuevos.
 La regla es: un click navega con `navigate(...)` y `renderRoute()` decide que se
 ve. Esto evita bugs de "volver" entre preview, editor y menu.
+
+## Dominio publico y QR del menu
+
+Cada negocio debe tener definida una URL publica raiz. Para Sumi es:
+
+```txt
+https://sumi.business/
+```
+
+Para otros clientes usar su dominio o subdominio, por ejemplo:
+
+```txt
+https://tu-dominio.com/
+```
+
+La variable recomendada es:
+
+```env
+VITE_PUBLIC_APP_URL="https://sumi.business"
+```
+
+El QR rapido del Inicio apunta a esa URL raiz, no a una ruta interna como
+`#/menu`. Esto permite imprimir QRs mas durables: si despues cambia la ruta del
+menu, el dominio sigue siendo valido y la app decide que pantalla mostrar.
+
+La seccion `QRs` del panel admin genera piezas para mesa, mostrador, redes o
+flyer. El owner elige objetivo, tono, estilo visual, color principal y texto
+principal, previsualiza el poster y puede descargarlo como PNG o PDF listo para
+imprimir. Los defaults viven en `businessConfig.qr` para que cada negocio pueda
+salir con su tematica inicial sin tocar `app.js`.
 
 ## QR, staff y carga de consumo
 
@@ -186,14 +244,16 @@ ocupar demasiado area, para no afectar la lectura.
 
 El flujo de caja es:
 
-1. El cliente muestra el QR al empleado.
-2. El staff escanea o pega el codigo manualmente.
-3. La app resuelve el cliente con `lookup_loyalty_customer_by_qr`.
-4. La pantalla de escaneo se repliega y queda la carga de consumo.
-5. El empleado ingresa el monto total y toca productos del catalogo visual.
-6. Si un producto tiene una sola presentacion se suma directo.
-7. Si tiene varias, aparece un selector contextual debajo de la tarjeta.
-8. El empleado confirma con `Registrar consumo`.
+1. El staff elige entre `Escanear QR de cliente` o `Cargar consumo` manual.
+2. En modo QR, el cliente muestra su QR y la app lo resuelve con
+   `lookup_loyalty_customer_by_qr`.
+3. En modo manual, el staff busca al cliente por nombre, email o QR.
+4. La pantalla de escaneo/busqueda se repliega y queda la carga de consumo.
+5. El empleado ingresa el monto total.
+6. Opcionalmente carga categoria, nota interna y productos del catalogo visual.
+7. Si un producto tiene una sola presentacion se suma directo.
+8. Si tiene varias, aparece un selector contextual debajo de la tarjeta.
+9. El empleado confirma con `Registrar consumo`.
 
 Los productos seleccionados son auditoria simple, no POS. El precio de cada
 presentacion no afecta los puntos: la unica fuente para puntos es el monto total
@@ -204,10 +264,14 @@ ingresado por el empleado. El payload de productos se guarda como:
 ```
 
 El registro se guarda en `point_events` mediante la RPC
-`record_customer_consumption`. Esa fila conserva:
+`record_customer_consumption_v2`. Esa fila conserva:
 
 - `purchase_total`: monto total cargado.
 - `purchase_items`: productos y cantidades.
+- `purchase_category`: categoria operativa del consumo, manual o inferida por
+  los productos.
+- `purchase_note`: observacion interna breve, por ejemplo mesa, aclaracion o
+  motivo de correccion.
 - `recorded_by_auth_user_id`: usuario staff/owner que cargo el consumo.
 - `qr_id`: QR publico usado.
 - `earn_rate`: regla aplicada en ese momento.
@@ -217,6 +281,30 @@ El resultado devuelve tambien `eventId`, que es el identificador interno de esa
 compra/evento de puntos. Para reportes futuros, usar `point_events.id` como ID
 interno principal y `request_id` como llave idempotente del intento desde la UI.
 
+La seccion `Consumos` del panel owner funciona como centro de control. Debe
+mantener filtros por rango de fecha, cliente, monto minimo/maximo, producto,
+categoria, nota, empleado, metodo (`qr`, `manual`, `api`, `adjustment`) y
+estado (`confirmed`, `cancelled`, `corrected`). El resumen superior siempre
+debe calcularse sobre los resultados filtrados para evitar confundir datos de
+hoy con datos historicos. Al abrir un consumo se muestra trazabilidad: monto,
+puntos, cliente, empleado, categoria, productos, estado, QR usado, request ID,
+fecha exacta y nota interna. Solo owner puede cancelar consumos confirmados.
+
+Correcciones operativas:
+
+- Solo `owner` puede corregir o cancelar consumos desde el panel.
+- Corregir un consumo permite cambiar monto, categoria y nota interna; los
+  productos se conservan en esta primera version y pueden aclararse en la nota.
+- Supabase recalcula los puntos usando el `earn_rate` original del consumo.
+- Si la correccion baja puntos y el cliente ya no tiene saldo suficiente, la RPC
+  rechaza la operacion para evitar saldos negativos invisibles.
+- El consumo original queda con `purchase_status = 'corrected'`.
+- La diferencia de puntos se guarda como `point_events.event_type = 'adjustment'`.
+- El historial antes/despues vive en `point_event_corrections` con owner,
+  valores previos, valores nuevos, diferencia y motivo de correccion.
+- Cancelar sigue usando `cancel_customer_consumption`: no borra el consumo,
+  cambia estado y registra el ajuste inverso.
+
 Regla visual importante: evitar problemas de superposicion o `overlap` entre el
 catalogo, el selector de presentaciones y la lista de productos seleccionados.
 El catalogo debe tener su propio alto con scroll, la lista de seleccionados debe
@@ -224,6 +312,63 @@ tener su propio contenedor, y los popovers no deben salir hacia controles
 superiores como monto o encabezados. En CSS esto suele ser un problema de
 `layout overlap`, `stacking context` y `z-index` mal combinado con contenedores
 con `overflow`.
+
+## Inicio y estadisticas accionables
+
+El Inicio del admin (`#/admin`) contiene la bienvenida del owner y un panel de
+tareas. No existe una seccion separada de Estadisticas: la primera pantalla debe
+responder rapido que requiere atencion en el negocio.
+
+Regla de producto para el Inicio: si el owner no puede tomar una decision o
+hacer algo con ese dato en menos de 10 segundos, no va en Inicio.
+
+El Inicio muestra solo:
+
+- Canjes pendientes.
+- Consumos cargados hoy.
+- Clientes nuevos hoy.
+- Puntos entregados hoy.
+- Accesos rapidos: cargar consumo, escanear QR, generar QR del menu, crear
+  promocion y agregar premio.
+- Actividad reciente: ultimos consumos, canjes y registros.
+
+No poner en Inicio:
+
+- Rankings de clientes.
+- Clientes en riesgo o inactivos.
+- Productos mas/menos vendidos.
+- Conversiones del menu digital.
+- Impacto de contenido.
+- Tablas largas o textos tecnicos.
+
+Esa informacion debe vivir en secciones especificas como Clientes, Premios,
+Contenido o futuras pantallas de Consumos/Estadisticas avanzadas.
+
+El MVP actual usa datos reales de estas fuentes:
+
+- `point_events` con `event_type = 'purchase'`, `purchase_total`,
+  `purchase_items`, `points_delta`, `recorded_by_auth_user_id` y `created_at`.
+- `customer_profiles` y `loyalty_accounts` para clientes, niveles y puntos.
+- `reward_redemptions` para canjes pendientes.
+- `generated_content_assets` para piezas creadas con IA.
+- `business_menu_events` para vistas del menu, detalles de productos y registro.
+
+Los canjes pendientes se refrescan con Supabase Realtime sobre
+`reward_redemptions` cuando el owner esta dentro del panel admin. Si aparece una
+solicitud nueva, el panel recarga datos, avisa con toast y actualiza
+`Necesita atencion`. El polling liviano cada 7 segundos queda como respaldo
+cuando Realtime esta con demora, falla o no esta habilitado para ese proyecto.
+
+Reglas para personalizar negocios:
+
+1. No inventar metricas si falta tracking. Usar estados vacios con accion:
+   `Cargar consumo`, `Crear contenido`, `Gestionar canjes` o `Generar QR`.
+2. Mantener las metricas conectadas a una accion navegable.
+3. Evitar graficos decorativos y rankings largos en Inicio.
+4. Usar `point_events.id` como identificador interno de una compra registrada y
+   `request_id` como llave idempotente del intento de carga.
+5. Si el volumen crece, mover los calculos pesados a RPCs SQL, pero conservar
+   Inicio como pantalla de control rapido.
 
 ## Como editar productos
 
@@ -300,21 +445,21 @@ debe borrar esa fila en Supabase. En modo sin Supabase, la clave de
 ## Idiomas y traduccion IA
 
 Los idiomas disponibles se definen en `businesses/<negocio>/config.js` dentro
-de `languages`. La UI actual del editor espera tres tabs:
-
-- `es`
-- `en`
-- `ar`
+de `languages`. El editor renderiza los tabs dinamicamente desde esa lista; no
+hay que tocar `index.html` para agregar o quitar idiomas.
 
 El editor guarda traducciones por producto en:
 
 ```js
 dish.translations = {
   es: { name: "...", description: "..." },
-  en: { name: "...", description: "..." },
-  ar: { name: "...", description: "..." }
+  en: { name: "...", description: "..." }
 }
 ```
+
+Si el negocio usa `fr`, `pt`, `ar` u otro idioma, se agrega otra clave con el
+codigo correspondiente. El idioma principal se define con `defaultLang` o con
+`languages[].primary`.
 
 Cuando el owner escribe en cualquier tab, ese idioma queda como ultimo idioma
 editado. Al tocar `Traducir con IA`, la app envia ese texto fuente a la Edge
@@ -324,17 +469,22 @@ Function:
 supabase/functions/translate-menu-item/index.ts
 ```
 
-La funcion usa el modelo `gpt-5-nano`, devuelve `es`, `en` y `ar`, y exige que
-el usuario autenticado exista en `business_admins` para el `businessId`
-solicitado.
+La funcion usa el modelo `gpt-5-nano`, devuelve los `targetLangs` configurados
+en `businessConfig.languages`, y exige que el usuario autenticado exista en
+`business_admins` para el `businessId` solicitado.
 
 Mapa de implementacion:
 
 - Boton del editor: `#translateButton` en `index.html`.
-- Tabs de idioma: `.tab[data-lang]` en `index.html`.
+- Contenedor de tabs: `#editorLanguageTabs` en `index.html`.
+- Tabs dinamicos: `.tab[data-lang]` generados en `renderEditorLanguageTabsMarkup()`.
 - Estado del ultimo idioma editado: `lastEditedEditorLang` en `app.js`.
 - Funcion frontend: `translateEditorDish()` en `app.js`.
 - Funcion backend segura: `translate-menu-item` en Supabase Edge Functions.
+
+`business.config.example.json` incluye `defaultLang` y `languages` a nivel raiz.
+`scripts/prepare-client.mjs --dry-run` devuelve `missingFlags` para detectar
+banderas que falten en `assets/flags/<flag>.svg` antes de entregar el cliente.
 
 Para activar esa funcion en un proyecto real:
 
@@ -482,11 +632,18 @@ El prompt se arma en `buildContentImagePrompt(dish, format, draft)` dentro de
 
 Creditos:
 
-- Cada negocio tiene 150 creditos por mes.
-- Cada generacion consume 2 creditos.
-- El saldo se restablece a 150 al cambiar de mes; no se acumula.
+- Cada negocio define sus creditos en `business.config.json` con
+  `aiCredits.monthlyLimit`.
+- La plantilla demo usa 150 creditos por mes.
+- Cada generacion consume `aiCredits.generationCreditCost`; la plantilla demo
+  usa 2 creditos.
+- El saldo se restablece al limite mensual configurado al cambiar de mes; no se
+  acumula.
 - El control real ocurre en Supabase mediante
-  `business_ai_credit_balances`, `business_ai_credit_events` y la Edge Function.
+  `business_ai_settings`, `business_ai_credit_balances`,
+  `business_ai_credit_events` y la Edge Function.
+- `scripts/prepare-client.mjs` copia estos valores al config generado y al seed
+  del cliente.
 
 Referencias de diseno usadas para loading states:
 
@@ -556,12 +713,25 @@ Solo se editan cuando cambia el producto base para todos los negocios.
 Para un negocio nuevo:
 
 1. Clonar o abrir el repo base.
-2. Crear una carpeta nueva en `businesses/`.
-3. Pedirle a Codex: "crea una configuracion para <negocio> usando
-   `businesses/sumi/config.js` como base".
-4. Pasarle a Codex el menu, precios, marca, horarios, direccion y fotos.
-5. Probar con `npm run dev`.
-6. Construir con `npm run build`.
+2. Completar `business.config.json` desde `business.config.example.json`.
+3. Validar la configuracion:
+
+   ```powershell
+   npm run prepare:client -- --config business.config.json --dry-run
+   ```
+
+4. Generar la carpeta del negocio y el seed inicial:
+
+   ```powershell
+   npm run prepare:client -- --config business.config.json
+   ```
+
+5. Revisar `businesses/<negocio>/config.js` y
+   `supabase/seed.client.generated.sql`.
+6. Cambiar temporalmente el `<script src="businesses/.../config.js">` de
+   `index.html` si queres probar ese negocio localmente.
+7. Probar con `npm run dev`.
+8. Construir con `npm run build`.
 
 Si el negocio solo cambia marca, menu, precios y fotos, no hace falta forkear el
 codigo. Si el negocio necesita una funcionalidad distinta, conviene crear una
@@ -791,6 +961,36 @@ operativo de la plantilla:
 - Niveles deseados: Bronce, Plata, Oro u otros:
 - Umbrales de cada nivel:
 
+En Supabase, los umbrales se guardan en `business_loyalty_settings` como
+`tier_silver_points`, `tier_gold_points` y `tier_platinum_points`. La funcion
+`loyalty_tier_for_points()` y los triggers de `loyalty_accounts` mantienen el
+nivel sincronizado cuando cambia el saldo o cuando el owner edita esos umbrales
+desde Fidelizacion. Defaults de plantilla: Plata 500, Oro 1000, Platino 2000.
+Los flujos de consumo, canje, cancelacion y ajuste manual tambien usan esa
+funcion para devolver el nivel actualizado al panel y a la tarjeta del cliente.
+
+#### Rachas semanales
+
+Para gastronomia, la plantilla usa rachas semanales. Cuenta un consumo valido
+por semana; los consumos cancelados no cuentan y los corregidos si cuentan. La
+racha no debe mostrarse solo como numero: siempre acompanarla con progreso y
+accion.
+
+La UI debe responder:
+
+- Cuantas semanas lleva el cliente.
+- Si esta semana ya esta cubierta.
+- Cuantas semanas faltan para el bonus.
+- Cuantos puntos entrega el bonus, si esta configurado.
+- Que debe hacer el cliente/empleado ahora: cargar consumo esta semana,
+  mantener racha o aprovechar bonus.
+
+Lugares obligatorios:
+
+- Perfil del cliente.
+- Ficha de cliente del owner.
+- Ficha rapida al escanear QR o cargar consumo.
+
 #### Flujo QR de cliente
 
 En la plantilla con Supabase, la tarjeta de puntos solo aparece si el cliente
@@ -808,7 +1008,10 @@ El QR contiene un payload v1 con:
 - `type`: `sumi-loyalty-customer`
 - `version`: `1`
 - `businessId`: el `businessId` del negocio
-- `customerId`: `public_qr_id` de `loyalty_accounts` cuando hay backend
+- `qrId`: `public_qr_id` de `loyalty_accounts` cuando hay backend
+
+La lectura de QR todavia acepta `customerId` y `publicQrId` como compatibilidad
+con QRs viejos, pero los nuevos QRs de la plantilla deben emitir `qrId`.
 
 El flujo esperado es: el cliente termina de consumir, muestra el QR al empleado,
 y el empleado lo escanea para identificar a quien debe acreditarse el consumo.
@@ -826,6 +1029,9 @@ Modelo minimo en Supabase:
 
 - `businesses`: negocios dueños del programa.
 - `customer_profiles`: perfil del cliente vinculado a `auth.users`.
+  Incluye `status` operativo: `active`, `incomplete`, `blocked` o `deleted`.
+  El owner puede cambiarlo desde la ficha de Cliente; clientes bloqueados,
+  eliminados o sin completar no pueden solicitar canjes nuevos.
 - `loyalty_accounts`: saldo, nivel y `public_qr_id`.
 - `point_events`: movimientos de puntos.
 - `reward_redemptions`: solicitudes/canjes de premios.
@@ -833,6 +1039,13 @@ Modelo minimo en Supabase:
 El `business_id` debe separar los datos de cada negocio. El cliente solo puede
 leer su propio perfil, cuenta, QR e historial; no puede acreditarse puntos desde
 el frontend.
+
+El owner puede ajustar puntos manualmente desde la ficha del cliente. Ese ajuste
+usa la RPC `adjust_customer_points`, exige un `request_id`, no permite dejar
+saldo negativo y guarda una fila `point_events.event_type = 'adjustment'` con
+`recorded_by_auth_user_id`. Para auditoria, el ID interno del ajuste es
+`point_events.id`; `request_id` sirve como llave idempotente del intento desde
+la UI.
 
 ### 8. Datos, Supabase y persistencia
 

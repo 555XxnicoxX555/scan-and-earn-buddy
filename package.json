@@ -4,7 +4,9 @@
     "build": "node scripts/build.mjs",
     "audit:ui": "node scripts/audit-ui.mjs",
     "smoke:ui": "node scripts/smoke-ui.mjs",
-    "check:supabase": "node scripts/check-supabase.mjs"
+    "check:supabase": "node scripts/check-supabase.mjs",
+    "check:client": "node scripts/check-client-readiness.mjs",
+    "prepare:client": "node scripts/prepare-client.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.1",

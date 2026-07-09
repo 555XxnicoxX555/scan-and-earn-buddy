@@ -54,10 +54,23 @@ Despues de aplicar la migracion, estas tablas deben existir:
 - `loyalty_accounts`
 - `point_events`
 - `reward_redemptions`
+- `business_loyalty_settings`
+- `business_rewards`
 - `dish_likes`
 - `dish_like_overrides`
 - `business_menu_settings`
 - `business_menu_catalog`
+- `business_menu_events`
+
+`business_rewards.min_tier` acepta `bronze`, `silver`, `gold`, `platinum` o
+`null`. La RPC `manage_reward_redemption_status` vuelve a validar `active`,
+`stock`, `valid_until`, puntos disponibles y nivel minimo al aprobar un canje,
+para que la regla no dependa solo del frontend.
+
+Seeds separados:
+
+- `supabase/seed.client.sql`: datos iniciales reales del cliente.
+- `supabase/seed.demo.sql`: datos ficticios para pruebas internas.
 
 Verificar desde el repo:
 
@@ -116,7 +129,119 @@ al fallback versionado de `businesses/<negocio>/config.js` para clientes,
 empleados, owners, pestanas nuevas e incognito. La lectura es publica; la
 escritura queda limitada por RLS a owners del negocio.
 
-## 6. Emails de Auth con Resend
+## 6. Eventos del menu y estadisticas
+
+El Inicio del admin (`#/admin`) usa eventos reales para mostrar resumen del dia,
+canjes pendientes y actividad reciente. La tabla `business_menu_events` registra
+actividad publica del menu:
+
+- `menu_view`: apertura del menu publico.
+- `dish_detail_view`: apertura del detalle de un producto.
+- `signup_start`: apertura del modal de registro.
+- `signup_complete`: cuenta creada desde el flujo publico.
+
+La tabla guarda `business_id`, `dish_id` opcional, `session_id`, `customer_id`
+si existe, `auth_user_id` si existe y `created_at`.
+
+Permisos esperados:
+
+- `anon` y `authenticated` pueden insertar eventos.
+- Solo owners del negocio pueden leerlos desde el admin.
+
+El panel de tareas tambien lee:
+
+- `point_events` para consumos cargados hoy y puntos entregados hoy.
+- `customer_profiles` y `loyalty_accounts` para clientes nuevos y nombres.
+- `reward_redemptions` para canjes pendientes.
+
+La seccion owner `Consumos` usa `point_events.event_type = 'purchase'` como
+fuente de verdad. La RPC `record_customer_consumption_v2` debe recibir y guardar
+`purchase_total`, `purchase_items`, `purchase_category`, `purchase_note`,
+`consumption_entry_method`, `recorded_by_auth_user_id`, `qr_id`, `earn_rate` y
+`request_id`. El frontend filtra por rango de fecha, cliente, monto, producto,
+categoria, nota, empleado, metodo y estado. Al cancelar, usar
+`cancel_customer_consumption` para marcar el consumo y revertir puntos/racha sin
+borrar la fila original.
+
+Correccion de errores operativos:
+
+- `point_event_corrections` guarda historial antes/despues de cada correccion.
+- `correct_customer_consumption` es owner-only, security definer y transaccional.
+- La RPC permite corregir monto, categoria y nota interna; recalcula puntos con
+  el `earn_rate` original del consumo.
+- Si la diferencia de puntos dejaria saldo negativo, la correccion se rechaza.
+- Cuando hay diferencia de puntos, se crea un `point_events` de tipo
+  `adjustment` con `recorded_by_auth_user_id = auth.uid()`.
+- La fila original de compra queda con `purchase_status = 'corrected'`, no se
+  borra.
+- `get_business_admin_dashboard` devuelve `consumptionCorrections` para que el
+  panel muestre trazabilidad sin consultas adicionales.
+
+Los canjes pendientes se mantienen al dia con Supabase Realtime sobre
+`reward_redemptions`. La migracion `20260709005000_reward_redemptions_realtime`
+agrega la tabla a la publicacion `supabase_realtime` cuando existe y configura
+`replica identity full` para recibir cambios completos. El panel owner abre la
+suscripcion solo dentro de rutas admin y la cierra al salir del panel o al
+ocultar la pestana.
+
+El polling cada 7 segundos sigue activo como respaldo. Si Realtime demora,
+falla o no esta habilitado en el proyecto, el panel conserva el refresco por
+polling y muestra el estado en `Necesita atencion`.
+
+El MVP calcula agregaciones en el navegador. Si un negocio empieza a tener mucho
+volumen, mover los resumenes del Inicio a RPCs SQL sin convertir la primera
+pantalla en un dashboard pesado.
+
+## 7. Rachas semanales
+
+La racha usa `point_events` de tipo `purchase` con `purchase_status` distinto de
+`cancelled`. Los consumos cancelados no cuentan para la racha; los consumos
+corregidos siguen contando porque representan una compra valida ajustada.
+
+La regla vive en `business_loyalty_settings`:
+
+- `streak_bonus_weeks`: cantidad de semanas consecutivas necesarias.
+- `streak_bonus_points`: puntos extra a acreditar.
+
+`record_customer_consumption_v2` acredita el bonus cuando el consumo deja al
+cliente en el umbral configurado o por encima de el. Para evitar abuso, el bonus
+se acredita como maximo una vez por semana por cliente. El evento queda como
+`point_events.event_type = adjustment`, descripcion `Bonus de racha semanal` y
+`request_id = <request_id-del-consumo>:streak`.
+
+`cancel_customer_consumption` revierte el consumo y, si existe, el bonus de racha
+atado a ese `request_id`.
+
+La UI debe mostrar rachas como progreso, no como numero suelto:
+
+- Perfil del cliente: racha actual, si la semana esta cubierta y que falta para
+  el proximo bonus.
+- Ficha admin de cliente: tarjeta de progreso con semanas actuales, objetivo,
+  estado semanal y beneficio.
+- Escaneo/carga de consumo: ficha rapida para que el empleado vea si ese
+  consumo mantiene la racha o ayuda a llegar al bonus.
+
+## 7.1 Niveles configurables
+
+Los umbrales de Bronce, Plata, Oro y Platino viven en
+`business_loyalty_settings`:
+
+- `tier_silver_points`: puntos desde los que el cliente pasa a Plata.
+- `tier_gold_points`: puntos desde los que pasa a Oro.
+- `tier_platinum_points`: puntos desde los que pasa a Platino.
+
+La funcion `loyalty_tier_for_points(business_id, points)` centraliza el calculo.
+Un trigger sobre `loyalty_accounts` aplica el nivel correcto cuando cambia el
+saldo, y otro trigger recalcula las cuentas del negocio cuando el owner cambia
+los umbrales desde Fidelizacion.
+
+Los RPC operativos que modifican puntos tambien deben devolver niveles basados
+en esa funcion: `record_customer_consumption_v2`, `cancel_customer_consumption`,
+`manage_reward_redemption_status` y `adjust_customer_points`. Esto evita que el
+frontend muestre un nivel viejo despues de cargar consumos, aprobar canjes o
+hacer ajustes manuales.
+
+## 8. Emails de Auth con Resend
 
 La Edge Function de emails esta en:
 
@@ -149,8 +274,18 @@ Cuando el dominio del negocio este verificado en Resend, cambiar
 Sumi <hola@dominio-del-negocio.com>
 ```
 
-`APP_PUBLIC_URL` debe ser la URL publicada del catalogo, sin slash final. Se usa
-para evitar que los emails de confirmacion redirijan a `localhost`.
+`APP_PUBLIC_URL` debe ser la URL raiz publicada del negocio, sin slash final. Se
+usa para evitar que los emails de confirmacion redirijan a `localhost`.
+
+Ejemplos:
+
+```text
+https://sumi.business
+https://tu-dominio.com
+```
+
+En el frontend, `VITE_PUBLIC_APP_URL` debe apuntar a la misma raiz. El QR rapido
+del Inicio se genera con esa URL base, no con una ruta interna como `#/menu`.
 
 Tambien configurar en Supabase:
 
@@ -186,7 +321,7 @@ La funcion maneja estos eventos:
 - `invite`: invitacion.
 - `email_change`: confirmacion de nuevo email.
 
-## 7. Traduccion IA del menu
+## 9. Traduccion IA del menu
 
 El editor de producto usa una Edge Function para traducir nombre y descripcion
 sin exponer la API key en el frontend.
@@ -239,7 +374,7 @@ Prueba rapida:
 Nunca guardar la API key de OpenAI en `.env`, `config.js`, `app.js`,
 documentacion o capturas. Debe vivir solo como secret remoto de Supabase.
 
-## 8. Generacion de imagenes con Kie.ai
+## 10. Generacion de imagenes con Kie.ai
 
 `Crear contenido` usa una Edge Function para generar la imagen final de la
 publicacion sin exponer la API key de Kie.ai en el navegador.

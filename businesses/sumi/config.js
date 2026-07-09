@@ -27,7 +27,7 @@ const categoryOrder = {
 
 const labels = {
   es: {
-    recommended: "Hoy te recomendamos",
+    recommended: "Producto destacado",
     search: "Buscar en el menu",
     results: "Resultados",
     dishes: "platillos",
@@ -97,7 +97,7 @@ const labels = {
     subtitles: { "Habibi Bites": "Comida libanesa", "Croissant de Lune": "Cafe & postres" }
   },
   en: {
-    recommended: "Today we recommend",
+    recommended: "Featured today",
     search: "Search menu",
     results: "Results",
     dishes: "items",
@@ -167,7 +167,7 @@ const labels = {
     subtitles: { "Habibi Bites": "Lebanese food", "Croissant de Lune": "Coffee & desserts" }
   },
   ar: {
-    recommended: "نوصي اليوم",
+    recommended: "المنتج المميز اليوم",
     search: "ابحث في القائمة",
     results: "نتائج",
     dishes: "أطباق",
@@ -405,11 +405,37 @@ const rewardCatalog = [
   window.SUMI_BUSINESS_CONFIG = {
     businessId: "sumi",
     appTitle: "Sumi Menu Admin",
+    publicAppUrl: "https://sumi.business/",
+    brand: {
+      name: "Habibi Bites",
+      mark: "HB",
+      subtitle: "Comida libanesa",
+      logoPath: "",
+      colors: {
+        primary: "#ff890a",
+        ink: "#461904",
+        cream: "#fff9ec"
+      }
+    },
     defaultLang: "es",
     defaultBrand: "Habibi Bites",
     defaultCategory: "Entradas",
     defaultDetailId: "shawarma-carne",
     initialPoints: 420,
+    aiCredits: {
+      monthlyLimit: 150,
+      generationCreditCost: 2
+    },
+    qr: {
+      defaultTarget: "https://sumi.business/",
+      defaultCta: "Pedi, suma y canjea.",
+      defaultUse: "mesa",
+      defaultGoal: "menu",
+      defaultTone: "directo",
+      defaultStyle: "editorial",
+      defaultColor: "marca",
+      uses: ["mesa", "mostrador", "redes", "flyer"]
+    },
     languages: [
       { code: "es", label: "Español", helper: "Continuar en español", flag: "mx", dir: "ltr" },
       { code: "en", label: "English", helper: "Continue in English", flag: "us", dir: "ltr" },

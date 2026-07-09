@@ -1,0 +1,106 @@
+{
+  "businessId": "cliente-demo",
+  "publicAppUrl": "https://tu-dominio.com/",
+  "brand": {
+    "name": "Nombre del negocio",
+    "mark": "NB",
+    "subtitle": "Rubro o cocina",
+    "logoPath": "assets/brand/logo.png",
+    "colors": {
+      "primary": "#ff8a00",
+      "ink": "#2b1a10",
+      "cream": "#fff8e8"
+    }
+  },
+  "contact": {
+    "address": "",
+    "whatsapp": "",
+    "instagram": "",
+    "website": "",
+    "hours": ""
+  },
+  "operations": {
+    "businessType": "restaurante",
+    "serviceModes": ["local", "take-away"],
+    "adminOwnerEmail": "",
+    "employeeEmails": []
+  },
+  "defaultLang": "es",
+  "languages": [
+    {
+      "code": "es",
+      "label": "Espanol",
+      "helper": "Continuar en espanol",
+      "flag": "mx",
+      "dir": "ltr",
+      "primary": true
+    },
+    {
+      "code": "en",
+      "label": "English",
+      "helper": "Continue in English",
+      "flag": "us",
+      "dir": "ltr"
+    }
+  ],
+  "loyalty": {
+    "earnRate": 0.1,
+    "signupBonusPoints": 0,
+    "referralReferrerPoints": 0,
+    "referralReferredPoints": 0,
+    "streak": {
+      "type": "weekly",
+      "bonusWeeks": 3,
+      "bonusPoints": 0
+    },
+    "levels": ["bronze", "silver", "gold", "platinum"],
+    "tierThresholds": {
+      "silver": 500,
+      "gold": 1000,
+      "platinum": 2000
+    }
+  },
+  "rewards": [
+    {
+      "rewardKey": "cafe-gratis",
+      "name": "Cafe gratis",
+      "description": "Valido en mostrador.",
+      "pointsCost": 120,
+      "stock": null,
+      "imageUrl": "",
+      "minTier": "",
+      "active": true
+    }
+  ],
+  "menu": {
+    "catalogs": [
+      {
+        "name": "Catalogo principal",
+        "categories": ["Entradas", "Bebidas"],
+        "products": []
+      }
+    ],
+    "autoTranslateInitial": true,
+    "reviewTranslationsBeforePublish": true
+  },
+  "content": {
+    "tone": "cercano",
+    "frequentPromotions": [],
+    "starProducts": [],
+    "blockedProducts": []
+  },
+  "aiCredits": {
+    "monthlyLimit": 150,
+    "generationCreditCost": 2
+  },
+  "qr": {
+    "defaultTarget": "https://tu-dominio.com/",
+    "defaultCta": "Pedi, suma y canjea.",
+    "defaultUse": "mesa",
+    "defaultGoal": "menu",
+    "defaultTone": "directo",
+    "defaultStyle": "editorial",
+    "defaultColor": "marca",
+    "uses": ["mesa", "mostrador", "redes", "flyer"]
+  }
+}

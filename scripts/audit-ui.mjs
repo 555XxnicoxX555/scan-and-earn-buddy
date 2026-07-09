@@ -19,6 +19,23 @@ function camelDataName(name) {
 
 const failures = [];
 
+function containingFormId(sourceText, offset) {
+  const before = sourceText.slice(0, offset);
+  const lastFormOpen = before.lastIndexOf("<form");
+  const lastFormClose = before.lastIndexOf("</form>");
+  if (lastFormOpen === -1 || lastFormClose > lastFormOpen) return "";
+  const formTagEnd = sourceText.indexOf(">", lastFormOpen);
+  if (formTagEnd === -1 || formTagEnd > offset) return "";
+  return sourceText.slice(lastFormOpen, formTagEnd).match(/\bid="([^"]+)"/)?.[1] || "";
+}
+
+function formSubmitHandled(formId) {
+  if (!formId) return false;
+  const selectorPattern = new RegExp(`const\\s+([\\w$]+)\\s*=\\s*document\\.querySelector\\("${`#${formId}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\)`);
+  const variableName = app.match(selectorPattern)?.[1] || "";
+  return Boolean(variableName && new RegExp(`${variableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\?\\.addEventListener\\("submit"`).test(app));
+}
+
 const buttons = sources.flatMap((source) =>
   [...source.text.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].map((match, index) => {
     const attrs = match[1];
@@ -39,7 +56,11 @@ const buttons = sources.flatMap((source) =>
       allowedHandledClasses.has(className) && app.includes(`.${className}`)
     );
 
-    return { attrs, classes, dataAttributes, disabled, id, index, referencedByClass, referencedByData, referencedById, source: source.name, text, type };
+    const formId = source.name === "index.html" && type === "submit"
+      ? containingFormId(source.text, match.index)
+      : "";
+
+    return { attrs, classes, dataAttributes, disabled, formId, id, index, referencedByClass, referencedByData, referencedById, source: source.name, text, type };
   })
 );
 
@@ -57,6 +78,7 @@ buttons.forEach((button) => {
   if (button.id && button.referencedById) return;
   if (button.dataAttributes.length && button.referencedByData) return;
   if (button.classes.length && button.referencedByClass) return;
+  if (button.type === "submit" && formSubmitHandled(button.formId)) return;
   failures.push(`${button.source} button #${button.index}${button.id ? ` (${button.id})` : ""} is active but has no obvious handler: "${button.text}"`);
 });
 

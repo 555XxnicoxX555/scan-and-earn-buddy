@@ -9,12 +9,13 @@ if (!businessConfig) {
 }
 
 const categoryOrder = businessConfig.categoryOrder;
-const labels = businessConfig.labels;
+const rawLabels = businessConfig.labels || {};
 const categoryLabels = businessConfig.categoryLabels;
 const descriptionTranslations = businessConfig.descriptionTranslations;
 const nameTranslations = businessConfig.nameTranslations;
 const menuItems = businessConfig.menuItems;
-const rewardCatalog = businessConfig.rewardCatalog;
+const fallbackRewardCatalog = (businessConfig.rewardCatalog || []).map((reward, index) => normalizeRewardDefinition(reward, index));
+let rewardCatalog = [...fallbackRewardCatalog];
 const businessId = businessConfig.businessId || "business";
 const initialMenuItems = menuItems.map((dish) => ({
   ...dish,
@@ -25,7 +26,12 @@ const initialMenuItems = menuItems.map((dish) => ({
 }));
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const publicAppUrl = import.meta.env.VITE_PUBLIC_APP_URL;
+const publicAppUrl = String(
+  import.meta.env.VITE_PUBLIC_APP_URL
+    || businessConfig.publicAppUrl
+    || businessConfig.qr?.defaultTarget
+    || ""
+).trim();
 const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -35,22 +41,31 @@ const supabase = supabaseUrl && supabaseAnonKey
     })
   : null;
 const brandSwitcher = businessConfig.brandSwitcher || Object.keys(categoryOrder).map((name) => ({ name, labels: {} }));
-const languages = businessConfig.languages || [
+const fallbackLanguages = [
   { code: "es", label: "Espanol", helper: "Continuar en espanol", flag: "mx", dir: "ltr" },
   { code: "en", label: "English", helper: "Continue in English", flag: "us", dir: "ltr" },
   { code: "ar", label: "\u0627\u0644\u0639\u0631\u0628\u064a\u0629", helper: "\u0645\u062a\u0627\u0628\u0639\u0629 \u0628\u0627\u0644\u0639\u0631\u0628\u064a\u0629", flag: "lb", dir: "rtl" }
 ];
+const languages = normalizeBusinessLanguages(businessConfig.languages || fallbackLanguages, businessConfig.defaultLang || "es");
+const languageCodes = languages.map((language) => language.code);
+const primaryLanguageCode = languages.find((language) => language.primary)?.code || businessConfig.defaultLang || languageCodes[0] || "es";
+const labels = normalizeBusinessLabels(rawLabels, languageCodes, primaryLanguageCode);
 const menuStateStorageKey = `sumi:menu:${businessId}:state`;
 const contentLibraryStorageKey = `sumi:content:${businessId}:library`;
 const dishLikesStorageKey = `sumi:likes:${businessId}:counts`;
 const dishLikedItemsStorageKey = `sumi:likes:${businessId}:mine`;
 const menuSettingsStorageKey = `sumi:menu:${businessId}:settings`;
 const pendingContentTasksStorageKey = `sumi:content:${businessId}:pending-tasks`;
+const menuEventSessionStorageKey = `sumi:menu:${businessId}:event-session`;
+const referralStorageKey = `sumi:referral:${businessId}`;
 const localDevOwnerStorageKey = "sumi:dev-owner";
 const editorImageMaxSize = 1400;
 const editorImageQuality = 0.78;
-const aiMonthlyCreditLimit = 150;
-const aiGenerationCreditCost = 2;
+const aiCreditConfig = businessConfig.aiCredits || businessConfig.content?.aiCredits || {};
+const aiMonthlyCreditLimit = Math.max(1, Number(aiCreditConfig.monthlyLimit || 150));
+const aiGenerationCreditCost = Math.max(1, Number(aiCreditConfig.generationCreditCost || 2));
+
+applyBusinessTheme();
 
 function serializedMenuItems() {
   return menuItems.map((dish) => ({
@@ -166,9 +181,20 @@ async function saveRemoteMenuCatalog() {
   return true;
 }
 
+function canPublishRemoteMenuCatalog() {
+  return Boolean(supabase && currentSession?.user && currentCustomer?.adminMembership?.role === "owner");
+}
+
 async function publishMenuCatalog() {
   persistMenuState();
-  await saveRemoteMenuCatalog();
+  if (canPublishRemoteMenuCatalog()) {
+    await saveRemoteMenuCatalog();
+    return true;
+  }
+  if (supabase && !isLocalDevOwner()) {
+    throw new Error("Inicia sesion como owner para publicar el menu para todos.");
+  }
+  return false;
 }
 
 if (!supabase) loadPersistedMenuState();
@@ -194,7 +220,7 @@ function persistContentLibrary() {
   window.localStorage.setItem(contentLibraryStorageKey, JSON.stringify(generatedContentLibrary));
 }
 
-let currentLang = businessConfig.defaultLang || "es";
+let currentLang = languageCodes.includes(businessConfig.defaultLang) ? businessConfig.defaultLang : primaryLanguageCode;
 let currentBrand = businessConfig.defaultBrand || brandSwitcher[0]?.name || Object.keys(categoryOrder)[0];
 let currentCategory = businessConfig.defaultCategory || categoryOrder[currentBrand]?.[0];
 let currentDetailId = businessConfig.defaultDetailId || menuItems[0]?.id;
@@ -202,6 +228,13 @@ let pointsBalance = businessConfig.initialPoints || 0;
 let selectedPresentationIndex = 0;
 let currentSession = null;
 let currentCustomer = null;
+let customerRefreshTimer = null;
+let customerRefreshInFlight = false;
+let adminRefreshTimer = null;
+let adminRefreshInFlight = false;
+let adminRealtimeChannel = null;
+let adminRealtimeStatus = "";
+let adminRealtimeRefreshTimer = null;
 let currentAdminView = "home";
 let selectedContentDishId = menuItems.find(isDishVisible)?.id || menuItems[0]?.id || "";
 let selectedContentType = "instagram-square";
@@ -215,30 +248,60 @@ let activeLibraryAssetId = "";
 let contentGenerationState = { status: "idle", result: null, error: "" };
 let aiCreditBalance = { remaining: aiMonthlyCreditLimit, monthlyLimit: aiMonthlyCreditLimit, periodMonth: "" };
 let menuSettings = { recommendedDishId: "", popularDishId: "", popularByBrand: {}, hasRecord: false };
-let loyaltySettings = { earnRate: 0.10 };
+let loyaltySettings = {
+  earnRate: 0.10,
+  signupBonusPoints: 0,
+  referralReferrerPoints: 0,
+  referralReferredPoints: 0,
+  streakBonusWeeks: 3,
+  streakBonusPoints: 0,
+  tierSilverPoints: 500,
+  tierGoldPoints: 1000,
+  tierPlatinumPoints: 2000
+};
 let consumptionQrScanner = null;
 let activeConsumptionQrId = "";
 let activeConsumptionCustomer = null;
+let consumptionMode = "scan";
+let consumptionStage = "lookup";
+let consumptionCustomerResults = [];
+let consumptionCustomerSearchToken = 0;
 let consumptionItems = [];
 let consumptionRequestId = "";
 let activePresentationDishId = "";
 let currentEditorDishId = null;
 let editorDraft = null;
 let editorPreviewDraft = null;
-let currentEditorLang = "es";
-let lastEditedEditorLang = "es";
+let currentEditorLang = primaryLanguageCode;
+let lastEditedEditorLang = primaryLanguageCode;
 let editorAiBackgroundImage = "";
 let editorAiImprovedPhoto = "";
 let editorAiOriginalPhoto = "";
 let editorAiCompressedPhoto = "";
+let homeRecentActivityItems = [];
+let activeActivityId = "";
+const urgentRedemptionsPageSize = 5;
+let visibleUrgentRedemptions = urgentRedemptionsPageSize;
+const customerRefreshIntervalMs = 5000;
+const adminRefreshIntervalMs = 7000;
+let activeAdminCustomerId = "";
+let activeAdminConsumptionId = "";
+let adminDataRequest = null;
+let adminDataRetryTimer = null;
+let adminLastRefreshAt = 0;
+let adminLastRefreshError = "";
 let currentAdminData = {
   customers: [],
   accounts: [],
   events: [],
   redemptions: [],
+  menuEvents: [],
+  consumptionCorrections: [],
   loaded: false,
+  remoteLoaded: false,
   error: null
 };
+const trackedMenuEvents = new Set();
 const favoriteItems = new Set();
 const dishLikeCounts = new Map();
 const dishLikeOverrides = new Map();
@@ -275,6 +338,7 @@ const levelName = document.querySelector("#levelName");
 const nextReward = document.querySelector("#nextReward");
 const levelProgress = document.querySelector("#levelProgress");
 const rewardStrip = document.querySelector("#rewardStrip");
+const rewardStatusNote = document.querySelector("#rewardStatusNote");
 const scanQrButton = document.querySelector("#scanQrButton");
 const addPurchaseButton = document.querySelector("#addPurchaseButton");
 const rewardsButton = document.querySelector("#rewardsButton");
@@ -307,10 +371,22 @@ const consumptionVideo = document.querySelector("#consumptionVideo");
 const consumptionQrInput = document.querySelector("#consumptionQrInput");
 const consumptionQrSubmit = document.querySelector("#consumptionQrSubmit");
 const consumptionScannerStatus = document.querySelector("#consumptionScannerStatus");
+const consumptionCustomerPicker = document.querySelector("#consumptionCustomerPicker");
+const consumptionCustomerSearch = document.querySelector("#consumptionCustomerSearch");
+const consumptionCustomerResultsEl = document.querySelector("#consumptionCustomerResults");
+const consumptionQuickProfile = document.querySelector("#consumptionQuickProfile");
+const consumptionQuickName = document.querySelector("#consumptionQuickName");
+const consumptionQuickMeta = document.querySelector("#consumptionQuickMeta");
+const consumptionQuickStats = document.querySelector("#consumptionQuickStats");
+const consumptionQuickRewards = document.querySelector("#consumptionQuickRewards");
+const consumptionStartForm = document.querySelector("#consumptionStartForm");
+const consumptionShowRewards = document.querySelector("#consumptionShowRewards");
 const consumptionCustomerCard = document.querySelector("#consumptionCustomerCard");
 const consumptionCustomerName = document.querySelector("#consumptionCustomerName");
 const consumptionCustomerMeta = document.querySelector("#consumptionCustomerMeta");
 const consumptionAmount = document.querySelector("#consumptionAmount");
+const consumptionCategory = document.querySelector("#consumptionCategory");
+const consumptionNote = document.querySelector("#consumptionNote");
 const consumptionPointsPreview = document.querySelector("#consumptionPointsPreview");
 const consumptionCatalog = document.querySelector("#consumptionCatalog");
 const consumptionItemsList = document.querySelector("#consumptionItemsList");
@@ -321,11 +397,21 @@ const profileName = document.querySelector("#profileName");
 const profileEmail = document.querySelector("#profileEmail");
 const profilePoints = document.querySelector("#profilePoints");
 const profileLevel = document.querySelector("#profileLevel");
+const profileStreak = document.querySelector("#profileStreak");
 const profileHistoryList = document.querySelector("#profileHistoryList");
 const profileHistoryCount = document.querySelector("#profileHistoryCount");
 const profileAdminButton = document.querySelector("#profileAdminButton");
 const profileQrButton = document.querySelector("#profileQrButton");
+const profileReferralButton = document.querySelector("#profileReferralButton");
+const profileReferralBox = document.querySelector("#profileReferralBox");
+const profileReferralCode = document.querySelector("#profileReferralCode");
+const profileReferralText = document.querySelector("#profileReferralText");
 const profileLogoutButton = document.querySelector("#profileLogoutButton");
+const activityDrawer = document.querySelector("#activityDrawer");
+const activityDrawerClose = document.querySelector("#activityDrawerClose");
+const activityDrawerKicker = document.querySelector("#activityDrawerKicker");
+const activityDrawerTitle = document.querySelector("#activityDrawerTitle");
+const activityDrawerBody = document.querySelector("#activityDrawerBody");
 const assetModal = document.querySelector("#assetModal");
 const assetModalClose = document.querySelector("#assetModalClose");
 const assetModalImage = document.querySelector("#assetModalImage");
@@ -358,19 +444,47 @@ const adminPanel = document.querySelector("#adminPanel");
 const adminHome = document.querySelector("#adminHome");
 const adminMenuSection = document.querySelector("#adminMenuSection");
 const adminCustomersSection = document.querySelector("#adminCustomersSection");
+const adminConsumptionsSection = document.querySelector("#adminConsumptionsSection");
 const adminContentSection = document.querySelector("#adminContentSection");
 const adminLibrarySection = document.querySelector("#adminLibrarySection");
 const adminRewardsSection = document.querySelector("#adminRewardsSection");
-const adminAnalyticsSection = document.querySelector("#adminAnalyticsSection");
+const adminQrsSection = document.querySelector("#adminQrsSection");
 const adminSettingsSection = document.querySelector("#adminSettingsSection");
-const adminStats = document.querySelector("#adminStats");
-const adminActions = document.querySelector("#adminActions");
+const adminHeroActions = document.querySelector("#adminHeroActions");
+const analyticsKpiGrid = document.querySelector("#analyticsKpiGrid");
+const analyticsActionStrip = document.querySelector("#analyticsActionStrip");
+const homeUrgentPanel = document.querySelector("#homeUrgentPanel");
+const homeRecentPanel = document.querySelector("#homeRecentPanel");
 const adminDishRows = document.querySelector("#adminDishRows");
 const adminSearchInput = document.querySelector("#adminSearchInput");
 const adminNewDishButton = document.querySelector("#adminNewDishButton");
 const adminMenuCount = document.querySelector("#adminMenuCount");
 const adminCustomerSearchInput = document.querySelector("#adminCustomerSearchInput");
+const adminCustomerTierFilter = document.querySelector("#adminCustomerTierFilter");
+const adminCustomerStatusFilter = document.querySelector("#adminCustomerStatusFilter");
+const adminCustomerActivityFilter = document.querySelector("#adminCustomerActivityFilter");
+const adminCustomerSortFilter = document.querySelector("#adminCustomerSortFilter");
 const adminCustomerRows = document.querySelector("#adminCustomerRows");
+const adminCustomerDetailPanel = document.querySelector("#adminCustomerDetailPanel");
+const adminCustomerDetailClose = document.querySelector("#adminCustomerDetailClose");
+const adminCustomerDetailContent = document.querySelector("#adminCustomerDetailContent");
+const adminConsumptionSummary = document.querySelector("#adminConsumptionSummary");
+const adminConsumptionDateFromFilter = document.querySelector("#adminConsumptionDateFromFilter");
+const adminConsumptionDateToFilter = document.querySelector("#adminConsumptionDateToFilter");
+const adminConsumptionClientFilter = document.querySelector("#adminConsumptionClientFilter");
+const adminConsumptionMinFilter = document.querySelector("#adminConsumptionMinFilter");
+const adminConsumptionMaxFilter = document.querySelector("#adminConsumptionMaxFilter");
+const adminConsumptionProductFilter = document.querySelector("#adminConsumptionProductFilter");
+const adminConsumptionCategoryFilter = document.querySelector("#adminConsumptionCategoryFilter");
+const adminConsumptionNoteFilter = document.querySelector("#adminConsumptionNoteFilter");
+const adminConsumptionEmployeeFilter = document.querySelector("#adminConsumptionEmployeeFilter");
+const adminConsumptionMethodFilter = document.querySelector("#adminConsumptionMethodFilter");
+const adminConsumptionStatusFilter = document.querySelector("#adminConsumptionStatusFilter");
+const adminConsumptionFilterReset = document.querySelector("#adminConsumptionFilterReset");
+const adminConsumptionRows = document.querySelector("#adminConsumptionRows");
+const adminConsumptionDetailPanel = document.querySelector("#adminConsumptionDetailPanel");
+const adminConsumptionDetailClose = document.querySelector("#adminConsumptionDetailClose");
+const adminConsumptionDetailContent = document.querySelector("#adminConsumptionDetailContent");
 const adminViewLibraryButton = document.querySelector("#adminViewLibraryButton");
 const adminAiCreditPill = document.querySelector("#adminAiCreditPill");
 const adminCreateContentButton = document.querySelector("#adminCreateContentButton");
@@ -401,13 +515,44 @@ const adminRewardsCount = document.querySelector("#adminRewardsCount");
 const adminRewardRows = document.querySelector("#adminRewardRows");
 const adminRedemptionsCount = document.querySelector("#adminRedemptionsCount");
 const adminRedemptionRows = document.querySelector("#adminRedemptionRows");
+const adminLoyaltyRulesForm = document.querySelector("#adminLoyaltyRulesForm");
+const loyaltyEarnRateInput = document.querySelector("#loyaltyEarnRateInput");
+const loyaltySignupBonusInput = document.querySelector("#loyaltySignupBonusInput");
+const loyaltyReferralOwnerInput = document.querySelector("#loyaltyReferralOwnerInput");
+const loyaltyReferralGuestInput = document.querySelector("#loyaltyReferralGuestInput");
+const loyaltyStreakWeeksInput = document.querySelector("#loyaltyStreakWeeksInput");
+const loyaltyStreakBonusInput = document.querySelector("#loyaltyStreakBonusInput");
+const loyaltyTierSilverInput = document.querySelector("#loyaltyTierSilverInput");
+const loyaltyTierGoldInput = document.querySelector("#loyaltyTierGoldInput");
+const loyaltyTierPlatinumInput = document.querySelector("#loyaltyTierPlatinumInput");
+const adminRewardForm = document.querySelector("#adminRewardForm");
+const adminRewardEditingKey = document.querySelector("#adminRewardEditingKey");
+const adminRewardNameInput = document.querySelector("#adminRewardNameInput");
+const adminRewardDescriptionInput = document.querySelector("#adminRewardDescriptionInput");
+const adminRewardImageInput = document.querySelector("#adminRewardImageInput");
+const adminRewardCostInput = document.querySelector("#adminRewardCostInput");
+const adminRewardStockInput = document.querySelector("#adminRewardStockInput");
+const adminRewardMinTierInput = document.querySelector("#adminRewardMinTierInput");
+const adminRewardValidUntilInput = document.querySelector("#adminRewardValidUntilInput");
+const adminRewardActiveInput = document.querySelector("#adminRewardActiveInput");
+const adminRewardCancelEdit = document.querySelector("#adminRewardCancelEdit");
+const adminQrUse = document.querySelector("#adminQrUse");
+const adminQrGoal = document.querySelector("#adminQrGoal");
+const adminQrTone = document.querySelector("#adminQrTone");
+const adminQrStyle = document.querySelector("#adminQrStyle");
+const adminQrColor = document.querySelector("#adminQrColor");
+const adminQrText = document.querySelector("#adminQrText");
+const adminQrDownloadPng = document.querySelector("#adminQrDownloadPng");
+const adminQrDownloadPdf = document.querySelector("#adminQrDownloadPdf");
+const adminQrRefreshPreview = document.querySelector("#adminQrRefreshPreview");
+const adminQrUrl = document.querySelector("#adminQrUrl");
+const adminQrPreview = document.querySelector("#adminQrPreview");
 const adminSettingsGrid = document.querySelector("#adminSettingsGrid");
 const adminNavItems = document.querySelectorAll("[data-admin-nav]");
 const adminExitButton = document.querySelector("#adminExitButton");
 const adminHelpButton = document.querySelector("#adminHelpButton");
 const adminGreeting = document.querySelector("#adminGreeting");
 const adminSummary = document.querySelector("#adminSummary");
-const adminSuggestionButton = document.querySelector("#adminSuggestionButton");
 const editorPanel = document.querySelector("#editorPanel");
 const backButton = document.querySelector("#backButton");
 const editorTitle = document.querySelector("#editorTitle");
@@ -415,7 +560,8 @@ const editorMeta = document.querySelector("#editorMeta");
 const dishNameInput = document.querySelector("#dishName");
 const dishDescriptionInput = document.querySelector("#dishDescription");
 const descCount = document.querySelector("#descCount");
-const editorLanguageTabs = document.querySelectorAll(".tab[data-lang]");
+const editorLanguageTabsContainer = document.querySelector("#editorLanguageTabs");
+let editorLanguageTabs = document.querySelectorAll(".tab[data-lang]");
 const translateButton = document.querySelector("#translateButton");
 const dishPhoto = document.querySelector("#dishPhoto");
 const dishPhotoInput = document.querySelector("#dishPhotoInput");
@@ -701,7 +847,7 @@ async function saveBusinessMenuSettings(nextSettings) {
     hasRecord: true
   };
   persistLocalMenuSettings();
-  if (!supabase || !isOwner() || isLocalDevOwner()) return;
+  if (!supabase || !isOwner() || (isLocalDevOwner() && !isRemoteOwner())) return;
   const { error } = await supabase
     .from("business_menu_settings")
     .upsert({
@@ -752,6 +898,10 @@ function isOwner() {
   return isLocalDevOwner() || currentCustomer?.adminMembership?.role === "owner";
 }
 
+function isRemoteOwner() {
+  return Boolean(supabase && currentSession?.user && currentCustomer?.adminMembership?.role === "owner");
+}
+
 function isStaff() {
   return isOwner() || currentCustomer?.adminMembership?.role === "employee";
 }
@@ -767,6 +917,41 @@ function displayError(error) {
   return labels[currentLang].authGenericError;
 }
 
+function exposeDebugState() {
+  if (!import.meta.env.DEV) return;
+  window.SumiDebug = {
+    ...(window.SumiDebug || {}),
+    admin: () => ({
+      businessId,
+      hasSupabase: Boolean(supabase),
+      sessionEmail: currentSession?.user?.email || "",
+      authenticated: isAuthenticated(),
+      localDevOwner: isLocalDevOwner(),
+      remoteOwner: isRemoteOwner(),
+      owner: isOwner(),
+      adminRole: currentCustomer?.adminMembership?.role || "",
+      loaded: currentAdminData.loaded,
+      remoteLoaded: currentAdminData.remoteLoaded,
+      error: currentAdminData.error ? displayError(currentAdminData.error) : "",
+      counts: {
+        customers: currentAdminData.customers.length,
+        accounts: currentAdminData.accounts.length,
+        events: currentAdminData.events.length,
+        redemptions: currentAdminData.redemptions.length,
+        menuEvents: currentAdminData.menuEvents.length
+      }
+    }),
+    reloadAdmin: async () => {
+      currentAdminData.loaded = false;
+      currentAdminData.remoteLoaded = false;
+      currentAdminData.error = null;
+      await ensureAdminData();
+      renderAdminPanel();
+      return window.SumiDebug.admin();
+    }
+  };
+}
+
 function tierLabel(tier) {
   const normalized = String(tier || "bronze").toLowerCase();
   const tierMap = {
@@ -776,6 +961,27 @@ function tierLabel(tier) {
     platinum: labels[currentLang].platinum || "Nivel Platino"
   };
   return tierMap[normalized] || tierMap.bronze;
+}
+
+function tierValueForPoints(points) {
+  const balance = Number(points || 0);
+  const thresholds = normalizedTierThresholds(loyaltySettings);
+  if (balance >= thresholds.platinum) return "platinum";
+  if (balance >= thresholds.gold) return "gold";
+  if (balance >= thresholds.silver) return "silver";
+  return "bronze";
+}
+
+function normalizedTierThresholds(settings = loyaltySettings) {
+  const silverInput = Number(settings.tierSilverPoints ?? settings.tier_silver_points ?? 500);
+  const goldInput = Number(settings.tierGoldPoints ?? settings.tier_gold_points ?? 1000);
+  const platinumInput = Number(settings.tierPlatinumPoints ?? settings.tier_platinum_points ?? 2000);
+  const silver = Math.max(0, Math.floor(Number.isFinite(silverInput) ? silverInput : 500));
+  const goldRaw = Math.floor(Number.isFinite(goldInput) ? goldInput : 1000);
+  const platinumRaw = Math.floor(Number.isFinite(platinumInput) ? platinumInput : 2000);
+  const gold = Math.max(silver + 1, goldRaw);
+  const platinum = Math.max(gold + 1, platinumRaw);
+  return { silver, gold, platinum };
 }
 
 function activeQrId() {
@@ -804,6 +1010,66 @@ function formatEventDate(dateValue) {
   } catch {
     return "";
   }
+}
+
+function formatFullDateTime(dateValue) {
+  if (!dateValue) return "";
+  try {
+    return new Intl.DateTimeFormat("es-MX", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(new Date(dateValue));
+  } catch {
+    return "";
+  }
+}
+
+function formatCurrency(value) {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: amount % 1 === 0 ? 0 : 2
+  }).format(amount);
+}
+
+function formatNumber(value, options = {}) {
+  return new Intl.NumberFormat("es-MX", options).format(Number(value || 0));
+}
+
+function menuEventSessionId() {
+  try {
+    const existing = window.sessionStorage.getItem(menuEventSessionStorageKey);
+    if (existing) return existing;
+    const next = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    window.sessionStorage.setItem(menuEventSessionStorageKey, next);
+    return next;
+  } catch {
+    return `session-${Date.now()}`;
+  }
+}
+
+function recordMenuEvent(eventType, dishId = "", options = {}) {
+  if (!supabase) return;
+  const eventKey = options.once === false ? "" : `${eventType}:${dishId || "menu"}`;
+  if (eventKey && trackedMenuEvents.has(eventKey)) return;
+  if (eventKey) trackedMenuEvents.add(eventKey);
+
+  const payload = {
+    business_id: businessId,
+    event_type: eventType,
+    dish_id: dishId || null,
+    session_id: menuEventSessionId(),
+    customer_id: currentCustomer?.profile?.id || null,
+    auth_user_id: currentSession?.user?.id || null
+  };
+
+  supabase.from("business_menu_events").insert(payload).then(({ error }) => {
+    if (error && eventKey) trackedMenuEvents.delete(eventKey);
+  });
 }
 
 function priceRange(dish) {
@@ -1064,7 +1330,7 @@ function pendingContentTaskForRequest(requestKey) {
 
 async function loadGeneratedContentLibrary() {
   const legacy = legacyLibraryItems();
-  if (!supabase || !isOwner() || isLocalDevOwner()) {
+  if (!supabase || !isOwner() || (isLocalDevOwner() && !isRemoteOwner())) {
     generatedContentLibrary = dedupeLibraryItems(legacy);
     return generatedContentLibrary;
   }
@@ -1082,7 +1348,7 @@ async function loadGeneratedContentLibrary() {
 }
 
 async function loadAiCreditBalance() {
-  if (!supabase || !isOwner() || isLocalDevOwner()) {
+  if (!supabase || !isOwner() || (isLocalDevOwner() && !isRemoteOwner())) {
     aiCreditBalance = { remaining: aiMonthlyCreditLimit, monthlyLimit: aiMonthlyCreditLimit, periodMonth: new Date().toISOString().slice(0, 7) };
     return aiCreditBalance;
   }
@@ -1605,7 +1871,7 @@ async function startContentImageGeneration(dish, format, draft) {
 }
 
 async function findGeneratedAssetByTask(taskId) {
-  if (!taskId || !supabase || !isOwner() || isLocalDevOwner()) return null;
+  if (!taskId || !supabase || !isOwner() || (isLocalDevOwner() && !isRemoteOwner())) return null;
   const { data, error } = await supabase
     .from("generated_content_assets")
     .select("*")
@@ -1617,7 +1883,7 @@ async function findGeneratedAssetByTask(taskId) {
 }
 
 async function finalizeGeneratedContentTask(task) {
-  if (!task?.taskId || !supabase || !currentSession?.access_token || !isOwner() || isLocalDevOwner()) return null;
+  if (!task?.taskId || !supabase || !currentSession?.access_token || !isOwner() || (isLocalDevOwner() && !isRemoteOwner())) return null;
   const { data, error } = await supabase.functions.invoke("generate-content-image", {
     body: {
       action: "finalize",
@@ -1670,7 +1936,7 @@ async function waitForGeneratedAsset(taskId) {
 
 async function recoverPendingGeneratedContentTasks() {
   const tasks = loadPendingContentTasks();
-  if (!tasks.length || !supabase || !isOwner() || isLocalDevOwner()) return [];
+  if (!tasks.length || !supabase || !isOwner() || (isLocalDevOwner() && !isRemoteOwner())) return [];
   const recovered = [];
   for (const task of tasks) {
     try {
@@ -1749,6 +2015,73 @@ function shortQrAlias(profile, account) {
   return `${name}-${digits}`;
 }
 
+function slugifyRewardKey(value) {
+  return String(value || "premio")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "premio";
+}
+
+function normalizeRewardDefinition(reward = {}, index = 0) {
+  const name = reward.name || reward.reward_name || "Premio";
+  const rewardKey = reward.reward_key || reward.rewardKey || reward.id || slugifyRewardKey(name) || `premio-${index + 1}`;
+  return {
+    id: rewardKey,
+    databaseId: reward.databaseId || (reward.reward_key ? reward.id : ""),
+    rewardKey,
+    name,
+    description: reward.description || "",
+    cost: Number(reward.points_cost ?? reward.cost ?? 0),
+    stock: reward.stock ?? null,
+    imageUrl: reward.image_url || reward.imageUrl || "",
+    minTier: reward.min_tier || reward.minTier || "",
+    validUntil: reward.valid_until || reward.validUntil || "",
+    active: reward.active !== false,
+    createdAt: reward.created_at || reward.createdAt || "",
+    updatedAt: reward.updated_at || reward.updatedAt || ""
+  };
+}
+
+function rewardTablePayloadFromForm() {
+  const name = adminRewardNameInput?.value.trim() || "";
+  const cost = Math.max(0, Number(adminRewardCostInput?.value || 0));
+  const editingKey = adminRewardEditingKey?.value || "";
+  return {
+    business_id: businessId,
+    reward_key: editingKey || `${slugifyRewardKey(name)}-${Date.now().toString(36)}`,
+    name,
+    description: adminRewardDescriptionInput?.value.trim() || "",
+    points_cost: cost,
+    stock: adminRewardStockInput?.value === "" ? null : Math.max(0, Number(adminRewardStockInput?.value || 0)),
+    image_url: adminRewardImageInput?.value.trim() || null,
+    min_tier: adminRewardMinTierInput?.value || null,
+    valid_until: adminRewardValidUntilInput?.value || null,
+    active: Boolean(adminRewardActiveInput?.checked)
+  };
+}
+
+async function loadBusinessRewards({ owner = false } = {}) {
+  if (!supabase) return rewardCatalog;
+  try {
+    let query = supabase
+      .from("business_rewards")
+      .select("*")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false });
+    if (!owner) query = query.eq("active", true);
+    const { data, error } = await query;
+    if (error) throw error;
+    rewardCatalog = data?.length ? data.map(normalizeRewardDefinition) : [...fallbackRewardCatalog];
+  } catch (error) {
+    if (import.meta.env.DEV) console.warn("[Sumi rewards] fallback catalog", displayError(error));
+    rewardCatalog = [...fallbackRewardCatalog];
+  }
+  return rewardCatalog;
+}
+
 function accountForCustomer(customerId) {
   return currentAdminData.accounts.find((account) => account.customer_id === customerId);
 }
@@ -1761,29 +2094,202 @@ function redemptionsForCustomer(customerId) {
   return currentAdminData.redemptions.filter((redemption) => redemption.customer_id === customerId);
 }
 
+function customerVisibleIdentifier(profile) {
+  return profile?.phone || profile?.phone_number || profile?.whatsapp || profile?.email || "Sin contacto";
+}
+
+function weekKey(dateValue) {
+  const date = new Date(dateValue);
+  if (!Number.isFinite(date.getTime())) return "";
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  const day = normalized.getDay() || 7;
+  normalized.setDate(normalized.getDate() - day + 1);
+  return normalized.toISOString().slice(0, 10);
+}
+
+function weeklyStreakForEvents(events) {
+  const purchaseWeeks = new Set(events
+    .filter((event) => event.event_type === "purchase" && consumptionStatus(event) !== "cancelled")
+    .map((event) => weekKey(event.created_at))
+    .filter(Boolean));
+  if (!purchaseWeeks.size) return 0;
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+  const day = cursor.getDay() || 7;
+  cursor.setDate(cursor.getDate() - day + 1);
+  let streak = 0;
+  let key = cursor.toISOString().slice(0, 10);
+  if (!purchaseWeeks.has(key)) {
+    cursor.setDate(cursor.getDate() - 7);
+    key = cursor.toISOString().slice(0, 10);
+  }
+  while (purchaseWeeks.has(key)) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 7);
+    key = cursor.toISOString().slice(0, 10);
+  }
+  return streak;
+}
+
+function currentWeekKey() {
+  return weekKey(new Date().toISOString());
+}
+
+function pluralWeeks(count) {
+  return `${count} semana${count === 1 ? "" : "s"}`;
+}
+
+function streakProgressModel(streak = 0, lastVisit = "") {
+  const goalWeeks = Math.max(1, Number(loyaltySettings.streakBonusWeeks || 3));
+  const bonusPoints = Math.max(0, Number(loyaltySettings.streakBonusPoints || 0));
+  const safeStreak = Math.max(0, Number(streak || 0));
+  const remainingWeeks = Math.max(0, goalWeeks - safeStreak);
+  const maintainedThisWeek = Boolean(lastVisit && weekKey(lastVisit) === currentWeekKey());
+  const progress = Math.min(100, Math.round((safeStreak / goalWeeks) * 100));
+  let title = safeStreak ? `${safeStreak} sem. de racha` : "Sin racha activa";
+  let helper = maintainedThisWeek
+    ? "Esta semana ya cuenta para mantener la racha."
+    : "Carga un consumo esta semana para mantener o iniciar la racha.";
+  if (bonusPoints > 0 && remainingWeeks === 0) {
+    title = `${safeStreak} sem. - bonus alcanzado`;
+    helper = maintainedThisWeek
+      ? `Puede recibir bonus de ${bonusPoints} pts si aun no se acredito esta semana.`
+      : `Debe consumir esta semana para conservar el bonus de ${bonusPoints} pts.`;
+  } else if (bonusPoints > 0) {
+    helper = `${remainingWeeks ? `Faltan ${pluralWeeks(remainingWeeks)} para el bonus de ${bonusPoints} pts.` : `Bonus de ${bonusPoints} pts listo.`} ${maintainedThisWeek ? "Semana actual cubierta." : "Necesita consumo esta semana."}`;
+  }
+  return {
+    streak: safeStreak,
+    goalWeeks,
+    bonusPoints,
+    remainingWeeks,
+    maintainedThisWeek,
+    progress,
+    title,
+    helper,
+    status: maintainedThisWeek ? "Semana actual cubierta" : "Pendiente esta semana"
+  };
+}
+
+function streakProgressMarkup(progress) {
+  return `
+    <div class="streak-progress-card ${progress.maintainedThisWeek ? "is-covered" : "is-pending"}">
+      <div>
+        <span>Racha semanal</span>
+        <strong>${escapeHtml(progress.title)}</strong>
+        <small>${escapeHtml(progress.helper)}</small>
+      </div>
+      <b>${escapeHtml(progress.status)}</b>
+      <div class="streak-progress-track" aria-hidden="true">
+        <i style="width:${escapeAttribute(progress.progress)}%"></i>
+      </div>
+    </div>
+  `;
+}
+
 function customerSearchMatches(profile, account) {
   const query = adminCustomerSearchInput?.value.trim().toLowerCase() || "";
   if (!query) return true;
-  const haystack = `${profile.name} ${profile.email} ${shortQrAlias(profile, account)} ${account?.public_qr_id || ""}`.toLowerCase();
+  const haystack = `${profile.name} ${profile.email} ${customerVisibleIdentifier(profile)} ${account?.tier || ""}`.toLowerCase();
   return haystack.includes(query);
 }
 
+function normalizeAdminDashboardPayload(payload = {}) {
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      payload = {};
+    }
+  }
+  return {
+    customers: Array.isArray(payload.customers) ? payload.customers : [],
+    accounts: Array.isArray(payload.accounts) ? payload.accounts : [],
+    events: Array.isArray(payload.events) ? payload.events : [],
+    redemptions: Array.isArray(payload.redemptions) ? payload.redemptions : [],
+    menuEvents: Array.isArray(payload.menuEvents) ? payload.menuEvents : [],
+    consumptionCorrections: Array.isArray(payload.consumptionCorrections) ? payload.consumptionCorrections : []
+  };
+}
+
+function normalizeLoyaltySettings(row = {}) {
+  const thresholds = normalizedTierThresholds(row);
+  return {
+    earnRate: Number(row.earn_rate ?? row.earnRate ?? 0.10) || 0.10,
+    signupBonusPoints: Number(row.signup_bonus_points ?? row.signupBonusPoints ?? 0) || 0,
+    referralReferrerPoints: Number(row.referral_referrer_points ?? row.referralReferrerPoints ?? 0) || 0,
+    referralReferredPoints: Number(row.referral_referred_points ?? row.referralReferredPoints ?? 0) || 0,
+    streakBonusWeeks: Number(row.streak_bonus_weeks ?? row.streakBonusWeeks ?? 3) || 3,
+    streakBonusPoints: Number(row.streak_bonus_points ?? row.streakBonusPoints ?? 0) || 0,
+    tierSilverPoints: thresholds.silver,
+    tierGoldPoints: thresholds.gold,
+    tierPlatinumPoints: thresholds.platinum
+  };
+}
+
+async function loadAdminDashboardRpc() {
+  const { data, error } = await supabase.rpc("get_business_admin_dashboard", {
+    target_business_id: businessId
+  });
+  if (error) throw error;
+  return normalizeAdminDashboardPayload(data || {});
+}
+
 async function loadAdminData() {
-  if (isLocalDevOwner()) {
-    currentAdminData = { customers: [], accounts: [], events: [], redemptions: [], loaded: true, error: null };
+  if (!supabase || !isOwner()) {
+    currentAdminData = { customers: [], accounts: [], events: [], redemptions: [], menuEvents: [], consumptionCorrections: [], loaded: false, remoteLoaded: false, error: null };
+    exposeDebugState();
     return currentAdminData;
   }
 
-  if (!supabase || !isOwner()) {
-    currentAdminData = { customers: [], accounts: [], events: [], redemptions: [], loaded: false, error: null };
+  if (isLocalDevOwner() && !currentSession?.user) {
+    currentAdminData = { customers: [], accounts: [], events: [], redemptions: [], menuEvents: [], consumptionCorrections: [], loaded: false, remoteLoaded: false, error: null };
+    exposeDebugState();
     return currentAdminData;
+  }
+
+  try {
+    const dashboard = await loadAdminDashboardRpc();
+    currentAdminData = {
+      ...dashboard,
+      loaded: true,
+      remoteLoaded: true,
+      error: null
+    };
+    adminLastRefreshAt = Date.now();
+    adminLastRefreshError = "";
+    if (adminDataRetryTimer) {
+      window.clearTimeout(adminDataRetryTimer);
+      adminDataRetryTimer = null;
+    }
+    if (import.meta.env.DEV) {
+      console.info("[Sumi admin] dashboard rpc loaded", {
+        businessId,
+        remoteOwner: isRemoteOwner(),
+        localDevOwner: isLocalDevOwner(),
+        customers: currentAdminData.customers.length,
+        accounts: currentAdminData.accounts.length,
+        events: currentAdminData.events.length,
+        redemptions: currentAdminData.redemptions.length,
+        menuEvents: currentAdminData.menuEvents.length
+      });
+    }
+    exposeDebugState();
+    return currentAdminData;
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn("[Sumi admin] dashboard rpc fallback", displayError(error));
+    }
   }
 
   const [
     customersResult,
     accountsResult,
     eventsResult,
-    redemptionsResult
+    redemptionsResult,
+    menuEventsResult,
+    correctionsResult
   ] = await Promise.all([
     supabase
       .from("customer_profiles")
@@ -1802,16 +2308,34 @@ async function loadAdminData() {
       .select("*")
       .eq("business_id", businessId)
       .order("created_at", { ascending: false })
-      .limit(100),
+      .limit(500),
     supabase
       .from("reward_redemptions")
       .select("*")
       .eq("business_id", businessId)
       .order("created_at", { ascending: false })
-      .limit(100)
+      .limit(300),
+    supabase
+      .from("business_menu_events")
+      .select("*")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    supabase
+      .from("point_event_corrections")
+      .select("*")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(1000)
   ]);
 
-  const error = customersResult.error || accountsResult.error || eventsResult.error || redemptionsResult.error;
+  const correctionsMissing = correctionsResult.error && ["42P01", "42703"].includes(correctionsResult.error.code);
+  const error = customersResult.error
+    || accountsResult.error
+    || eventsResult.error
+    || redemptionsResult.error
+    || menuEventsResult.error
+    || (correctionsMissing ? null : correctionsResult.error);
   if (error) throw error;
 
   currentAdminData = {
@@ -1819,10 +2343,67 @@ async function loadAdminData() {
     accounts: accountsResult.data || [],
     events: eventsResult.data || [],
     redemptions: redemptionsResult.data || [],
+    menuEvents: menuEventsResult.data || [],
+    consumptionCorrections: correctionsMissing ? [] : correctionsResult.data || [],
     loaded: true,
+    remoteLoaded: true,
     error: null
   };
+  adminLastRefreshAt = Date.now();
+  adminLastRefreshError = "";
+  if (adminDataRetryTimer) {
+    window.clearTimeout(adminDataRetryTimer);
+    adminDataRetryTimer = null;
+  }
+  if (import.meta.env.DEV) {
+    console.info("[Sumi admin] data loaded", {
+      businessId,
+      remoteOwner: isRemoteOwner(),
+      localDevOwner: isLocalDevOwner(),
+      customers: currentAdminData.customers.length,
+      accounts: currentAdminData.accounts.length,
+      events: currentAdminData.events.length,
+      redemptions: currentAdminData.redemptions.length,
+      menuEvents: currentAdminData.menuEvents.length
+    });
+  }
+  exposeDebugState();
   return currentAdminData;
+}
+
+function pendingRedemptionIdSet(data = currentAdminData) {
+  return new Set((data.redemptions || [])
+    .filter((redemption) => redemption.status === "requested")
+    .map((redemption) => redemption.id)
+    .filter(Boolean));
+}
+
+function notifyNewPendingRedemptions(previousIds, nextData = currentAdminData) {
+  if (!previousIds?.size) return;
+  const nextPending = [...pendingRedemptionIdSet(nextData)];
+  const newIds = nextPending.filter((id) => !previousIds.has(id));
+  if (!newIds.length) return;
+  showToast(newIds.length === 1 ? "Nuevo canje pendiente." : `${newIds.length} canjes pendientes nuevos.`);
+}
+
+function adminLiveSyncMarkup() {
+  if (!supabase || !isOwner()) return "";
+  if (adminRefreshInFlight) {
+    return `<span class="admin-live-sync is-loading">Actualizando...</span>`;
+  }
+  if (adminLastRefreshError) {
+    return `<span class="admin-live-sync is-error">Sincronizacion con demora</span>`;
+  }
+  if (adminRealtimeStatus === "SUBSCRIBED") {
+    return `<span class="admin-live-sync">Realtime activo - ${escapeHtml(timeLabel(adminLastRefreshAt || Date.now()))}</span>`;
+  }
+  if (adminRealtimeStatus === "CHANNEL_ERROR" || adminRealtimeStatus === "TIMED_OUT" || adminRealtimeStatus === "CLOSED") {
+    return `<span class="admin-live-sync is-error">Realtime con demora - polling activo</span>`;
+  }
+  if (adminLastRefreshAt) {
+    return `<span class="admin-live-sync">En vivo · ${escapeHtml(timeLabel(adminLastRefreshAt))}</span>`;
+  }
+  return `<span class="admin-live-sync">En vivo</span>`;
 }
 
 async function loadCustomerData(session = currentSession, options = {}) {
@@ -1893,7 +2474,7 @@ async function loadCustomerData(session = currentSession, options = {}) {
       .maybeSingle(),
     supabase
       .from("business_loyalty_settings")
-      .select("earn_rate")
+      .select("*")
       .eq("business_id", businessId)
       .maybeSingle()
   ]);
@@ -1903,7 +2484,7 @@ async function loadCustomerData(session = currentSession, options = {}) {
   if (redemptionsError) throw redemptionsError;
   if (adminError) throw adminError;
   if (loyaltySettingsError) {
-    loyaltySettings = { earnRate: 0.10 };
+    loyaltySettings = normalizeLoyaltySettings();
   }
 
   currentCustomer = {
@@ -1913,12 +2494,25 @@ async function loadCustomerData(session = currentSession, options = {}) {
     redemptions: redemptions || [],
     adminMembership
   };
-  pointsBalance = account?.points_balance || 0;
-  if (!loyaltySettingsError) {
-    loyaltySettings = {
-      earnRate: Number(businessLoyaltySettings?.earn_rate ?? businessLoyaltySettings?.earnRate ?? 0.10) || 0.10
+  if (adminMembership?.role === "owner") {
+    currentAdminData = {
+      customers: [],
+      accounts: [],
+      events: [],
+      redemptions: [],
+      menuEvents: [],
+      consumptionCorrections: [],
+      loaded: false,
+      remoteLoaded: false,
+      error: null
     };
   }
+  exposeDebugState();
+  pointsBalance = account?.points_balance || 0;
+  if (!loyaltySettingsError) {
+    loyaltySettings = normalizeLoyaltySettings(businessLoyaltySettings || {});
+  }
+  await loadBusinessRewards({ owner: adminMembership?.role === "owner" });
   return currentCustomer;
 }
 
@@ -1935,6 +2529,7 @@ function renderAuthState() {
     profileToggle.hidden = !authenticated;
     profileToggle.setAttribute("aria-label", labels[currentLang].profileButtonLabel || "Abrir perfil");
   }
+  exposeDebugState();
 }
 
 function applyBusinessShell() {
@@ -1966,7 +2561,7 @@ function applyBusinessShell() {
     .map(
       (language) => `
         <button class="language-option ${language.code === currentLang ? "selected" : ""}" data-enter-lang="${escapeAttribute(language.code)}" type="button">
-          <span class="flag ${escapeAttribute(language.flag)}" aria-hidden="true"></span>
+          <span class="flag ${escapeAttribute(language.flag)}" ${flagStyle(language.flag)} aria-hidden="true"></span>
           <span dir="${escapeAttribute(language.dir || "ltr")}">
             <strong>${escapeHtml(language.label)}</strong>
             <small>${escapeHtml(language.helper)}</small>
@@ -1976,6 +2571,7 @@ function applyBusinessShell() {
       `
     )
     .join("");
+  renderEditorLanguageTabsMarkup();
 
   brandSwitch.innerHTML = brandSwitcher
     .map(
@@ -2077,6 +2673,39 @@ async function renderCustomerQr() {
   }
 }
 
+async function openAdminCustomerQr(customerId, trigger = adminCustomerRows) {
+  const profile = customerProfile(customerId);
+  const account = accountForCustomer(customerId);
+  const qrId = account?.public_qr_id;
+  if (!profile || !qrId) {
+    showToast("Ese cliente todavia no tiene QR publico.");
+    return;
+  }
+  lastQrTrigger = trigger;
+  qrModal.hidden = false;
+  document.body.classList.add("qr-open");
+  updateQrShell();
+  setText("#qrTitle", `QR de ${profile.name || "cliente"}`);
+  setText("#qrText", "Mostra este codigo en caja para cargar consumo o validar al cliente.");
+  qrCustomerId.textContent = shortQrAlias(profile, account);
+  qrError.textContent = "";
+  try {
+    await QRCode.toCanvas(customerQrCanvas, customerQrPayload(qrId), {
+      width: 192,
+      margin: 1,
+      errorCorrectionLevel: "H",
+      color: {
+        dark: "#461904",
+        light: "#ffffff"
+      }
+    });
+    drawBusinessMarkOnQr(customerQrCanvas);
+  } catch {
+    qrError.textContent = "No se pudo generar el QR. Intenta de nuevo.";
+  }
+  window.requestAnimationFrame(() => qrClose.focus());
+}
+
 function drawBusinessMarkOnQr(canvas) {
   const context = canvas?.getContext?.("2d");
   if (!context) return;
@@ -2101,6 +2730,388 @@ function drawBusinessMarkOnQr(canvas) {
   context.textBaseline = "middle";
   context.fillText(mark, canvas.width / 2, canvas.height / 2 + 1);
   context.restore();
+}
+
+function publicMenuUrl() {
+  const base = (publicAppUrl || `${window.location.origin}${window.location.pathname}`).replace(/\/$/, "");
+  return `${base}/`;
+}
+
+function captureReferralCodeFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("ref") || params.get("referido") || "";
+  const cleanCode = code.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  if (cleanCode) window.localStorage.setItem(referralStorageKey, cleanCode);
+  return cleanCode;
+}
+
+function activeReferralCode() {
+  return captureReferralCodeFromUrl() || window.localStorage.getItem(referralStorageKey) || "";
+}
+
+function customerReferralCode() {
+  return currentCustomer?.profile?.referral_code || currentCustomer?.profile?.referralCode || "";
+}
+
+function customerReferralLink() {
+  const code = customerReferralCode();
+  if (!code) return "";
+  return `${publicMenuUrl()}?ref=${encodeURIComponent(code)}`;
+}
+
+async function downloadMenuQr() {
+  try {
+    const canvas = document.createElement("canvas");
+    await QRCode.toCanvas(canvas, publicMenuUrl(), {
+      width: 720,
+      margin: 2,
+      errorCorrectionLevel: "H",
+      color: {
+        dark: "#263128",
+        light: "#ffffff"
+      }
+    });
+    drawBusinessMarkOnQr(canvas);
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `${businessId}-menu-qr.png`;
+    link.click();
+    showToast("QR del menu descargado.");
+  } catch (error) {
+    showToast(displayError(error) || "No se pudo generar el QR.");
+  }
+}
+
+function adminQrSuggestedText() {
+  const goal = adminQrGoal?.value || "menu";
+  const tone = adminQrTone?.value || "directo";
+  const suggestions = {
+    menu: {
+      directo: "Pedi, suma y canjea.",
+      elegante: "Tu proxima recompensa empieza aca.",
+      divertido: "Mira el menu y gana puntos.",
+      premium: "Descubri beneficios exclusivos."
+    },
+    registro: {
+      directo: "Entra al club de beneficios.",
+      elegante: "Unite al club y acumula recompensas.",
+      divertido: "Sumate y empeza a ganar.",
+      premium: "Accede a recompensas del negocio."
+    },
+    premios: {
+      directo: "Descubri premios exclusivos.",
+      elegante: "Canjea beneficios en tu proxima visita.",
+      divertido: "Tus puntos se convierten en premios.",
+      premium: "Beneficios reservados para clientes frecuentes."
+    },
+    promo: {
+      directo: "Escanea y aprovecha la promo.",
+      elegante: "Una promocion especial te espera.",
+      divertido: "Tu antojo tiene premio.",
+      premium: "Una experiencia especial empieza aca."
+    }
+  };
+  return suggestions[goal]?.[tone] || "Pedi, suma y canjea.";
+}
+
+function setSelectValueIfAvailable(control, value) {
+  if (!control || !value) return;
+  const hasOption = [...control.options].some((option) => option.value === value);
+  if (hasOption) control.value = value;
+}
+
+function applyAdminQrDefaults() {
+  if (!adminQrPreview || adminQrPreview.dataset.defaultsApplied === "true") return;
+  const qrConfig = businessConfig.qr || {};
+  setSelectValueIfAvailable(adminQrUse, qrConfig.defaultUse);
+  setSelectValueIfAvailable(adminQrGoal, qrConfig.defaultGoal);
+  setSelectValueIfAvailable(adminQrTone, qrConfig.defaultTone);
+  setSelectValueIfAvailable(adminQrStyle, qrConfig.defaultStyle);
+  setSelectValueIfAvailable(adminQrColor, qrConfig.defaultColor);
+  if (adminQrText && qrConfig.defaultCta) adminQrText.value = qrConfig.defaultCta;
+  adminQrPreview.dataset.defaultsApplied = "true";
+}
+
+function adminQrCanvasSize() {
+  return adminQrUse?.value === "redes" ? { width: 1080, height: 1080 } : { width: 900, height: 1200 };
+}
+
+function safeHexColor(value, fallback) {
+  const color = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
+}
+
+function hexToRgb(color) {
+  const normalized = safeHexColor(color, "#000000").slice(1);
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16)
+  };
+}
+
+function rgbToHex({ r, g, b }) {
+  return `#${[r, g, b]
+    .map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+function mixHexColor(color, mixWith, weight = 0.5) {
+  const a = hexToRgb(color);
+  const b = hexToRgb(mixWith);
+  const ratio = Math.max(0, Math.min(1, Number(weight)));
+  return rgbToHex({
+    r: a.r * ratio + b.r * (1 - ratio),
+    g: a.g * ratio + b.g * (1 - ratio),
+    b: a.b * ratio + b.b * (1 - ratio)
+  });
+}
+
+function applyBusinessTheme() {
+  const colors = businessConfig.brand?.colors || {};
+  const primary = safeHexColor(colors.primary, "");
+  const ink = safeHexColor(colors.ink, "");
+  const cream = safeHexColor(colors.cream, "");
+  if (!primary && !ink && !cream) return;
+
+  const accent = primary || "#ff890a";
+  const text = ink || "#461904";
+  const paper = cream || "#fff9ec";
+  const root = document.documentElement;
+  const themeVars = {
+    "--pumpkin-50": paper,
+    "--pumpkin-100": mixHexColor(accent, paper, 0.14),
+    "--pumpkin-200": mixHexColor(accent, paper, 0.28),
+    "--pumpkin-300": mixHexColor(accent, paper, 0.46),
+    "--pumpkin-400": mixHexColor(accent, paper, 0.72),
+    "--pumpkin-500": accent,
+    "--pumpkin-600": mixHexColor(accent, text, 0.82),
+    "--pumpkin-700": mixHexColor(accent, text, 0.64),
+    "--pumpkin-800": mixHexColor(accent, text, 0.44),
+    "--pumpkin-900": mixHexColor(accent, text, 0.28),
+    "--pumpkin-950": text,
+    "--ink": text,
+    "--muted": mixHexColor(text, paper, 0.56),
+    "--line": mixHexColor(accent, paper, 0.28),
+    "--paper": paper,
+    "--panel": mixHexColor(paper, "#ffffff", 0.72),
+    "--panel-strong": mixHexColor(accent, paper, 0.16),
+    "--gold": accent,
+    "--gold-soft": mixHexColor(accent, paper, 0.46),
+    "--olive": mixHexColor(accent, text, 0.64),
+    "--brown": mixHexColor(accent, text, 0.44)
+  };
+  Object.entries(themeVars).forEach(([name, value]) => {
+    root.style.setProperty(name, value);
+  });
+}
+
+function adminQrTheme() {
+  const brandPrimary = safeHexColor(businessConfig.brand?.colors?.primary, "#ff8a00");
+  const brandInk = safeHexColor(businessConfig.brand?.colors?.ink, "#4b1d0d");
+  const brandCream = safeHexColor(businessConfig.brand?.colors?.cream, "#fff8e8");
+  const themes = {
+    marca: { accent: brandPrimary, ink: brandInk, bg: brandCream, soft: "#fff3d8", qrDark: "#263128" },
+    ambar: { accent: "#ff8a00", ink: "#4b1d0d", bg: "#fff8e8", soft: "#ffe6b8", qrDark: "#381407" },
+    oliva: { accent: "#66752a", ink: "#243126", bg: "#f8f5e7", soft: "#e8edcf", qrDark: "#263128" },
+    vino: { accent: "#8d2f20", ink: "#3a120d", bg: "#fff4ec", soft: "#f4d2c4", qrDark: "#32110c" }
+  };
+  return themes[adminQrColor?.value || "marca"] || themes.marca;
+}
+
+function drawQrPosterFrame(ctx, width, height, theme, style) {
+  ctx.fillStyle = theme.bg;
+  ctx.fillRect(0, 0, width, height);
+  if (style === "simple") {
+    ctx.strokeStyle = theme.accent;
+    ctx.lineWidth = Math.max(8, width * 0.012);
+    ctx.strokeRect(width * 0.05, height * 0.05, width * 0.9, height * 0.9);
+    return;
+  }
+  if (style === "sello") {
+    ctx.fillStyle = theme.ink;
+    ctx.fillRect(0, 0, width, height * 0.33);
+    ctx.fillStyle = theme.accent;
+    ctx.beginPath();
+    ctx.arc(width / 2, height * 0.325, width * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+  ctx.fillStyle = theme.soft;
+  ctx.fillRect(width * 0.05, height * 0.05, width * 0.9, height * 0.9);
+  ctx.fillStyle = theme.accent;
+  ctx.fillRect(width * 0.05, height * 0.05, width * 0.9, height * 0.025);
+}
+
+async function drawAdminQrPoster(canvas = adminQrPreview) {
+  if (!canvas) return null;
+  const { width, height } = adminQrCanvasSize();
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  const theme = adminQrTheme();
+  const style = adminQrStyle?.value || "editorial";
+  const qrCanvas = document.createElement("canvas");
+  await QRCode.toCanvas(qrCanvas, publicMenuUrl(), {
+    width: Math.round(Math.min(width, height) * 0.48),
+    margin: 2,
+    errorCorrectionLevel: "H",
+    color: {
+      dark: theme.qrDark,
+      light: "#ffffff"
+    }
+  });
+  drawBusinessMarkOnQr(qrCanvas);
+
+  drawQrPosterFrame(ctx, width, height, theme, style);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = style === "sello" ? "#fff8e8" : theme.ink;
+  ctx.font = `900 ${Math.round(width * 0.048)}px Georgia, serif`;
+  ctx.fillText(businessConfig.admin?.brandName || businessConfig.landing?.primaryName || businessId, width / 2, height * 0.14);
+  ctx.fillStyle = style === "sello" ? "#fff8e8" : theme.ink;
+  ctx.font = `900 ${Math.round(width * 0.028)}px system-ui, sans-serif`;
+  ctx.letterSpacing = "0px";
+  ctx.fillText((adminQrUse?.value || "mesa").toUpperCase(), width / 2, height * 0.19);
+  ctx.fillStyle = style === "sello" ? "#fff8e8" : theme.ink;
+  ctx.font = `900 ${Math.round(width * 0.052)}px Georgia, serif`;
+  const text = adminQrText?.value.trim() || adminQrSuggestedText();
+  wrapCanvasText(ctx, text, width / 2, height * 0.29, width * 0.78, Math.round(width * 0.062));
+  const qrSize = qrCanvas.width;
+  const qrY = style === "simple" ? height * 0.43 : height * 0.46;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect((width - qrSize) / 2 - width * 0.018, qrY - width * 0.018, qrSize + width * 0.036, qrSize + width * 0.036);
+  ctx.drawImage(qrCanvas, (width - qrSize) / 2, qrY, qrSize, qrSize);
+  ctx.fillStyle = theme.ink;
+  ctx.font = `800 ${Math.round(width * 0.024)}px system-ui, sans-serif`;
+  ctx.fillText(publicMenuUrl(), width / 2, height * 0.91);
+  return canvas;
+}
+
+function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = String(text || "").split(/\s+/);
+  let line = "";
+  let cursorY = y;
+  words.forEach((word, index) => {
+    const testLine = line ? `${line} ${word}` : word;
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      ctx.fillText(line, x, cursorY);
+      line = word;
+      cursorY += lineHeight;
+    } else {
+      line = testLine;
+    }
+    if (index === words.length - 1 && line) ctx.fillText(line, x, cursorY);
+  });
+}
+
+async function renderAdminQrs() {
+  if (!adminQrPreview) return;
+  applyAdminQrDefaults();
+  if (adminQrUrl) adminQrUrl.textContent = `Destino: ${publicMenuUrl()}`;
+  if (adminQrText && !adminQrText.value.trim()) adminQrText.value = adminQrSuggestedText();
+  await drawAdminQrPoster(adminQrPreview).catch((error) => {
+    if (import.meta.env.DEV) console.warn("[Sumi QR] preview failed", error);
+  });
+}
+
+async function downloadAdminQrPoster() {
+  try {
+    const canvas = document.createElement("canvas");
+    await drawAdminQrPoster(canvas);
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `${businessId}-qr-${adminQrUse?.value || "mesa"}.png`;
+    link.click();
+    showToast("QR descargado.");
+  } catch (error) {
+    showToast(displayError(error) || "No se pudo generar el QR.");
+  }
+}
+
+function bytesFromAscii(text) {
+  return new TextEncoder().encode(text);
+}
+
+function bytesFromBase64(base64) {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function concatBytes(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(total);
+  let offset = 0;
+  parts.forEach((part) => {
+    output.set(part, offset);
+    offset += part.length;
+  });
+  return output;
+}
+
+function pdfBlobFromCanvas(canvas) {
+  const jpegData = canvas.toDataURL("image/jpeg", 0.92).split(",")[1] || "";
+  const imageBytes = bytesFromBase64(jpegData);
+  const pageWidth = Math.round(canvas.width * 0.75);
+  const pageHeight = Math.round(canvas.height * 0.75);
+  const parts = [];
+  const offsets = [0];
+  let cursor = 0;
+  const add = (part) => {
+    const bytes = typeof part === "string" ? bytesFromAscii(part) : part;
+    parts.push(bytes);
+    cursor += bytes.length;
+  };
+  const addObject = (number, bodyParts) => {
+    offsets[number] = cursor;
+    add(`${number} 0 obj\n`);
+    bodyParts.forEach(add);
+    add("\nendobj\n");
+  };
+
+  add("%PDF-1.4\n");
+  addObject(1, ["<< /Type /Catalog /Pages 2 0 R >>"]);
+  addObject(2, ["<< /Type /Pages /Kids [3 0 R] /Count 1 >>"]);
+  addObject(3, [
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] `,
+    "/Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>"
+  ]);
+  addObject(4, [
+    `<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} `,
+    `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>\nstream\n`,
+    imageBytes,
+    "\nendstream"
+  ]);
+  const content = `q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/Im0 Do\nQ`;
+  addObject(5, [`<< /Length ${bytesFromAscii(content).length} >>\nstream\n${content}\nendstream`]);
+  const xrefOffset = cursor;
+  add(`xref\n0 6\n0000000000 65535 f \n`);
+  for (let number = 1; number <= 5; number += 1) {
+    add(`${String(offsets[number]).padStart(10, "0")} 00000 n \n`);
+  }
+  add(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`);
+  return new Blob([concatBytes(parts)], { type: "application/pdf" });
+}
+
+async function downloadAdminQrPdf() {
+  try {
+    const canvas = document.createElement("canvas");
+    await drawAdminQrPoster(canvas);
+    const blob = pdfBlobFromCanvas(canvas);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${businessId}-qr-${adminQrUse?.value || "mesa"}.pdf`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast("QR descargado en PDF.");
+  } catch (error) {
+    showToast(displayError(error) || "No se pudo generar el PDF.");
+  }
 }
 
 function fallbackRequestId(prefix = "consumption") {
@@ -2128,6 +3139,18 @@ function selectedConsumptionAmount() {
   return Number.isFinite(value) ? value : 0;
 }
 
+function selectedConsumptionCategory() {
+  const explicitCategory = String(consumptionCategory?.value || "").trim();
+  if (explicitCategory) return explicitCategory;
+  return consumptionItems
+    .map((item) => dishById(item.dishId)?.category)
+    .find(Boolean) || "";
+}
+
+function selectedConsumptionNote() {
+  return String(consumptionNote?.value || "").trim();
+}
+
 function estimatedConsumptionPoints() {
   const amount = selectedConsumptionAmount();
   const rate = Number(loyaltySettings.earnRate || 0.10);
@@ -2141,19 +3164,53 @@ function updateConsumptionPointsPreview() {
   consumptionPointsPreview.textContent = `${estimatedConsumptionPoints()} pts a acreditar (${ratePercent}% del monto)`;
 }
 
-function resetConsumptionFlow() {
+function renderConsumptionCategoryOptions() {
+  if (!consumptionCategory) return;
+  const current = consumptionCategory.value || "";
+  const categories = [...new Set(menuItems.filter(isDishVisible).map((dish) => dish.category).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+  consumptionCategory.innerHTML = [
+    `<option value="">Inferir por productos</option>`,
+    ...categories.map((category) => `<option value="${escapeAttribute(category)}">${escapeHtml(category)}</option>`)
+  ].join("");
+  consumptionCategory.value = categories.includes(current) ? current : "";
+}
+
+function resetConsumptionFlow(options = {}) {
+  consumptionMode = options.mode || "scan";
+  consumptionStage = "lookup";
   activeConsumptionQrId = "";
   activeConsumptionCustomer = null;
+  consumptionCustomerResults = [];
+  consumptionCustomerSearchToken += 1;
   consumptionItems = [];
   consumptionRequestId = fallbackRequestId();
   activePresentationDishId = "";
-  consumptionModal?.classList.remove("is-ready");
+  consumptionModal?.classList.remove("is-ready", "is-summary", "is-form");
+  consumptionModal?.classList.toggle("is-manual", consumptionMode === "manual");
+  consumptionModal?.classList.toggle("is-scan", consumptionMode === "scan");
   if (consumptionQrInput) consumptionQrInput.value = "";
+  if (consumptionCustomerSearch) consumptionCustomerSearch.value = "";
+  if (consumptionCustomerPicker) consumptionCustomerPicker.hidden = consumptionMode !== "manual";
   if (consumptionAmount) consumptionAmount.value = "";
+  if (consumptionNote) consumptionNote.value = "";
+  renderConsumptionCategoryOptions();
   if (consumptionCustomerCard) consumptionCustomerCard.hidden = true;
+  if (consumptionQuickProfile) consumptionQuickProfile.hidden = true;
+  renderConsumptionCustomerResults();
   renderConsumptionCatalog();
   renderConsumptionItems();
   updateConsumptionPointsPreview();
+}
+
+function setConsumptionStage(stage) {
+  consumptionStage = stage;
+  const ready = stage === "summary" || stage === "form";
+  consumptionModal?.classList.toggle("is-ready", ready);
+  consumptionModal?.classList.toggle("is-summary", stage === "summary");
+  consumptionModal?.classList.toggle("is-form", stage === "form");
+  if (consumptionQuickProfile) consumptionQuickProfile.hidden = stage !== "summary";
+  if (consumptionCustomerCard) consumptionCustomerCard.hidden = stage !== "form" || !activeConsumptionCustomer;
 }
 
 async function openConsumptionModal(trigger = staffScanButton) {
@@ -2162,11 +3219,66 @@ async function openConsumptionModal(trigger = staffScanButton) {
     return;
   }
   lastQrTrigger = trigger;
-  resetConsumptionFlow();
+  resetConsumptionFlow({ mode: "scan" });
   consumptionModal.hidden = false;
   document.body.classList.add("consumption-open");
+  setText("#consumptionTitle", "Escanear cliente");
+  if (consumptionScannerStatus) consumptionScannerStatus.textContent = "Apunta la camara al QR del cliente.";
   await startConsumptionScanner();
   window.requestAnimationFrame(() => consumptionQrInput?.focus());
+}
+
+async function openManualConsumptionModal(trigger = adminPanel) {
+  if (!isStaff()) {
+    showToast("Esta cuenta no puede cargar consumos.");
+    return;
+  }
+  lastQrTrigger = trigger;
+  resetConsumptionFlow({ mode: "manual" });
+  consumptionModal.hidden = false;
+  document.body.classList.add("consumption-open");
+  stopConsumptionScanner();
+  setText("#consumptionTitle", "Cargar consumo");
+  if (consumptionScannerStatus) consumptionScannerStatus.textContent = "Busca un cliente y carga el consumo sin escanear QR.";
+  await loadConsumptionCustomerResults("");
+  window.requestAnimationFrame(() => consumptionCustomerSearch?.focus());
+}
+
+function openConsumptionModalForCustomer(customerId, trigger = adminCustomerRows) {
+  if (!isStaff()) {
+    showToast("Esta cuenta no puede cargar consumos.");
+    return;
+  }
+  const profile = customerProfile(customerId);
+  const account = accountForCustomer(customerId);
+  const qrId = account?.public_qr_id;
+  if (!profile || !account || !qrId) {
+    showToast("Ese cliente todavia no tiene QR publico para cargar consumo.");
+    return;
+  }
+  const customerPurchases = eventsForCustomer(customerId)
+    .filter((event) => event.event_type === "purchase" && consumptionStatus(event) !== "cancelled")
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  lastQrTrigger = trigger;
+  resetConsumptionFlow({ mode: "manual" });
+  activeConsumptionQrId = qrId;
+  activeConsumptionCustomer = {
+    customer_id: profile.id,
+    customer_name: profile.name || "Cliente",
+    customer_email: profile.email || "",
+    points_balance: account.points_balance || 0,
+    tier: account.tier || "bronze",
+    public_qr_id: qrId,
+    last_visit: customerPurchases[0]?.created_at || "",
+    visit_count: customerPurchases.length,
+    weekly_streak: weeklyStreakForEvents(customerPurchases)
+  };
+  consumptionModal.hidden = false;
+  document.body.classList.add("consumption-open");
+  stopConsumptionScanner();
+  renderConsumptionCustomer();
+  if (consumptionScannerStatus) consumptionScannerStatus.textContent = "Cliente seleccionado. Carga el monto y los productos.";
+  window.requestAnimationFrame(() => consumptionAmount?.focus());
 }
 
 function closeConsumptionModal() {
@@ -2220,10 +3332,71 @@ async function handleConsumptionQrScan(value) {
 
 function renderConsumptionCustomer() {
   if (!activeConsumptionCustomer || !consumptionCustomerCard) return;
-  consumptionModal?.classList.add("is-ready");
+  setConsumptionStage("form");
   consumptionCustomerCard.hidden = false;
   consumptionCustomerName.textContent = activeConsumptionCustomer.customer_name || "Cliente";
   consumptionCustomerMeta.textContent = `${activeConsumptionCustomer.points_balance || 0} pts actuales - ${tierLabel(activeConsumptionCustomer.tier)}`;
+}
+
+function customerLastVisitLabel(customer) {
+  if (!customer?.last_visit) return "Sin visitas cargadas";
+  return formatFullDateTime(customer.last_visit);
+}
+
+function customerAvailableRewards(customer) {
+  const balance = Number(customer?.points_balance || 0);
+  const tier = customer?.tier || "bronze";
+  return rewardCatalog.filter((reward) =>
+    rewardIsVisibleToCustomer(reward)
+    && balance >= Number(reward.cost || 0)
+    && customerTierMeetsReward(tier, reward.minTier)
+  );
+}
+
+function rewardIsVisibleToCustomer(reward) {
+  if (!reward || reward.active === false) return false;
+  if (reward.stock !== null && Number(reward.stock) <= 0) return false;
+  if (reward.validUntil) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const validUntil = new Date(`${reward.validUntil}T23:59:59`);
+    if (Number.isFinite(validUntil.getTime()) && validUntil < today) return false;
+  }
+  return true;
+}
+
+function tierRank(tier) {
+  return { bronze: 0, silver: 1, gold: 2, platinum: 3 }[tier || "bronze"] ?? 0;
+}
+
+function customerTierMeetsReward(customerTier, minTier) {
+  if (!minTier) return true;
+  return tierRank(customerTier) >= tierRank(minTier);
+}
+
+function renderConsumptionQuickProfile() {
+  if (!activeConsumptionCustomer || !consumptionQuickProfile) return;
+  const rewards = customerAvailableRewards(activeConsumptionCustomer);
+  const streakProgress = streakProgressModel(activeConsumptionCustomer.weekly_streak || 0, activeConsumptionCustomer.last_visit || "");
+  consumptionQuickName.textContent = activeConsumptionCustomer.customer_name || "Cliente";
+  consumptionQuickMeta.textContent = `${activeConsumptionCustomer.points_balance || 0} pts actuales - ${tierLabel(activeConsumptionCustomer.tier)}`;
+  consumptionQuickStats.innerHTML = [
+    ["Ultima visita", customerLastVisitLabel(activeConsumptionCustomer)],
+    ["Racha", streakProgress.title],
+    ["Esta semana", streakProgress.maintainedThisWeek ? "Cubierta" : "Pendiente"],
+    ["Premios disponibles", `${rewards.length}`]
+  ].map(([label, value]) => `
+    <span>
+      <small>${escapeHtml(label)}</small>
+      <strong>${escapeHtml(value)}</strong>
+    </span>
+  `).join("");
+  consumptionQuickRewards.innerHTML = rewards.length
+    ? `${streakProgressMarkup(streakProgress)}${rewards.slice(0, 4).map((reward) => `
+      <span>${escapeHtml(reward.name)} <b>${escapeHtml(reward.cost)} pts</b></span>
+    `).join("")}`
+    : `${streakProgressMarkup(streakProgress)}<span>No tiene premios disponibles por puntos todavia.</span>`;
+  setConsumptionStage("summary");
 }
 
 async function lookupConsumptionCustomer(qrId) {
@@ -2250,9 +3423,82 @@ async function lookupConsumptionCustomer(qrId) {
     consumptionScannerStatus.textContent = "No encontramos ese QR.";
     return;
   }
+  activeConsumptionCustomer = normalizeConsumptionCustomer(customer);
+  renderConsumptionQuickProfile();
+  consumptionScannerStatus.textContent = "Cliente identificado. Revisa la ficha rapida antes de cargar.";
+  consumptionStartForm?.focus();
+}
+
+function normalizeConsumptionCustomer(customer) {
+  if (!customer) return null;
+  return {
+    customer_id: customer.customer_id,
+    customer_name: customer.customer_name || "Cliente",
+    customer_email: customer.customer_email || "",
+    points_balance: customer.points_balance || 0,
+    tier: customer.tier || "bronze",
+    public_qr_id: customer.public_qr_id || customer.qr_id || "",
+    last_visit: customer.last_visit || "",
+    visit_count: Number(customer.visit_count || 0),
+    weekly_streak: Number(customer.weekly_streak || 0)
+  };
+}
+
+function renderConsumptionCustomerResults(message = "") {
+  if (!consumptionCustomerResultsEl) return;
+  if (message) {
+    consumptionCustomerResultsEl.innerHTML = `<div class="consumption-customer-empty">${escapeHtml(message)}</div>`;
+    return;
+  }
+  consumptionCustomerResultsEl.innerHTML = consumptionCustomerResults.length
+    ? consumptionCustomerResults.map((customer) => `
+      <button class="consumption-customer-option" type="button" data-consumption-customer="${escapeAttribute(customer.customer_id)}">
+        <span>
+          <strong>${escapeHtml(customer.customer_name || "Cliente")}</strong>
+          <small>${escapeHtml(customer.customer_email || "Sin email")} - ${escapeHtml(tierLabel(customer.tier))}</small>
+        </span>
+        <b>${escapeHtml(customer.points_balance || 0)} pts</b>
+      </button>
+    `).join("")
+    : `<div class="consumption-customer-empty">Busca o selecciona un cliente registrado.</div>`;
+}
+
+async function loadConsumptionCustomerResults(query = "") {
+  if (consumptionMode !== "manual") return;
+  if (!supabase) {
+    renderConsumptionCustomerResults("Configura Supabase para buscar clientes.");
+    return;
+  }
+  const token = consumptionCustomerSearchToken + 1;
+  consumptionCustomerSearchToken = token;
+  renderConsumptionCustomerResults("Buscando clientes...");
+  const { data, error } = await supabase.rpc("lookup_loyalty_customers_for_consumption", {
+    target_business_id: businessId,
+    search_query: query
+  });
+  if (token !== consumptionCustomerSearchToken) return;
+  if (error) {
+    consumptionCustomerResults = [];
+    renderConsumptionCustomerResults(displayError(error));
+    return;
+  }
+  consumptionCustomerResults = (Array.isArray(data) ? data : [])
+    .map(normalizeConsumptionCustomer)
+    .filter((customer) => customer?.customer_id && customer?.public_qr_id);
+  renderConsumptionCustomerResults(consumptionCustomerResults.length ? "" : "No encontramos clientes con esa busqueda.");
+}
+
+function selectConsumptionCustomer(customerId) {
+  const customer = consumptionCustomerResults.find((item) => item.customer_id === customerId);
+  if (!customer?.public_qr_id) {
+    showToast("Ese cliente no tiene QR publico para cargar consumo.");
+    return;
+  }
+  stopConsumptionScanner();
+  activeConsumptionQrId = customer.public_qr_id;
   activeConsumptionCustomer = customer;
   renderConsumptionCustomer();
-  consumptionScannerStatus.textContent = "Cliente listo. Carga el monto y los productos.";
+  if (consumptionScannerStatus) consumptionScannerStatus.textContent = "Cliente seleccionado. Carga el monto y los productos.";
   consumptionAmount?.focus();
 }
 
@@ -2339,22 +3585,18 @@ function renderConsumptionItems() {
         </span>
       </article>
     `).join("")
-    : `<div class="admin-empty">Todavia no agregaste productos.</div>`;
+    : `<div class="admin-empty">Puedes registrar solo el monto o agregar productos como detalle.</div>`;
 }
 
 async function saveConsumption() {
   if (!activeConsumptionCustomer || !activeConsumptionQrId) {
-    showToast("Escanea primero el QR del cliente.");
+    showToast(consumptionMode === "manual" ? "Selecciona primero un cliente." : "Escanea primero el QR del cliente.");
     return;
   }
   const amount = selectedConsumptionAmount();
   if (amount <= 0) {
     showToast("Carga un monto mayor a cero.");
     consumptionAmount?.focus();
-    return;
-  }
-  if (!consumptionItems.length) {
-    showToast("Agrega al menos un producto consumido.");
     return;
   }
   if (!supabase) {
@@ -2369,12 +3611,15 @@ async function saveConsumption() {
     presentationName,
     quantity
   }));
-  const { data, error } = await supabase.rpc("record_customer_consumption", {
+  const { data, error } = await supabase.rpc("record_customer_consumption_v2", {
     target_business_id: businessId,
     target_qr_id: activeConsumptionQrId,
     purchase_total: amount,
+    request_id: consumptionRequestId,
     purchase_items: payloadItems,
-    request_id: consumptionRequestId
+    purchase_category: selectedConsumptionCategory() || null,
+    purchase_note: selectedConsumptionNote() || null,
+    entry_method: consumptionMode === "scan" ? "qr" : "manual"
   });
   consumptionSave.disabled = false;
   consumptionSave.textContent = "Registrar consumo";
@@ -2383,21 +3628,75 @@ async function saveConsumption() {
     return;
   }
   const result = data || {};
-  showToast(`${result.customerName || "Cliente"} sumo ${result.pointsEarned || estimatedConsumptionPoints()} pts.`);
+  const earnedPoints = Number(result.pointsEarned || estimatedConsumptionPoints());
+  const streakBonusPoints = Number(result.streakBonusPoints || 0);
+  const streakText = streakBonusPoints ? ` + ${streakBonusPoints} bonus de racha` : "";
+  showToast(`${result.customerName || "Cliente"} sumo ${earnedPoints} pts${streakText}.`);
   if (currentAdminData.loaded) {
     currentAdminData.loaded = false;
     await ensureAdminData();
   }
-  resetConsumptionFlow();
-  await startConsumptionScanner();
+  const previousMode = consumptionMode;
+  resetConsumptionFlow({ mode: previousMode });
+  if (previousMode === "scan") {
+    await startConsumptionScanner();
+  } else {
+    await loadConsumptionCustomerResults("");
+    consumptionCustomerSearch?.focus();
+  }
 }
 
 function localCategory(category) {
   return categoryLabels[currentLang]?.[category] || category;
 }
 
+function normalizeBusinessLanguages(rawLanguages, defaultLang = "es") {
+  const source = Array.isArray(rawLanguages) && rawLanguages.length ? rawLanguages : fallbackLanguages;
+  const seen = new Set();
+  const normalized = source
+    .map((language) => ({
+      code: String(language?.code || "").trim().toLowerCase(),
+      label: String(language?.label || language?.code || "").trim(),
+      helper: String(language?.helper || "").trim(),
+      flag: String(language?.flag || language?.code || "").trim().toLowerCase(),
+      dir: language?.dir === "rtl" ? "rtl" : "ltr",
+      primary: Boolean(language?.primary)
+    }))
+    .filter((language) => language.code && !seen.has(language.code) && seen.add(language.code));
+  if (!normalized.length) return fallbackLanguages;
+  if (!normalized.some((language) => language.code === defaultLang)) {
+    normalized[0].primary = true;
+  }
+  return normalized.map((language) => ({
+    ...language,
+    label: language.label || language.code.toUpperCase(),
+    helper: language.helper || `Continuar en ${language.label || language.code.toUpperCase()}`,
+    flag: language.flag || language.code
+  }));
+}
+
+function normalizeBusinessLabels(raw, codes, primaryCode) {
+  const primaryLabels = raw?.[primaryCode] || raw?.es || Object.values(raw || {})[0] || {};
+  return codes.reduce((acc, code) => {
+    acc[code] = {
+      ...primaryLabels,
+      ...(raw?.[code] || {})
+    };
+    return acc;
+  }, {});
+}
+
 function languageDirection(lang) {
   return languages.find((language) => language.code === lang)?.dir || "ltr";
+}
+
+function languageDefinition(lang) {
+  return languages.find((language) => language.code === lang) || languages[0];
+}
+
+function flagStyle(flag) {
+  const safeFlag = String(flag || "").replace(/[^a-z0-9-]/gi, "").toLowerCase();
+  return safeFlag ? `style="background-image:url('assets/flags/${escapeAttribute(safeFlag)}.svg')"` : "";
 }
 
 function legacyTranslatedName(dish, lang) {
@@ -2413,11 +3712,11 @@ function ensureDishTranslations(dish) {
     dish.translations = {};
   }
 
-  ["es", "en", "ar"].forEach((lang) => {
+  languageCodes.forEach((lang) => {
     const existing = dish.translations[lang] || {};
     dish.translations[lang] = {
-      name: existing.name || (lang === "es" ? dish.name : legacyTranslatedName(dish, lang)) || dish.name,
-      description: existing.description || (lang === "es" ? dish.description : legacyTranslatedDescription(dish, lang)) || dish.description
+      name: existing.name || (lang === primaryLanguageCode ? dish.name : legacyTranslatedName(dish, lang)) || dish.name,
+      description: existing.description || (lang === primaryLanguageCode ? dish.description : legacyTranslatedDescription(dish, lang)) || dish.description
     };
   });
 
@@ -2426,7 +3725,7 @@ function ensureDishTranslations(dish) {
 
 function dishText(dish, lang) {
   const translations = ensureDishTranslations(dish);
-  return translations[lang] || translations.es;
+  return translations[lang] || translations[primaryLanguageCode] || translations[languageCodes[0]];
 }
 
 function localName(dish) {
@@ -2461,16 +3760,55 @@ function normalizeCurrentCategory(items = currentItems()) {
 }
 
 function currentLevel() {
-  if (pointsBalance >= 2000) return { name: labels[currentLang].platinum || "Nivel Platino", next: null, floor: 2000, target: 2000 };
-  if (pointsBalance >= 1000) return { name: labels[currentLang].gold, next: labels[currentLang].platinum || "Nivel Platino", floor: 1000, target: 2000 };
-  if (pointsBalance >= 500) return { name: labels[currentLang].silver, next: labels[currentLang].gold, floor: 500, target: 1000 };
-  return { name: labels[currentLang].bronze, next: labels[currentLang].silver, floor: 0, target: 500 };
+  const thresholds = normalizedTierThresholds(loyaltySettings);
+  if (pointsBalance >= thresholds.platinum) {
+    return { name: labels[currentLang].platinum || "Nivel Platino", next: null, floor: thresholds.platinum, target: thresholds.platinum };
+  }
+  if (pointsBalance >= thresholds.gold) {
+    return { name: labels[currentLang].gold, next: labels[currentLang].platinum || "Nivel Platino", floor: thresholds.gold, target: thresholds.platinum };
+  }
+  if (pointsBalance >= thresholds.silver) {
+    return { name: labels[currentLang].silver, next: labels[currentLang].gold, floor: thresholds.silver, target: thresholds.gold };
+  }
+  return { name: labels[currentLang].bronze, next: labels[currentLang].silver, floor: 0, target: thresholds.silver };
+}
+
+function redemptionStatusLabel(status) {
+  const labelsMap = {
+    requested: "Pendiente",
+    approved: "Aprobado",
+    redeemed: "Entregado",
+    cancelled: "Rechazado"
+  };
+  return labelsMap[status] || status || "Pendiente";
+}
+
+function redemptionStatusTone(status) {
+  const tones = {
+    requested: "warn",
+    approved: "good",
+    redeemed: "neutral",
+    cancelled: "bad"
+  };
+  return tones[status] || "neutral";
+}
+
+function redemptionsByReward(rewardId) {
+  return [...(currentCustomer?.redemptions || [])]
+    .filter((redemption) => redemption.reward_id === rewardId)
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+}
+
+function pendingRewardRedemption(rewardId) {
+  return redemptionsByReward(rewardId).find((redemption) => redemption.status === "requested");
 }
 
 function activeRewardRedemption(rewardId) {
-  return currentCustomer?.redemptions?.find((redemption) =>
-    redemption.reward_id === rewardId && redemption.status !== "cancelled"
-  );
+  return pendingRewardRedemption(rewardId);
+}
+
+function closedRewardRedemption(rewardId) {
+  return redemptionsByReward(rewardId).find((redemption) => redemption.status !== "requested") || null;
 }
 
 function showToast(message) {
@@ -2485,6 +3823,7 @@ function openSignupModal(trigger = signupCta) {
   signupModal.hidden = false;
   document.body.classList.add("signup-open");
   setSignupMode("register");
+  recordMenuEvent("signup_start", "", { once: false });
   window.requestAnimationFrame(() => signupEmail.focus());
 }
 
@@ -2673,6 +4012,10 @@ function trapPhotoAiFocus(event) {
   trapModalFocus(photoAiModal, event);
 }
 
+function trapActivityFocus(event) {
+  trapModalFocus(activityDrawer, event);
+}
+
 function renderLoyalty() {
   renderAuthState();
   if (!isAuthenticated() || isStaff()) return;
@@ -2687,16 +4030,35 @@ function renderLoyalty() {
   addPurchaseButton.textContent = labels[currentLang].addPurchase;
   rewardsButton.textContent = labels[currentLang].rewards;
   earnDetailPoints.textContent = labels[currentLang].earnDetail;
+  const latestRedemption = [...(currentCustomer?.redemptions || [])]
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0];
+  if (rewardStatusNote) {
+    rewardStatusNote.hidden = !latestRedemption;
+    rewardStatusNote.className = `reward-status-note tone-${redemptionStatusTone(latestRedemption?.status)}`;
+    rewardStatusNote.textContent = latestRedemption
+      ? `Ultimo canje: ${latestRedemption.reward_name} - ${redemptionStatusLabel(latestRedemption.status)}.`
+      : "";
+  }
   rewardStrip.innerHTML = rewardCatalog
+    .filter(rewardIsVisibleToCustomer)
     .map(
       (reward) => {
-        const redemption = activeRewardRedemption(reward.id);
-        const available = pointsBalance >= reward.cost && !redemption;
-        const status = redemption
-          ? redemption.status === "redeemed" ? "Entregado" : redemption.status === "approved" ? "Aprobado" : "Solicitado"
-          : `${reward.cost} pts`;
+        const pendingRedemption = activeRewardRedemption(reward.id);
+        const closedRedemptionForReward = closedRewardRedemption(reward.id);
+        const meetsTier = customerTierMeetsReward(currentCustomer?.account?.tier || "bronze", reward.minTier);
+        const available = pointsBalance >= reward.cost && meetsTier && !pendingRedemption;
+        const status = pendingRedemption
+          ? "Pendiente de aprobacion"
+          : !meetsTier
+            ? `Requiere ${tierLabel(reward.minTier)}`
+            : pointsBalance >= reward.cost
+            ? closedRedemptionForReward
+              ? `Pedir de nuevo (${reward.cost} pts)`
+              : `${reward.cost} pts`
+            : `${reward.cost - pointsBalance} pts restantes`;
         return `
-        <button class="reward-chip ${available ? "available" : ""} ${redemption ? "is-requested" : ""}" data-reward="${escapeAttribute(reward.id)}" type="button" ${redemption ? "aria-disabled=\"true\"" : ""}>
+        <button class="reward-chip ${available ? "available" : ""} ${pendingRedemption ? "is-requested" : ""}" data-reward="${escapeAttribute(reward.id)}" type="button" ${pendingRedemption ? "disabled aria-disabled=\"true\"" : ""}>
+          ${reward.imageUrl ? `<span class="reward-chip-thumb" style="background-image:url(&quot;${escapeAttribute(reward.imageUrl)}&quot;)" aria-hidden="true"></span>` : ""}
           <strong>${escapeHtml(reward.name)}</strong>
           <span>${escapeHtml(status)}</span>
         </button>
@@ -2720,8 +4082,9 @@ function updateHeader() {
   document.body.dir = language?.dir || "ltr";
   if (currentLanguageFlag && language?.flag) {
     currentLanguageFlag.className = `header-flag flag ${language.flag}`;
+    currentLanguageFlag.style.backgroundImage = `url('assets/flags/${language.flag}.svg')`;
   }
-  languageToggle?.setAttribute("aria-label", `${labels[currentLang].changeLanguage || "Cambiar idioma"}: ${language?.label || currentLang}`);
+  languageToggle?.setAttribute("aria-label", `${labels[currentLang]?.changeLanguage || "Cambiar idioma"}: ${language?.label || currentLang}`);
   renderAuthState();
 
   brandButtons.forEach((button) => {
@@ -2830,19 +4193,53 @@ function renderProfile() {
   profileEmail.textContent = profile.email || currentSession.user.email || "";
   profilePoints.textContent = account.points_balance || 0;
   profileLevel.textContent = level.name;
+  if (profileStreak) {
+    const streak = weeklyStreakForEvents(currentCustomer.events || []);
+    const purchases = (currentCustomer.events || [])
+      .filter((event) => event.event_type === "purchase" && consumptionStatus(event) !== "cancelled")
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const streakProgress = streakProgressModel(streak, purchases[0]?.created_at || "");
+    profileStreak.textContent = `Racha semanal: ${streakProgress.title}. ${streakProgress.helper}`;
+  }
+  const referralCode = customerReferralCode();
+  if (profileReferralBox) profileReferralBox.hidden = !referralCode;
+  if (profileReferralCode) profileReferralCode.textContent = referralCode || "Sin codigo";
+  if (profileReferralText) {
+    const ownerPoints = loyaltySettings.referralReferrerPoints || 0;
+    const guestPoints = loyaltySettings.referralReferredPoints || 0;
+    profileReferralText.textContent = referralCode
+      ? `Comparte tu link: tu ganas ${ownerPoints} pts y tu invitado ${guestPoints} pts.`
+      : "Tu codigo se generara al completar el registro.";
+  }
   profileAdminButton.hidden = !isOwner();
-  profileHistoryCount.textContent = currentCustomer.events.length;
-  profileHistoryList.innerHTML = currentCustomer.events.length
-    ? currentCustomer.events
+  const profileMovements = [
+    ...(currentCustomer.events || []).map((event) => ({
+      kind: "points",
+      created_at: event.created_at,
+      title: event.description || event.event_type,
+      meta: formatEventDate(event.created_at),
+      value: `${event.points_delta > 0 ? "+" : ""}${event.points_delta} pts`
+    })),
+    ...(currentCustomer.redemptions || []).map((redemption) => ({
+      kind: "redemption",
+      created_at: redemption.created_at,
+      title: `Canje ${redemptionStatusLabel(redemption.status)}: ${redemption.reward_name}`,
+      meta: formatEventDate(redemption.created_at),
+      value: `${redemption.points_cost || 0} pts`
+    }))
+  ].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  profileHistoryCount.textContent = profileMovements.length;
+  profileHistoryList.innerHTML = profileMovements.length
+    ? profileMovements
+        .slice(0, 30)
         .map((event) => {
-          const sign = event.points_delta > 0 ? "+" : "";
           return `
-            <div class="profile-event">
+            <div class="profile-event ${event.kind === "redemption" ? "is-redemption" : ""}">
               <span>
-                <strong>${escapeHtml(event.description || event.event_type)}</strong>
-                <small>${escapeHtml(formatEventDate(event.created_at))}</small>
+                <strong>${escapeHtml(event.title)}</strong>
+                <small>${escapeHtml(event.meta)}</small>
               </span>
-              <b>${sign}${escapeHtml(event.points_delta)} pts</b>
+              <b>${escapeHtml(event.value)}</b>
             </div>
           `;
         })
@@ -2853,30 +4250,27 @@ function renderProfile() {
 function renderAdminHome() {
   if (!adminPanel) return;
   const ownerName = currentCustomer?.profile?.name || "Owner";
-  const activeItems = menuItems.filter(isDishVisible);
-  const hiddenItems = menuItems.length - activeItems.length;
-  const soldOutItems = activeItems.filter(isSoldOut).length;
-  const activeRewards = rewardCatalog.length;
-  const customerCount = currentAdminData.loaded ? currentAdminData.customers.length : "-";
+  const today = new Intl.DateTimeFormat("es-MX", {
+    weekday: "long",
+    day: "numeric",
+    month: "long"
+  }).format(new Date());
 
-  adminGreeting.textContent = `Buenos dias, ${ownerName}`;
-  adminSummary.innerHTML = `Gestiona clientes, puntos y menu desde un panel simple. Hoy conviene revisar <strong>${activeRewards} premios</strong> y <strong>${activeItems.length} productos visibles</strong>.`;
-  adminStats.innerHTML = `
-    <article class="admin-stat"><span>Clientes</span><strong>${escapeHtml(customerCount)}</strong><small>registrados en loyalty</small></article>
-    <article class="admin-stat"><span>Productos visibles</span><strong>${activeItems.length}</strong><small>${hiddenItems} ocultos - ${soldOutItems} agotados</small></article>
-    <article class="admin-stat"><span>Premios activos</span><strong>${activeRewards}</strong><small>catalogo de lealtad</small></article>
-  `;
-  adminActions.innerHTML = `
-    <button type="button" data-admin-action="consumption"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-qr"></use></svg></span><strong>Cargar consumo</strong><small>Escanear QR, monto y productos consumidos</small></button>
-    <button type="button" data-admin-action="customers"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-qr"></use></svg></span><strong>Ver clientes y QR</strong><small>Consultar puntos, alias QR e historial</small></button>
-    <button type="button" data-admin-action="rewards"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-library"></use></svg></span><strong>Revisar canjes</strong><small>Aprobar, entregar o cancelar premios</small></button>
-    <button type="button" data-admin-action="menu"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-menu"></use></svg></span><strong>Editar menu</strong><small>Productos, precios, fotos y visibilidad</small></button>
-    <button type="button" data-admin-action="content"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg></span><strong>Crear contenido</strong><small>Post, copy e imagenes desde platillos</small></button>
-    <button type="button" data-admin-action="analytics"><span><svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg></span><strong>Estadisticas</strong><small>Base para consumos, puntos y productos</small></button>
-  `;
-  document.querySelector("#adminSuggestionTitle").textContent = "Mantene el panel enfocado en las tareas del dia.";
-  document.querySelector("#adminSuggestionText").textContent = "Clientes, canjes y menu son las tres areas que el dueno necesita resolver sin perderse en configuraciones.";
-  adminSuggestionButton.innerHTML = `<svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg> Preparar contenido`;
+  adminGreeting.textContent = `Bienvenido, ${ownerName}`;
+  adminSummary.textContent = "Estas son las senales que ayudan a decidir que vender, que cliente recuperar y que accion tomar hoy.";
+  document.querySelector("#adminDate").textContent = `Inicio - ${today}`;
+  if (adminHeroActions) {
+    adminHeroActions.innerHTML = `
+      <button class="primary" type="button" data-analytics-action="consumption">
+        <svg class="ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+        Cargar consumo
+      </button>
+      <button class="outline" type="button" data-analytics-action="content">
+        <svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
+        Crear contenido
+      </button>
+    `;
+  }
 }
 
 function renderAdminMenu() {
@@ -2903,8 +4297,8 @@ function renderAdminMenu() {
         <span class="cell-muted">${escapeHtml(priceRange(dish))}</span>
         <span class="status">${status}</span>
         <span class="row-actions" aria-label="Acciones de ${escapeAttribute(dish.name)}">
-          <button class="icon-button ${recommended ? "is-active" : ""}" data-admin-row-action="recommend" type="button" aria-label="${recommended ? "Recomendado hoy" : "Poner en Hoy te recomendamos"} ${escapeAttribute(dish.name)}">
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
+          <button class="icon-button ${recommended ? "is-active" : ""}" data-admin-row-action="recommend" type="button" aria-label="${recommended ? "Producto destacado" : "Destacar producto"} ${escapeAttribute(dish.name)}">
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-pin"></use></svg>
           </button>
           <button class="icon-button hot-admin-action ${popular ? "is-active" : ""}" data-admin-row-action="popular" type="button" aria-label="${popular ? "Quitar popular" : "Marcar popular"} ${escapeAttribute(dish.name)}">
             <span aria-hidden="true">🔥</span>
@@ -2932,7 +4326,7 @@ async function setRecommendedDish(dish) {
   });
   renderAdminPanel();
   renderList();
-  showToast(`${dish.name} ahora aparece en Hoy te recomendamos.`);
+  showToast(`${dish.name} ahora aparece como producto destacado.`);
 }
 
 async function togglePopularDish(dish) {
@@ -2962,34 +4356,1630 @@ function renderAdminCustomers() {
     adminCustomerRows.innerHTML = `<div class="admin-empty">No se pudieron cargar clientes: ${escapeHtml(displayError(currentAdminData.error))}</div>`;
     return;
   }
+  if (supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded) {
+    adminCustomerRows.innerHTML = `<div class="admin-empty">Cargando clientes del negocio...</div>`;
+    return;
+  }
 
-  const customers = currentAdminData.customers
-    .filter((profile) => customerSearchMatches(profile, accountForCustomer(profile.id)));
+  syncCustomerTierFilter();
+  const rows = filteredCustomerAnalytics();
 
-  adminCustomerRows.innerHTML = customers.length
-    ? customers
-        .map((profile) => {
-          const account = accountForCustomer(profile.id);
-          const recentEvents = eventsForCustomer(profile.id);
-          const pending = redemptionsForCustomer(profile.id).filter((redemption) => redemption.status === "requested").length;
-          return `
-            <article class="admin-customer-row">
+  adminCustomerRows.innerHTML = rows.length
+    ? rows.map((customer) => customerRowMarkup(customer)).join("")
+    : `<div class="admin-empty">No hay clientes que coincidan con estos filtros.</div>`;
+
+  if (activeAdminCustomerId) renderAdminCustomerDetail();
+}
+
+function syncCustomerTierFilter() {
+  if (!adminCustomerTierFilter) return;
+  const current = adminCustomerTierFilter.value || "all";
+  const tiers = [...new Set(currentAdminData.accounts.map((account) => account.tier || "bronze"))]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+  adminCustomerTierFilter.innerHTML = [
+    `<option value="all">Todos</option>`,
+    ...tiers.map((tier) => `<option value="${escapeAttribute(tier)}">${escapeHtml(tierLabel(tier))}</option>`)
+  ].join("");
+  adminCustomerTierFilter.value = tiers.includes(current) ? current : "all";
+}
+
+function filteredCustomerAnalytics() {
+  const tier = adminCustomerTierFilter?.value || "all";
+  const status = adminCustomerStatusFilter?.value || "all";
+  const activity = adminCustomerActivityFilter?.value || "all";
+  const sort = adminCustomerSortFilter?.value || "lastVisit";
+
+  return buildCustomerAnalytics(purchaseEvents())
+    .filter((customer) => customerSearchMatches(customer.profile, customer.account))
+    .filter((customer) => tier === "all" || (customer.account?.tier || "bronze") === tier)
+    .filter((customer) => status === "all"
+      || customer.status.tone === status
+      || (status.startsWith("operational:") && customer.status.operational === status.replace("operational:", "")))
+    .filter((customer) => {
+      if (activity === "points") return Number(customer.account?.points_balance || 0) > 0;
+      if (activity === "inactive") return customer.status.tone === "warn" || customer.status.tone === "bad" || customer.status.tone === "neutral";
+      if (activity === "streak") return customer.streak > 0;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sort === "name") return String(a.profile.name || "").localeCompare(String(b.profile.name || ""));
+      if (sort === "points") return Number(b.account?.points_balance || 0) - Number(a.account?.points_balance || 0);
+      if (sort === "visits") return b.visits - a.visits;
+      if (sort === "spent") return b.totalSpent - a.totalSpent;
+      return new Date(b.lastVisit || 0) - new Date(a.lastVisit || 0);
+    });
+}
+
+function customerRowMarkup(customer) {
+  const points = Number(customer.account?.points_balance || 0);
+  const tier = tierLabel(customer.account?.tier || "bronze");
+  const pending = redemptionsForCustomer(customer.profile.id).filter((redemption) => redemption.status === "requested").length;
+  const activeClass = activeAdminCustomerId === customer.profile.id ? "is-active" : "";
+  const streakProgress = streakProgressModel(customer.streak, customer.lastVisit);
+  return `
+    <article class="admin-customer-row ${activeClass}" data-customer-id="${escapeAttribute(customer.profile.id)}">
+      <span>
+        <strong>${escapeHtml(customer.profile.name || "Cliente")}</strong>
+        <small>${escapeHtml(customerVisibleIdentifier(customer.profile))}</small>
+      </span>
+      <b>${escapeHtml(formatNumber(points))} pts</b>
+      <span class="pill">${escapeHtml(tier)}</span>
+      <span>
+        <strong>${customer.lastVisit ? escapeHtml(formatEventDate(customer.lastVisit)) : "Sin consumo"}</strong>
+        <small>${escapeHtml(customer.status.label)}</small>
+      </span>
+      <span>
+        <strong>${escapeHtml(streakProgress.title)}</strong>
+        <small>${escapeHtml(streakProgress.status)}</small>
+      </span>
+      <span>
+        <strong>${escapeHtml(customer.visits)}</strong>
+        <small>${pending ? `${escapeHtml(pending)} canjes pendientes` : "Sin canjes pendientes"}</small>
+      </span>
+      <b>${escapeHtml(formatCurrency(customer.totalSpent))}</b>
+      <span class="row-actions customer-row-actions">
+        <button class="mini-action" type="button" data-customer-action="detail" data-customer-id="${escapeAttribute(customer.profile.id)}">Ver</button>
+        <button class="mini-action" type="button" data-customer-action="consume" data-customer-id="${escapeAttribute(customer.profile.id)}">Cargar</button>
+      </span>
+    </article>
+  `;
+}
+
+function customerDetailModel(customerId) {
+  const customer = buildCustomerAnalytics(purchaseEvents()).find((item) => item.profile.id === customerId);
+  if (!customer) return null;
+  const purchases = eventsForCustomer(customerId)
+    .filter((event) => event.event_type === "purchase")
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const redemptions = redemptionsForCustomer(customerId)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  return { ...customer, purchases, redemptions };
+}
+
+function purchaseItemsLabel(event) {
+  const items = parsePurchaseItems(event);
+  const status = consumptionStatus(event);
+  const category = purchaseCategoryLabel(event);
+  const note = purchaseNote(event);
+  if (!items.length) return "Sin productos cargados";
+  return items
+    .slice(0, 4)
+    .map((item) => `${item.name || "Producto"} x${item.quantity || 1}`)
+    .join(", ");
+}
+
+function renderAdminCustomerDetail() {
+  if (!adminCustomerDetailPanel || !adminCustomerDetailContent) return;
+  const model = activeAdminCustomerId ? customerDetailModel(activeAdminCustomerId) : null;
+  if (!model) {
+    adminCustomerDetailPanel.hidden = true;
+    adminCustomerDetailContent.innerHTML = "";
+    return;
+  }
+  const points = Number(model.account?.points_balance || 0);
+  const streakProgress = streakProgressModel(model.streak, model.lastVisit);
+  adminCustomerDetailPanel.hidden = false;
+  adminCustomerDetailContent.innerHTML = `
+    <div class="customer-detail-hero">
+      <span class="status-dot tone-${escapeAttribute(model.status.tone)}">${escapeHtml(model.status.label)}</span>
+      <h2>${escapeHtml(model.profile.name || "Cliente")}</h2>
+      <p>${escapeHtml(customerVisibleIdentifier(model.profile))}</p>
+    </div>
+    <div class="customer-detail-metrics">
+      <div><span>Puntos</span><strong>${escapeHtml(formatNumber(points))}</strong></div>
+      <div><span>Nivel</span><strong>${escapeHtml(tierLabel(model.account?.tier || "bronze"))}</strong></div>
+      <div><span>Consumos</span><strong>${escapeHtml(model.visits)}</strong></div>
+      <div><span>Total gastado</span><strong>${escapeHtml(formatCurrency(model.totalSpent))}</strong></div>
+      <div><span>Ticket promedio</span><strong>${escapeHtml(formatCurrency(model.averageTicket))}</strong></div>
+      <div><span>Racha</span><strong>${escapeHtml(streakProgress.title)}</strong></div>
+    </div>
+    <div class="customer-detail-block">
+      ${streakProgressMarkup(streakProgress)}
+    </div>
+    <div class="customer-detail-block">
+      <h3>Actividad</h3>
+      <dl class="activity-detail-list">
+        ${detailRows([
+          { label: "Alta", value: formatFullDateTime(model.profile.created_at) || "Sin dato" },
+          { label: "Estado operativo", value: operationalCustomerStatus(model.profile)?.label || "Activo" },
+          { label: "Ultima visita", value: model.lastVisit ? formatFullDateTime(model.lastVisit) : "Sin consumo" },
+          { label: "Producto favorito", value: model.favoriteProduct || "Sin patron aun" },
+          { label: "Canjes pedidos", value: model.redemptions.length }
+        ])}
+      </dl>
+    </div>
+    <div class="customer-detail-block">
+      <h3>Ultimos consumos</h3>
+      ${model.purchases.length ? `
+        <div class="customer-detail-list">
+          ${model.purchases.slice(0, 5).map((event) => `
+            <article>
               <span>
-                <strong>${escapeHtml(profile.name)}</strong>
-                <small>${escapeHtml(profile.email)}</small>
+                <strong>${escapeHtml(formatCurrency(event.purchase_total))}</strong>
+                <small>${escapeHtml(purchaseItemsLabel(event))}</small>
               </span>
-              <b>${escapeHtml(account?.points_balance ?? 0)} pts</b>
-              <span class="pill">${escapeHtml(account?.tier || "bronze")}</span>
-              <code>${escapeHtml(shortQrAlias(profile, account))}</code>
+              <b>+${escapeHtml(event.points_delta || 0)} pts</b>
+              <small>${escapeHtml(formatFullDateTime(event.created_at))}</small>
+            </article>
+          `).join("")}
+        </div>
+      ` : `<div class="admin-empty compact">Todavia no tiene consumos cargados.</div>`}
+    </div>
+    <div class="customer-detail-block">
+      <h3>Canjes</h3>
+      ${model.redemptions.length ? `
+        <div class="customer-detail-list">
+          ${model.redemptions.slice(0, 5).map((redemption) => `
+            <article class="customer-redemption-row">
               <span>
-                <strong>${escapeHtml(formatEventDate(profile.created_at))}</strong>
-                <small>${recentEvents.length} movimientos &middot; ${pending} canjes pendientes</small>
+                <strong>${escapeHtml(redemption.reward_name || "Premio")}</strong>
+                <small>${escapeHtml(formatFullDateTime(redemption.created_at))} - ${escapeHtml(redemptionStatusLabel(redemption.status))}</small>
+              </span>
+              <b>${escapeHtml(redemption.points_cost || 0)} pts</b>
+              <span class="redemption-actions">
+                ${redemption.status === "requested" ? `<button class="mini-action" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}">Aprobar</button>` : ""}
+                ${redemption.status === "approved" ? `<button class="mini-action" type="button" data-redemption-action="redeemed" data-redemption-id="${escapeAttribute(redemption.id)}">Entregado</button>` : ""}
+                ${redemption.status !== "cancelled" && redemption.status !== "redeemed" ? `<button class="mini-action danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}">Rechazar</button>` : ""}
               </span>
             </article>
-          `;
-        })
-        .join("")
-    : `<div class="admin-empty">Todavia no hay clientes para este negocio.</div>`;
+          `).join("")}
+        </div>
+      ` : `<div class="admin-empty compact">Sin canjes registrados.</div>`}
+    </div>
+    <div class="customer-detail-actions">
+      <button class="primary" type="button" data-customer-action="consume" data-customer-id="${escapeAttribute(model.profile.id)}">Cargar consumo</button>
+      <button class="outline" type="button" data-customer-action="qr" data-customer-id="${escapeAttribute(model.profile.id)}">Ver QR</button>
+    </div>
+    <div class="customer-status-editor">
+      <label>
+        <span>Estado de cliente</span>
+        <select data-customer-status-select="${escapeAttribute(model.profile.id)}">
+          ${customerOperationalStatusOptions.map((option) => `
+            <option value="${escapeAttribute(option.value)}" ${customerOperationalStatusValue(model.profile) === option.value ? "selected" : ""}>${escapeHtml(option.label)}</option>
+          `).join("")}
+        </select>
+      </label>
+      <button class="outline" type="button" data-customer-action="status" data-customer-id="${escapeAttribute(model.profile.id)}">Guardar estado</button>
+    </div>
+    <div class="customer-adjust-editor">
+      <div>
+        <span>Ajuste manual de puntos</span>
+        <small>Solo owner. Queda registrado en actividad y no puede dejar saldo negativo.</small>
+      </div>
+      <label>
+        <span>Puntos</span>
+        <input type="number" step="1" inputmode="numeric" placeholder="+50 o -20" data-customer-points-delta="${escapeAttribute(model.profile.id)}" />
+      </label>
+      <label>
+        <span>Motivo</span>
+        <input type="text" maxlength="120" placeholder="Ej. compensacion por error" data-customer-points-reason="${escapeAttribute(model.profile.id)}" />
+      </label>
+      <button class="outline" type="button" data-customer-action="adjust-points" data-customer-id="${escapeAttribute(model.profile.id)}">Aplicar ajuste</button>
+    </div>
+  `;
+}
+
+function openAdminCustomerDetail(customerId) {
+  activeAdminCustomerId = customerId || "";
+  renderAdminCustomers();
+  renderAdminCustomerDetail();
+}
+
+function closeAdminCustomerDetail() {
+  activeAdminCustomerId = "";
+  renderAdminCustomers();
+  renderAdminCustomerDetail();
+}
+
+function updateLocalCustomerStatus(customerId, status) {
+  const profile = currentAdminData.customers.find((customer) => customer.id === customerId);
+  if (profile) profile.status = status;
+}
+
+async function updateAdminCustomerStatus(customerId, status, trigger = null) {
+  if (!customerId) return;
+  const normalizedStatus = customerOperationalStatusOptions.some((option) => option.value === status)
+    ? status
+    : "active";
+  if (!isOwner()) {
+    showToast("Solo el owner puede cambiar el estado del cliente.");
+    return;
+  }
+  if (trigger) trigger.disabled = true;
+  try {
+    if (!supabase || !isRemoteOwner()) {
+      updateLocalCustomerStatus(customerId, normalizedStatus);
+      showToast("Estado del cliente actualizado.");
+      renderAdminCustomers();
+      renderAdminCustomerDetail();
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("customer_profiles")
+      .update({ status: normalizedStatus })
+      .eq("id", customerId)
+      .eq("business_id", businessId)
+      .select("id, status")
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) throw new Error("No se encontro el cliente para actualizar.");
+    updateLocalCustomerStatus(customerId, data.status || normalizedStatus);
+    currentAdminData.loaded = false;
+    currentAdminData.remoteLoaded = false;
+    showToast("Estado del cliente actualizado.");
+    renderAdminCustomers();
+    renderAdminCustomerDetail();
+  } catch (error) {
+    showToast(displayError(error));
+  } finally {
+    if (trigger) trigger.disabled = false;
+  }
+}
+
+function updateLocalCustomerPoints(customerId, delta, reason = "", payload = {}) {
+  const account = currentAdminData.accounts.find((item) => item.customer_id === customerId);
+  if (!account) return null;
+  const nextBalance = Math.max(0, Number(account.points_balance || 0) + Number(delta || 0));
+  account.points_balance = nextBalance;
+  account.tier = tierValueForPoints(nextBalance);
+  account.updated_at = new Date().toISOString();
+
+  const event = payload.event || {
+    id: fallbackId(),
+    customer_id: customerId,
+    business_id: businessId,
+    event_type: "adjustment",
+    points_delta: Number(delta || 0),
+    description: reason ? `Ajuste manual: ${reason}` : "Ajuste manual de puntos",
+    recorded_by_auth_user_id: currentSession?.user?.id || null,
+    request_id: payload.requestId || fallbackRequestId("manual-adjustment"),
+    created_at: new Date().toISOString()
+  };
+  currentAdminData.events = [event, ...currentAdminData.events.filter((item) => item.id !== event.id)];
+
+  if (currentCustomer?.account?.id === account.id) {
+    currentCustomer.account = { ...currentCustomer.account, ...account };
+    pointsBalance = account.points_balance || 0;
+  }
+
+  return { account, event };
+}
+
+function recalculateLocalAccountTiers() {
+  currentAdminData.accounts.forEach((account) => {
+    account.tier = tierValueForPoints(account.points_balance || 0);
+  });
+  if (currentCustomer?.account) {
+    currentCustomer.account = {
+      ...currentCustomer.account,
+      tier: tierValueForPoints(currentCustomer.account.points_balance || 0)
+    };
+  }
+}
+
+async function adjustAdminCustomerPoints(customerId, trigger = null) {
+  if (!customerId || !adminCustomerDetailPanel) return;
+  if (!isOwner()) {
+    showToast("Solo el owner puede ajustar puntos.");
+    return;
+  }
+  const deltaInput = [...adminCustomerDetailPanel.querySelectorAll("[data-customer-points-delta]")]
+    .find((element) => element.dataset.customerPointsDelta === customerId);
+  const reasonInput = [...adminCustomerDetailPanel.querySelectorAll("[data-customer-points-reason]")]
+    .find((element) => element.dataset.customerPointsReason === customerId);
+  const delta = Number(deltaInput?.value || 0);
+  const reason = String(reasonInput?.value || "").trim();
+  if (!Number.isInteger(delta) || delta === 0) {
+    showToast("Ingresa un ajuste entero distinto de cero.");
+    deltaInput?.focus();
+    return;
+  }
+
+  const account = currentAdminData.accounts.find((item) => item.customer_id === customerId);
+  if (!account) {
+    showToast("No se encontro la cuenta de puntos.");
+    return;
+  }
+  if (Number(account.points_balance || 0) + delta < 0) {
+    showToast("El ajuste no puede dejar saldo negativo.");
+    deltaInput?.focus();
+    return;
+  }
+
+  if (trigger) trigger.disabled = true;
+  try {
+    const requestId = `manual-adjust:${businessId}:${customerId}:${fallbackRequestId("points")}`;
+    if (!supabase || !isRemoteOwner()) {
+      updateLocalCustomerPoints(customerId, delta, reason, { requestId });
+      showToast("Puntos ajustados.");
+      if (deltaInput) deltaInput.value = "";
+      if (reasonInput) reasonInput.value = "";
+      renderAdminPanel();
+      renderAdminCustomerDetail();
+      renderLoyalty();
+      return;
+    }
+
+    const { data, error } = await supabase.rpc("adjust_customer_points", {
+      target_business_id: businessId,
+      target_customer_id: customerId,
+      adjustment_points: delta,
+      adjustment_reason: reason,
+      request_id: requestId
+    });
+    if (error) throw error;
+
+    const updatedAccount = data?.account || null;
+    const event = data?.event || null;
+    if (updatedAccount?.id) {
+      const localAccount = currentAdminData.accounts.find((item) => item.id === updatedAccount.id);
+      if (localAccount) Object.assign(localAccount, updatedAccount);
+      if (currentCustomer?.account?.id === updatedAccount.id) {
+        currentCustomer.account = { ...currentCustomer.account, ...updatedAccount };
+        pointsBalance = updatedAccount.points_balance || 0;
+      }
+    }
+    if (event?.id) {
+      currentAdminData.events = [event, ...currentAdminData.events.filter((item) => item.id !== event.id)];
+    }
+    currentAdminData.loaded = false;
+    currentAdminData.remoteLoaded = false;
+    await ensureAdminData();
+    if (deltaInput) deltaInput.value = "";
+    if (reasonInput) reasonInput.value = "";
+    showToast(data?.idempotent ? "Ajuste ya registrado." : "Puntos ajustados.");
+    renderAdminPanel();
+    renderAdminCustomerDetail();
+    renderLoyalty();
+  } catch (error) {
+    showToast(displayError(error));
+  } finally {
+    if (trigger) trigger.disabled = false;
+  }
+}
+
+function purchaseEvents() {
+  return currentAdminData.events.filter((event) => event.event_type === "purchase");
+}
+
+function consumptionStatus(event) {
+  return event.purchase_status || "confirmed";
+}
+
+function consumptionMethod(event) {
+  return event.consumption_entry_method || (event.qr_id ? "qr" : "manual");
+}
+
+function consumptionMethodLabel(method) {
+  const labelsMap = {
+    qr: "QR",
+    manual: "Manual",
+    api: "API",
+    adjustment: "Ajuste"
+  };
+  return labelsMap[method] || "Manual";
+}
+
+function consumptionStatusLabel(status) {
+  const labelsMap = {
+    confirmed: "Confirmado",
+    cancelled: "Cancelado",
+    corrected: "Corregido"
+  };
+  return labelsMap[status] || "Confirmado";
+}
+
+function employeeLabel(authUserId) {
+  if (!authUserId) return "Sin empleado";
+  const owner = currentAdminData.customers.find((profile) => profile.auth_user_id === authUserId);
+  if (owner?.name) return owner.name;
+  return `Empleado ${String(authUserId).slice(0, 8)}`;
+}
+
+function consumptionDateKey(event) {
+  if (!event.created_at) return "";
+  return new Date(event.created_at).toISOString().slice(0, 10);
+}
+
+function purchaseCategory(event) {
+  return String(event.purchase_category || "").trim();
+}
+
+function purchaseNote(event) {
+  return String(event.purchase_note || "").trim();
+}
+
+function purchaseCategoryLabel(event) {
+  const category = purchaseCategory(event);
+  if (category) return category;
+  const firstKnownCategory = parsePurchaseItems(event)
+    .map((item) => dishById(item.dishId)?.category)
+    .find(Boolean);
+  return firstKnownCategory || "Sin categoria";
+}
+
+function filteredConsumptionEvents() {
+  const dateFrom = adminConsumptionDateFromFilter?.value || "";
+  const dateTo = adminConsumptionDateToFilter?.value || "";
+  const clientQuery = (adminConsumptionClientFilter?.value || "").trim().toLowerCase();
+  const productQuery = (adminConsumptionProductFilter?.value || "").trim().toLowerCase();
+  const noteQuery = (adminConsumptionNoteFilter?.value || "").trim().toLowerCase();
+  const minAmount = Number(adminConsumptionMinFilter?.value || 0);
+  const maxAmountRaw = adminConsumptionMaxFilter?.value || "";
+  const maxAmount = maxAmountRaw === "" ? Infinity : Number(maxAmountRaw);
+  const category = adminConsumptionCategoryFilter?.value || "all";
+  const employee = adminConsumptionEmployeeFilter?.value || "all";
+  const method = adminConsumptionMethodFilter?.value || "all";
+  const status = adminConsumptionStatusFilter?.value || "all";
+
+  return purchaseEvents()
+    .filter((event) => {
+      const key = consumptionDateKey(event);
+      return (!dateFrom || key >= dateFrom) && (!dateTo || key <= dateTo);
+    })
+    .filter((event) => {
+      const amount = Number(event.purchase_total || 0);
+      return amount >= minAmount && amount <= maxAmount;
+    })
+    .filter((event) => category === "all" || purchaseCategoryLabel(event) === category)
+    .filter((event) => method === "all" || consumptionMethod(event) === method)
+    .filter((event) => status === "all" || consumptionStatus(event) === status)
+    .filter((event) => employee === "all" || String(event.recorded_by_auth_user_id || "") === employee)
+    .filter((event) => {
+      if (!clientQuery) return true;
+      const profile = customerProfile(event.customer_id);
+      const haystack = `${profile?.name || ""} ${profile?.email || ""}`.toLowerCase();
+      return haystack.includes(clientQuery);
+    })
+    .filter((event) => {
+      if (!productQuery) return true;
+      return purchaseItemsLabel(event).toLowerCase().includes(productQuery);
+    })
+    .filter((event) => {
+      if (!noteQuery) return true;
+      return `${purchaseNote(event)} ${event.request_id || ""} ${event.qr_id || ""}`.toLowerCase().includes(noteQuery);
+    })
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+function syncSelectOptions(select, values, labelForValue, fallbackLabel = "Todos") {
+  if (!select) return;
+  const current = select.value || "all";
+  select.innerHTML = [
+    `<option value="all">${escapeHtml(fallbackLabel)}</option>`,
+    ...values.map((value) => `<option value="${escapeAttribute(value)}">${escapeHtml(labelForValue(value))}</option>`)
+  ].join("");
+  select.value = values.includes(current) ? current : "all";
+}
+
+function syncConsumptionFilterOptions() {
+  const employees = [...new Set(purchaseEvents().map((event) => event.recorded_by_auth_user_id).filter(Boolean))];
+  const categories = [...new Set(purchaseEvents().map(purchaseCategoryLabel).filter((category) => category && category !== "Sin categoria"))]
+    .sort((a, b) => a.localeCompare(b));
+  syncSelectOptions(adminConsumptionEmployeeFilter, employees, employeeLabel);
+  syncSelectOptions(adminConsumptionCategoryFilter, categories, (category) => category, "Todas");
+}
+
+function topProductFromConsumptions(events) {
+  const map = new Map();
+  events.forEach((event) => {
+    parsePurchaseItems(event).forEach((item) => {
+      addRankValue(map, item.dishId || item.name, item.name || "Producto", Number(item.quantity || 1));
+    });
+  });
+  return sortedRank(map)[0] || null;
+}
+
+function consumptionCorrectionsForEvent(eventId) {
+  return (currentAdminData.consumptionCorrections || [])
+    .filter((correction) => correction.original_event_id === eventId)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+function adminConsumptionCategoryOptions(selected = "") {
+  const categories = [...new Set([
+    ...menuItems.map((dish) => dish.category).filter(Boolean),
+    ...purchaseEvents().map(purchaseCategoryLabel).filter((category) => category && category !== "Sin categoria")
+  ])].sort((a, b) => a.localeCompare(b));
+  return [
+    `<option value="">Sin categoria</option>`,
+    ...categories.map((category) => `<option value="${escapeAttribute(category)}" ${category === selected ? "selected" : ""}>${escapeHtml(category)}</option>`)
+  ].join("");
+}
+
+function consumptionCorrectionHistoryMarkup(eventId) {
+  const corrections = consumptionCorrectionsForEvent(eventId);
+  if (!corrections.length) {
+    return `<div class="admin-empty compact">Todavia no hay correcciones registradas.</div>`;
+  }
+  return `
+    <div class="customer-detail-list">
+      ${corrections.map((correction) => `
+        <article>
+          <span>
+            <strong>${escapeHtml(formatCurrency(correction.previous_purchase_total))} -> ${escapeHtml(formatCurrency(correction.next_purchase_total))}</strong>
+            <small>${escapeHtml(formatFullDateTime(correction.created_at))} · ${escapeHtml(employeeLabel(correction.corrected_by_auth_user_id))}</small>
+          </span>
+          <b>${Number(correction.points_delta_adjustment || 0) >= 0 ? "+" : ""}${escapeHtml(correction.points_delta_adjustment || 0)} pts</b>
+          <small>${escapeHtml(correction.correction_note || "Sin nota de correccion")}</small>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function consumptionCorrectionFormMarkup(event) {
+  const status = consumptionStatus(event);
+  if (status === "cancelled") {
+    return `<div class="admin-empty compact">Los consumos cancelados no se pueden corregir.</div>`;
+  }
+  const category = purchaseCategory(event);
+  return `
+    <div class="consumption-correction-form" data-consumption-correction-form="${escapeAttribute(event.id)}">
+      <label>
+        <span>Monto corregido</span>
+        <input type="number" min="1" step="1" inputmode="decimal" value="${escapeAttribute(event.purchase_total || "")}" data-consumption-correction-total="${escapeAttribute(event.id)}" />
+      </label>
+      <label>
+        <span>Categoria</span>
+        <select data-consumption-correction-category="${escapeAttribute(event.id)}">
+          ${adminConsumptionCategoryOptions(category)}
+        </select>
+      </label>
+      <label>
+        <span>Nota interna</span>
+        <input type="text" maxlength="180" value="${escapeAttribute(purchaseNote(event))}" data-consumption-correction-note="${escapeAttribute(event.id)}" placeholder="Mesa, aclaracion o motivo operativo" />
+      </label>
+      <label>
+        <span>Motivo de correccion</span>
+        <input type="text" maxlength="180" data-consumption-correction-reason="${escapeAttribute(event.id)}" placeholder="Ej: monto mal cargado" />
+      </label>
+      <button class="primary" type="button" data-consumption-action="correct" data-consumption-id="${escapeAttribute(event.id)}">Guardar correccion</button>
+    </div>
+  `;
+}
+
+function renderAdminConsumptionSummary(events = filteredConsumptionEvents()) {
+  if (!adminConsumptionSummary) return;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayEvents = events.filter((event) => consumptionDateKey(event) === todayKey);
+  const totalFiltered = events.reduce((sum, event) => sum + Number(event.purchase_total || 0), 0);
+  const totalToday = todayEvents.reduce((sum, event) => sum + Number(event.purchase_total || 0), 0);
+  const totalPoints = events.reduce((sum, event) => sum + Number(event.points_delta || 0), 0);
+  const averageTicket = events.length ? totalFiltered / events.length : 0;
+  const topProduct = topProductFromConsumptions(events);
+
+  adminConsumptionSummary.innerHTML = [
+    ["Total filtrado", formatCurrency(totalFiltered), `${formatNumber(events.length)} consumos en vista`],
+    ["Hoy", formatCurrency(totalToday), `${formatNumber(todayEvents.length)} consumos hoy`],
+    ["Ticket promedio", formatCurrency(averageTicket), "segun filtros activos"],
+    ["Puntos entregados", `${formatNumber(totalPoints)} pts`, "segun filtros activos"],
+    ["Producto mas cargado", topProduct ? topProduct.label : "Sin productos", topProduct ? `${formatNumber(topProduct.value)} unidades` : "solo monto"]
+  ].map(([label, value, note]) => `
+    <article class="consumption-summary-card">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(note)}</small>
+    </article>
+  `).join("");
+}
+
+function consumptionRowMarkup(event) {
+  const profile = customerProfile(event.customer_id);
+  const activeClass = activeAdminConsumptionId === event.id ? "is-active" : "";
+  const status = consumptionStatus(event);
+  return `
+    <article class="admin-consumption-row ${activeClass}" data-consumption-id="${escapeAttribute(event.id)}">
+      <span>
+        <strong>${escapeHtml(profile?.name || "Cliente")}</strong>
+        <small>${escapeHtml(profile?.email || "Sin email")}</small>
+      </span>
+      <b>${escapeHtml(formatCurrency(event.purchase_total))}</b>
+      <span class="cell-muted">${escapeHtml(purchaseItemsLabel(event))}</span>
+      <b>+${escapeHtml(event.points_delta || 0)} pts</b>
+      <span class="cell-muted">${escapeHtml(employeeLabel(event.recorded_by_auth_user_id))}</span>
+      <span class="pill">${escapeHtml(consumptionMethodLabel(consumptionMethod(event)))}</span>
+      <span>
+        <strong>${escapeHtml(formatEventDate(event.created_at))}</strong>
+        <small class="${status === "cancelled" ? "text-danger" : ""}">${escapeHtml(consumptionStatusLabel(status))}</small>
+      </span>
+      <span class="row-actions">
+        <button class="mini-action" type="button" data-consumption-action="detail" data-consumption-id="${escapeAttribute(event.id)}">Ver</button>
+      </span>
+    </article>
+  `;
+}
+
+function renderAdminConsumptions() {
+  if (!adminConsumptionRows) return;
+  if (currentAdminData.error) {
+    adminConsumptionRows.innerHTML = `<div class="admin-empty">No se pudieron cargar consumos: ${escapeHtml(displayError(currentAdminData.error))}</div>`;
+    return;
+  }
+  if (supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded) {
+    adminConsumptionRows.innerHTML = `<div class="admin-empty">Cargando consumos del negocio...</div>`;
+    return;
+  }
+
+  syncConsumptionFilterOptions();
+  const rows = filteredConsumptionEvents();
+  renderAdminConsumptionSummary(rows);
+  adminConsumptionRows.innerHTML = rows.length
+    ? rows.map(consumptionRowMarkup).join("")
+    : `<div class="admin-empty">No hay consumos que coincidan con estos filtros.</div>`;
+  if (activeAdminConsumptionId) renderAdminConsumptionDetail();
+}
+
+function renderAdminConsumptionDetail() {
+  if (!adminConsumptionDetailPanel || !adminConsumptionDetailContent) return;
+  const event = activeAdminConsumptionId
+    ? purchaseEvents().find((item) => item.id === activeAdminConsumptionId)
+    : null;
+  if (!event) {
+    adminConsumptionDetailPanel.hidden = true;
+    adminConsumptionDetailContent.innerHTML = "";
+    return;
+  }
+  const profile = customerProfile(event.customer_id);
+  const items = parsePurchaseItems(event);
+  const status = consumptionStatus(event);
+  const category = purchaseCategoryLabel(event);
+  const note = purchaseNote(event);
+  adminConsumptionDetailPanel.hidden = false;
+  adminConsumptionDetailContent.innerHTML = `
+    <div class="customer-detail-hero">
+      <span class="status-dot ${status === "cancelled" ? "tone-danger" : "tone-good"}">${escapeHtml(consumptionStatusLabel(status))}</span>
+      <h2>${escapeHtml(formatCurrency(event.purchase_total))}</h2>
+      <p>${escapeHtml(profile?.name || "Cliente")} · ${escapeHtml(formatFullDateTime(event.created_at))}</p>
+    </div>
+    <div class="customer-detail-metrics">
+      <div><span>Puntos</span><strong>+${escapeHtml(event.points_delta || 0)}</strong></div>
+      <div><span>Metodo</span><strong>${escapeHtml(consumptionMethodLabel(consumptionMethod(event)))}</strong></div>
+      <div><span>Empleado</span><strong>${escapeHtml(employeeLabel(event.recorded_by_auth_user_id))}</strong></div>
+      <div><span>Estado</span><strong>${escapeHtml(consumptionStatusLabel(status))}</strong></div>
+      <div><span>Categoria</span><strong>${escapeHtml(category)}</strong></div>
+    </div>
+    <div class="customer-detail-block">
+      <h3>Productos</h3>
+      ${items.length ? `
+        <div class="customer-detail-list">
+          ${items.map((item) => `
+            <article>
+              <span>
+                <strong>${escapeHtml(item.name || "Producto")}</strong>
+                <small>${escapeHtml(item.presentationName || "Presentacion")}</small>
+              </span>
+              <b>x${escapeHtml(item.quantity || 1)}</b>
+            </article>
+          `).join("")}
+        </div>
+      ` : `<div class="admin-empty compact">Este consumo se cargo solo por monto.</div>`}
+    </div>
+    <div class="customer-detail-block">
+      <h3>Trazabilidad</h3>
+      <dl class="activity-detail-list">
+        ${detailRows([
+          { label: "ID interno", value: event.id },
+          { label: "Request ID", value: event.request_id || "Sin dato" },
+          { label: "QR usado", value: event.qr_id || "Sin dato" },
+          { label: "Fecha exacta", value: formatFullDateTime(event.created_at) || "Sin dato" },
+          { label: "Cliente", value: profile?.email || profile?.name || "Sin dato" },
+          { label: "Nota interna", value: note || "Sin observacion" }
+        ])}
+      </dl>
+    </div>
+    <div class="customer-detail-block">
+      <h3>Historial de correcciones</h3>
+      ${consumptionCorrectionHistoryMarkup(event.id)}
+    </div>
+    <div class="customer-detail-block">
+      <h3>Corregir consumo</h3>
+      ${consumptionCorrectionFormMarkup(event)}
+    </div>
+    <div class="customer-detail-actions">
+      <button class="primary" type="button" data-customer-action="consume" data-customer-id="${escapeAttribute(event.customer_id)}">Cargar otro consumo</button>
+      <button class="outline" type="button" data-activity-action="view-customer" data-customer-id="${escapeAttribute(event.customer_id)}">Ver cliente</button>
+      ${status === "confirmed" ? `<button class="outline danger" type="button" data-consumption-action="cancel" data-consumption-id="${escapeAttribute(event.id)}">Cancelar consumo</button>` : ""}
+    </div>
+  `;
+}
+
+async function cancelConsumption(consumptionId) {
+  const event = purchaseEvents().find((item) => item.id === consumptionId);
+  if (!event) return;
+  if (!window.confirm("Cancelar este consumo y descontar los puntos generados?")) return;
+  if (!supabase || !isOwner()) {
+    showToast("Solo owner puede cancelar consumos.");
+    return;
+  }
+  const { data, error } = await supabase.rpc("cancel_customer_consumption", {
+    target_business_id: businessId,
+    target_event_id: consumptionId
+  });
+  if (error) {
+    showToast(displayError(error));
+    return;
+  }
+  const updatedEvent = data?.event;
+  if (updatedEvent) Object.assign(event, updatedEvent);
+  currentAdminData.loaded = false;
+  currentAdminData.remoteLoaded = false;
+  await ensureAdminData();
+  renderAdminPanel();
+  activeAdminConsumptionId = consumptionId;
+  renderAdminConsumptionDetail();
+  showToast("Consumo cancelado y puntos descontados.");
+}
+
+async function correctConsumption(consumptionId, trigger = null) {
+  const event = purchaseEvents().find((item) => item.id === consumptionId);
+  if (!event) return;
+  if (!supabase || !isOwner()) {
+    showToast("Solo owner puede corregir consumos.");
+    return;
+  }
+  const correctionField = (attribute) => [...(adminConsumptionDetailPanel?.querySelectorAll(`[${attribute}]`) || [])]
+    .find((element) => element.getAttribute(attribute) === consumptionId);
+  const totalInput = correctionField("data-consumption-correction-total");
+  const categoryInput = correctionField("data-consumption-correction-category");
+  const noteInput = correctionField("data-consumption-correction-note");
+  const reasonInput = correctionField("data-consumption-correction-reason");
+  const nextTotal = Number(totalInput?.value || 0);
+  const reason = String(reasonInput?.value || "").trim();
+  if (nextTotal <= 0) {
+    showToast("Carga un monto corregido mayor a cero.");
+    totalInput?.focus();
+    return;
+  }
+  if (!reason) {
+    showToast("Agrega un motivo de correccion.");
+    reasonInput?.focus();
+    return;
+  }
+  if (trigger) trigger.disabled = true;
+  try {
+    const { data, error } = await supabase.rpc("correct_customer_consumption", {
+      target_business_id: businessId,
+      target_event_id: consumptionId,
+      next_purchase_total: nextTotal,
+      next_purchase_items: parsePurchaseItems(event),
+      next_purchase_category: categoryInput?.value || null,
+      next_purchase_note: noteInput?.value?.trim() || null,
+      correction_note: reason
+    });
+    if (error) throw error;
+
+    const updatedEvent = data?.event || null;
+    const updatedAccount = data?.account || null;
+    const adjustmentEvent = data?.adjustmentEvent || null;
+    const correction = data?.correction || null;
+    if (updatedEvent?.id) {
+      const localEvent = currentAdminData.events.find((item) => item.id === updatedEvent.id);
+      if (localEvent) Object.assign(localEvent, updatedEvent);
+    }
+    if (adjustmentEvent?.id) {
+      currentAdminData.events = [adjustmentEvent, ...currentAdminData.events.filter((item) => item.id !== adjustmentEvent.id)];
+    }
+    if (updatedAccount?.id) {
+      const localAccount = currentAdminData.accounts.find((item) => item.id === updatedAccount.id);
+      if (localAccount) Object.assign(localAccount, updatedAccount);
+      if (currentCustomer?.account?.id === updatedAccount.id) {
+        currentCustomer.account = { ...currentCustomer.account, ...updatedAccount };
+        pointsBalance = updatedAccount.points_balance || 0;
+      }
+    }
+    if (correction?.id) {
+      currentAdminData.consumptionCorrections = [
+        correction,
+        ...(currentAdminData.consumptionCorrections || []).filter((item) => item.id !== correction.id)
+      ];
+    }
+    currentAdminData.loaded = false;
+    currentAdminData.remoteLoaded = false;
+    await ensureAdminData();
+    activeAdminConsumptionId = consumptionId;
+    renderAdminPanel();
+    renderAdminConsumptionDetail();
+    renderLoyalty();
+    showToast("Consumo corregido y saldo actualizado.");
+  } catch (error) {
+    showToast(displayError(error));
+  } finally {
+    if (trigger) trigger.disabled = false;
+  }
+}
+
+function openAdminConsumptionDetail(consumptionId) {
+  activeAdminConsumptionId = consumptionId || "";
+  renderAdminConsumptions();
+  renderAdminConsumptionDetail();
+}
+
+function closeAdminConsumptionDetail() {
+  activeAdminConsumptionId = "";
+  renderAdminConsumptions();
+  renderAdminConsumptionDetail();
+}
+
+function resetAdminConsumptionFilters() {
+  [
+    adminConsumptionDateFromFilter,
+    adminConsumptionDateToFilter,
+    adminConsumptionClientFilter,
+    adminConsumptionMinFilter,
+    adminConsumptionMaxFilter,
+    adminConsumptionProductFilter,
+    adminConsumptionNoteFilter
+  ].forEach((filter) => {
+    if (filter) filter.value = "";
+  });
+  [
+    adminConsumptionCategoryFilter,
+    adminConsumptionEmployeeFilter,
+    adminConsumptionMethodFilter,
+    adminConsumptionStatusFilter
+  ].forEach((filter) => {
+    if (filter) filter.value = "all";
+  });
+  renderAdminConsumptions();
+}
+
+function parsePurchaseItems(event) {
+  if (Array.isArray(event.purchase_items)) return event.purchase_items;
+  if (typeof event.purchase_items === "string") {
+    try {
+      const parsed = JSON.parse(event.purchase_items);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function dishById(dishId) {
+  return menuItems.find((dish) => dish.id === dishId);
+}
+
+function addRankValue(map, key, label, amount = 1, extra = {}) {
+  if (!key) return;
+  const current = map.get(key) || { key, label, value: 0, ...extra };
+  current.value += amount;
+  map.set(key, { ...current, ...extra, label: current.label || label });
+}
+
+function sortedRank(map, direction = "desc") {
+  return [...map.values()].sort((a, b) => direction === "asc" ? a.value - b.value : b.value - a.value);
+}
+
+function operationalCustomerStatus(profile = {}) {
+  const status = String(profile.status || "active").toLowerCase();
+  if (status === "blocked") return { label: "Bloqueado", tone: "bad", operational: "blocked" };
+  if (status === "deleted") return { label: "Eliminado", tone: "bad", operational: "deleted" };
+  if (status === "incomplete") return { label: "Sin completar", tone: "neutral", operational: "incomplete" };
+  return null;
+}
+
+const customerOperationalStatusOptions = [
+  { value: "active", label: "Activo" },
+  { value: "incomplete", label: "Sin completar" },
+  { value: "blocked", label: "Bloqueado" },
+  { value: "deleted", label: "Eliminado" }
+];
+
+function customerOperationalStatusValue(profile = {}) {
+  const value = String(profile.status || "active").toLowerCase();
+  return customerOperationalStatusOptions.some((option) => option.value === value) ? value : "active";
+}
+
+function customerStatus(lastVisit, profile = {}) {
+  const operationalStatus = operationalCustomerStatus(profile);
+  if (operationalStatus) return operationalStatus;
+  if (!lastVisit) return { label: "Sin visitas", tone: "neutral" };
+  const days = (Date.now() - new Date(lastVisit).getTime()) / 86400000;
+  if (days <= 30) return { label: "Activo", tone: "good" };
+  if (days <= 60) return { label: "En riesgo", tone: "warn" };
+  return { label: "Inactivo", tone: "bad" };
+}
+
+function buildCustomerAnalytics(purchases) {
+  const purchasesByCustomer = new Map();
+  purchases.forEach((event) => {
+    if (!event.customer_id) return;
+    if (consumptionStatus(event) === "cancelled") return;
+    const list = purchasesByCustomer.get(event.customer_id) || [];
+    list.push(event);
+    purchasesByCustomer.set(event.customer_id, list);
+  });
+
+  return currentAdminData.customers.map((profile) => {
+    const account = accountForCustomer(profile.id);
+    const customerPurchases = purchasesByCustomer.get(profile.id) || [];
+    const totalSpent = customerPurchases.reduce((sum, event) => sum + Number(event.purchase_total || 0), 0);
+    const lastVisit = customerPurchases
+      .map((event) => event.created_at)
+      .filter(Boolean)
+      .sort((a, b) => new Date(b) - new Date(a))[0] || "";
+    const itemMap = new Map();
+    customerPurchases.forEach((event) => {
+      parsePurchaseItems(event).forEach((item) => {
+        addRankValue(itemMap, item.dishId || item.name, item.name || "Producto", Number(item.quantity || 1));
+      });
+    });
+    const favorite = sortedRank(itemMap)[0];
+    return {
+      profile,
+      account,
+      visits: customerPurchases.length,
+      totalSpent,
+      averageTicket: customerPurchases.length ? totalSpent / customerPurchases.length : 0,
+      lastVisit,
+      streak: weeklyStreakForEvents(customerPurchases),
+      favoriteProduct: favorite?.label || "",
+      status: customerStatus(lastVisit, profile)
+    };
+  });
+}
+
+function contentCreatedAt(asset) {
+  return asset.createdAt || asset.created_at || asset.created || asset.updatedAt || "";
+}
+
+function contentDishId(asset) {
+  return asset.dishId || asset.dish_id || asset.menuItemId || "";
+}
+
+function buildContentImpact(purchases) {
+  return dedupeLibraryItems(generatedContentLibrary)
+    .map((asset) => {
+      const createdAt = contentCreatedAt(asset);
+      const dishId = contentDishId(asset);
+      if (!createdAt || !dishId) return null;
+      const createdTime = new Date(createdAt).getTime();
+      if (!Number.isFinite(createdTime)) return null;
+      const beforeStart = createdTime - 7 * 86400000;
+      const afterEnd = createdTime + 7 * 86400000;
+      let before = 0;
+      let after = 0;
+      purchases.forEach((event) => {
+        const eventTime = new Date(event.created_at).getTime();
+        if (!Number.isFinite(eventTime)) return;
+        const quantity = parsePurchaseItems(event)
+          .filter((item) => item.dishId === dishId)
+          .reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+        if (!quantity) return;
+        if (eventTime >= beforeStart && eventTime < createdTime) before += quantity;
+        if (eventTime >= createdTime && eventTime <= afterEnd) after += quantity;
+      });
+      const delta = before ? Math.round(((after - before) / before) * 100) : after > 0 ? 100 : 0;
+      return {
+        id: asset.id,
+        dishId,
+        label: asset.dishName || dishById(dishId)?.name || "Pieza de contenido",
+        format: contentTypes.find((type) => type.id === asset.type)?.platform || asset.format || "Post",
+        before,
+        after,
+        delta,
+        createdAt
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+}
+
+function buildAnalyticsModel() {
+  const purchases = purchaseEvents();
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const thirtyDaysAgo = now.getTime() - 30 * 86400000;
+  const revenue = purchases.reduce((sum, event) => sum + Number(event.purchase_total || 0), 0);
+  const pointsIssued = currentAdminData.events
+    .filter((event) => Number(event.points_delta || 0) > 0)
+    .reduce((sum, event) => sum + Number(event.points_delta || 0), 0);
+  const customerStats = buildCustomerAnalytics(purchases);
+  const activeCustomers = customerStats.filter((customer) => customer.lastVisit && new Date(customer.lastVisit).getTime() >= thirtyDaysAgo);
+  const riskCustomers = customerStats.filter((customer) => customer.status.tone === "warn");
+  const inactiveCustomers = customerStats.filter((customer) => customer.status.tone === "bad");
+  const newCustomersThisMonth = currentAdminData.customers.filter((customer) => new Date(customer.created_at) >= monthStart);
+  const pendingRedemptions = currentAdminData.redemptions.filter((redemption) => redemption.status === "requested");
+
+  const productMap = new Map();
+  const categoryMap = new Map();
+  purchases.forEach((event) => {
+    parsePurchaseItems(event).forEach((item) => {
+      const quantity = Math.max(1, Number(item.quantity || 1));
+      const dish = dishById(item.dishId);
+      const productKey = item.dishId || item.name;
+      addRankValue(productMap, productKey, item.name || dish?.name || "Producto", quantity, {
+        dishId: item.dishId || "",
+        category: dish?.category || "Sin categoria"
+      });
+      addRankValue(categoryMap, dish?.category || "Sin categoria", dish?.category || "Sin categoria", quantity);
+    });
+  });
+
+  const consumedProducts = sortedRank(productMap);
+  const consumedById = new Map(consumedProducts.map((item) => [item.dishId || item.key, item.value]));
+  const lowConsumptionProducts = menuItems
+    .filter(isDishVisible)
+    .map((dish) => ({
+      key: dish.id,
+      dishId: dish.id,
+      label: dish.name,
+      value: consumedById.get(dish.id) || 0,
+      category: dish.category
+    }))
+    .sort((a, b) => a.value - b.value || a.label.localeCompare(b.label));
+
+  const rewardMap = new Map();
+  currentAdminData.redemptions.forEach((redemption) => {
+    addRankValue(rewardMap, redemption.reward_id || redemption.reward_name, redemption.reward_name || "Premio", 1, {
+      status: redemption.status
+    });
+  });
+
+  const menuEvents = currentAdminData.menuEvents || [];
+  const menuViews = menuEvents.filter((event) => event.event_type === "menu_view");
+  const detailViews = menuEvents.filter((event) => event.event_type === "dish_detail_view");
+  const signupStarts = menuEvents.filter((event) => event.event_type === "signup_start");
+  const signupCompletes = menuEvents.filter((event) => event.event_type === "signup_complete");
+  const detailViewMap = new Map();
+  detailViews.forEach((event) => {
+    const dish = dishById(event.dish_id);
+    addRankValue(detailViewMap, event.dish_id, dish?.name || event.dish_id || "Producto", 1, {
+      dishId: event.dish_id
+    });
+  });
+  const detailViewRank = sortedRank(detailViewMap);
+  const productConversions = detailViewRank.map((item) => {
+    const purchasesForDish = consumedById.get(item.dishId) || 0;
+    return {
+      ...item,
+      purchases: purchasesForDish,
+      conversion: item.value ? purchasesForDish / item.value : 0
+    };
+  });
+  const opportunity = productConversions
+    .filter((item) => item.value >= 2)
+    .sort((a, b) => a.conversion - b.conversion || b.value - a.value)[0]
+    || lowConsumptionProducts.find((item) => item.value === 0)
+    || null;
+
+  return {
+    purchases,
+    revenue,
+    averageTicket: purchases.length ? revenue / purchases.length : 0,
+    pointsIssued,
+    customerStats,
+    activeCustomers,
+    riskCustomers,
+    inactiveCustomers,
+    newCustomersThisMonth,
+    pendingRedemptions,
+    consumedProducts,
+    lowConsumptionProducts,
+    categories: sortedRank(categoryMap),
+    topCustomers: [...customerStats].sort((a, b) => b.totalSpent - a.totalSpent || b.visits - a.visits),
+    rewards: sortedRank(rewardMap),
+    contentImpact: buildContentImpact(purchases),
+    menu: {
+      events: menuEvents,
+      menuViews,
+      detailViews,
+      signupStarts,
+      signupCompletes,
+      detailViewRank,
+      productConversions,
+      signupConversion: menuViews.length ? signupCompletes.length / menuViews.length : 0
+    },
+    opportunity
+  };
+}
+
+function analyticsEmpty(title, body, action = "") {
+  return `
+    <div class="analytics-empty">
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(body)}</span>
+      ${action}
+    </div>
+  `;
+}
+
+function analyticsActionButton(label, action, extraAttributes = "") {
+  return `<button class="ghost compact" type="button" data-analytics-action="${escapeAttribute(action)}" ${extraAttributes}>${escapeHtml(label)}</button>`;
+}
+
+function renderAnalyticsRank(items, options = {}) {
+  const list = (items || []).slice(0, options.limit || 5);
+  if (!list.length) return analyticsEmpty(options.emptyTitle || "Sin datos todavia", options.emptyBody || "Los datos aparecen cuando el equipo usa el flujo.");
+  const max = Math.max(...list.map((item) => Number(item.value || 0)), 1);
+  return `
+    <div class="analytics-rank-list">
+      ${list.map((item, index) => {
+        const percent = Math.max(4, Math.round((Number(item.value || 0) / max) * 100));
+        const meta = options.meta ? options.meta(item) : "";
+        const action = options.action ? options.action(item) : "";
+        return `
+          <article class="analytics-rank-row">
+            <span class="analytics-rank-number">${index + 1}</span>
+            <span class="analytics-rank-copy">
+              <strong>${escapeHtml(item.label)}</strong>
+              ${meta ? `<small>${meta}</small>` : ""}
+              <i style="--bar:${percent}%"></i>
+            </span>
+            <b>${escapeHtml(options.value ? options.value(item) : item.value)}</b>
+            ${action}
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderAnalyticsTable(rows, options = {}) {
+  const list = (rows || []).slice(0, options.limit || 6);
+  if (!list.length) return analyticsEmpty(options.emptyTitle || "Sin filas para mostrar", options.emptyBody || "Cuando haya actividad real, aparece aca.");
+  const columns = options.columns || [];
+  const template = columns.map((column, index) => column.width || (index === 0 ? "minmax(180px, 1.2fr)" : "minmax(90px, 0.8fr)")).join(" ");
+  return `
+    <div class="analytics-table" role="table" style="--analytics-columns:${escapeAttribute(template)}">
+      <div class="analytics-table-head" role="row">
+        ${columns.map((column) => `<span role="columnheader">${escapeHtml(column.label)}</span>`).join("")}
+      </div>
+      ${list.map((row) => `
+        <div class="analytics-table-row" role="row">
+          ${columns.map((column) => `<span role="cell">${column.render(row)}</span>`).join("")}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function isToday(dateValue) {
+  if (!dateValue) return false;
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
+}
+
+function timeLabel(dateValue) {
+  if (!dateValue) return "";
+  try {
+    return new Intl.DateTimeFormat("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(new Date(dateValue));
+  } catch {
+    return "";
+  }
+}
+
+function customerName(customerId) {
+  return currentAdminData.customers.find((profile) => profile.id === customerId)?.name || "Cliente";
+}
+
+function customerProfile(customerId) {
+  return currentAdminData.customers.find((profile) => profile.id === customerId) || null;
+}
+
+function customerAnalytics(customerId) {
+  const events = eventsForCustomer(customerId).filter((event) => event.event_type === "purchase");
+  const totalSpent = events.reduce((sum, event) => sum + Number(event.purchase_total || 0), 0);
+  const sortedVisits = [...events].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const account = accountForCustomer(customerId);
+  return {
+    account,
+    visits: events.length,
+    totalSpent,
+    averageTicket: events.length ? totalSpent / events.length : 0,
+    lastVisit: sortedVisits[0]?.created_at || "",
+    previousVisit: sortedVisits[1]?.created_at || ""
+  };
+}
+
+function shortUserId(value) {
+  return value ? String(value).slice(0, 8) : "No registrado";
+}
+
+function recentHomeActivity(model) {
+  const purchases = model.purchases.slice(0, 5).map((event) => ({
+    id: `purchase:${event.id}`,
+    kind: "purchase",
+    sourceId: event.id,
+    type: "Consumo",
+    title: `${customerName(event.customer_id)} - ${formatCurrency(event.purchase_total)}`,
+    meta: `${timeLabel(event.created_at)} - +${event.points_delta || 0} pts`,
+    date: event.created_at
+  }));
+  const redemptions = currentAdminData.redemptions.slice(0, 5).map((redemption) => ({
+    id: `redemption:${redemption.id}`,
+    kind: "redemption",
+    sourceId: redemption.id,
+    type: redemption.status === "requested" ? "Canje pendiente" : "Canje",
+    title: `${customerName(redemption.customer_id)} - ${redemption.reward_name}`,
+    meta: `${timeLabel(redemption.created_at)} - ${redemption.status}`,
+    date: redemption.created_at
+  }));
+  const signups = currentAdminData.customers.slice(0, 5).map((profile) => ({
+    id: `signup:${profile.id}`,
+    kind: "signup",
+    sourceId: profile.id,
+    type: "Registro",
+    title: profile.name || profile.email || "Nuevo cliente",
+    meta: `${timeLabel(profile.created_at)} - cliente nuevo`,
+    date: profile.created_at
+  }));
+  return [...purchases, ...redemptions, ...signups]
+    .filter((item) => item.date)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 8);
+}
+
+function detailRows(rows) {
+  return `
+    <dl class="activity-detail-list">
+      ${rows
+        .filter((row) => row.value !== undefined && row.value !== null && row.value !== "")
+        .map((row) => `
+          <div>
+            <dt>${escapeHtml(row.label)}</dt>
+            <dd>${row.html ? row.value : escapeHtml(row.value)}</dd>
+          </div>
+        `)
+        .join("")}
+    </dl>
+  `;
+}
+
+function activityTrace({ id, createdAt, actor, origin }) {
+  return `
+    <section class="activity-detail-section">
+      <h2>Trazabilidad</h2>
+      ${detailRows([
+        { label: "ID interno", value: id || "No disponible" },
+        { label: "Fecha exacta", value: formatFullDateTime(createdAt) || "No disponible" },
+        { label: "Responsable", value: actor || "No registrado" },
+        { label: "Origen", value: origin || "Panel Sumi" }
+      ])}
+    </section>
+  `;
+}
+
+function activityCustomerSummary(customerId) {
+  const profile = customerProfile(customerId);
+  const analytics = customerAnalytics(customerId);
+  return `
+    <section class="activity-detail-section">
+      <h2>Cliente</h2>
+      ${detailRows([
+        { label: "Nombre", value: profile?.name || "Cliente" },
+        { label: "Email", value: profile?.email || "No disponible" },
+        { label: "Puntos actuales", value: `${analytics.account?.points_balance ?? 0} pts` },
+        { label: "Nivel", value: tierLabel(analytics.account?.tier || "bronze") },
+        { label: "Visitas registradas", value: analytics.visits },
+        { label: "Ticket promedio", value: analytics.averageTicket ? formatCurrency(analytics.averageTicket) : "Sin consumos" },
+        { label: "Ultima visita anterior", value: analytics.previousVisit ? formatFullDateTime(analytics.previousVisit) : "No disponible" }
+      ])}
+    </section>
+  `;
+}
+
+function purchaseActivityDetail(event) {
+  const items = parsePurchaseItems(event);
+  const itemText = items.length
+    ? items.map((item) => `${item.quantity || 1}x ${item.name}${item.presentationName ? ` (${item.presentationName})` : ""}`).join(", ")
+    : "No se cargaron productos";
+  return {
+    kicker: "Consumo",
+    title: `${customerName(event.customer_id)} · ${formatCurrency(event.purchase_total)}`,
+    body: `
+      <section class="activity-summary-card">
+        <span>Monto cargado</span>
+        <strong>${escapeHtml(formatCurrency(event.purchase_total))}</strong>
+        <small>${escapeHtml(`+${event.points_delta || 0} pts otorgados`)}</small>
+      </section>
+      <section class="activity-detail-section">
+        <h2>Detalle del consumo</h2>
+        ${detailRows([
+          { label: "Productos", value: itemText },
+          { label: "Metodo de carga", value: event.qr_id ? "QR de cliente" : "Carga de caja" },
+          { label: "Regla aplicada", value: event.earn_rate ? `${Math.round(Number(event.earn_rate) * 100)}% del monto` : "Regla vigente del negocio" },
+          { label: "Request ID", value: event.request_id || "No disponible" }
+        ])}
+      </section>
+      ${activityCustomerSummary(event.customer_id)}
+      ${activityTrace({
+        id: event.id,
+        createdAt: event.created_at,
+        actor: event.recorded_by_auth_user_id ? `Usuario ${shortUserId(event.recorded_by_auth_user_id)}` : "No registrado",
+        origin: event.qr_id ? "Escaneo QR / caja" : "Panel admin"
+      })}
+      <div class="activity-detail-actions">
+        <button class="primary" type="button" data-activity-action="view-customer" data-customer-id="${escapeAttribute(event.customer_id)}">Ver cliente</button>
+        <button class="outline" type="button" data-activity-action="load-consumption">Cargar otro consumo</button>
+      </div>
+    `
+  };
+}
+
+function signupActivityDetail(profile) {
+  const analytics = customerAnalytics(profile.id);
+  return {
+    kicker: "Registro",
+    title: `${profile.name || "Nuevo cliente"} · cliente nuevo`,
+    body: `
+      <section class="activity-summary-card">
+        <span>Nuevo cliente</span>
+        <strong>${escapeHtml(profile.name || "Cliente")}</strong>
+        <small>${escapeHtml(formatFullDateTime(profile.created_at))}</small>
+      </section>
+      <section class="activity-detail-section">
+        <h2>Datos del registro</h2>
+        ${detailRows([
+          { label: "Email", value: profile.email || "No disponible" },
+          { label: "Canal", value: "Menu digital / registro publico" },
+          { label: "Puntos de bienvenida", value: `${analytics.account?.points_balance ?? 0} pts actuales` },
+          { label: "QR visible", value: shortQrAlias(profile, analytics.account) }
+        ])}
+      </section>
+      ${activityCustomerSummary(profile.id)}
+      ${activityTrace({
+        id: profile.id,
+        createdAt: profile.created_at,
+        actor: "Cliente",
+        origin: "Registro publico"
+      })}
+      <div class="activity-detail-actions">
+        <button class="primary" type="button" data-activity-action="view-customer" data-customer-id="${escapeAttribute(profile.id)}">Ver cliente</button>
+        <button class="outline" type="button" data-activity-action="load-consumption">Cargar consumo</button>
+      </div>
+    `
+  };
+}
+
+function redemptionActivityDetail(redemption) {
+  const requested = redemption.status === "requested";
+  const approved = redemption.status === "approved";
+  return {
+    kicker: "Canje",
+    title: `${customerName(redemption.customer_id)} · ${redemption.reward_name}`,
+    body: `
+      <section class="activity-summary-card">
+        <span>Premio</span>
+        <strong>${escapeHtml(redemption.reward_name)}</strong>
+        <small>${escapeHtml(`${redemption.points_cost} pts · ${redemption.status}`)}</small>
+      </section>
+      <section class="activity-detail-section">
+        <h2>Detalle del canje</h2>
+        ${detailRows([
+          { label: "Estado", value: redemption.status },
+          { label: "Costo", value: `${redemption.points_cost} pts` },
+          { label: "Premio ID", value: redemption.reward_id },
+          { label: "Solicitado", value: formatFullDateTime(redemption.created_at) }
+        ])}
+      </section>
+      ${activityCustomerSummary(redemption.customer_id)}
+      ${activityTrace({
+        id: redemption.id,
+        createdAt: redemption.created_at,
+        actor: "Panel del negocio",
+        origin: "Solicitud de premio"
+      })}
+      <div class="activity-detail-actions">
+        ${requested ? `<button class="primary" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}">Aprobar</button>` : ""}
+        ${approved ? `<button class="primary" type="button" data-redemption-action="redeemed" data-redemption-id="${escapeAttribute(redemption.id)}">Marcar entregado</button>` : ""}
+        ${redemption.status !== "cancelled" && redemption.status !== "redeemed" ? `<button class="outline danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}">Rechazar</button>` : ""}
+        <button class="outline" type="button" data-activity-action="view-customer" data-customer-id="${escapeAttribute(redemption.customer_id)}">Ver cliente</button>
+      </div>
+    `
+  };
+}
+
+function activityDetail(activityId) {
+  const item = homeRecentActivityItems.find((activity) => activity.id === activityId);
+  if (!item) return null;
+  if (item.kind === "purchase") {
+    const event = currentAdminData.events.find((entry) => entry.id === item.sourceId);
+    return event ? purchaseActivityDetail(event) : null;
+  }
+  if (item.kind === "redemption") {
+    const redemption = currentAdminData.redemptions.find((entry) => entry.id === item.sourceId);
+    return redemption ? redemptionActivityDetail(redemption) : null;
+  }
+  if (item.kind === "signup") {
+    const profile = currentAdminData.customers.find((entry) => entry.id === item.sourceId);
+    return profile ? signupActivityDetail(profile) : null;
+  }
+  return null;
+}
+
+function openActivityDrawer(activityId) {
+  const detail = activityDetail(activityId);
+  if (!detail || !activityDrawer) return;
+  activeActivityId = activityId;
+  activityDrawerKicker.textContent = detail.kicker;
+  activityDrawerTitle.textContent = detail.title;
+  activityDrawerBody.innerHTML = detail.body;
+  activityDrawer.hidden = false;
+  document.body.classList.add("activity-open");
+  window.requestAnimationFrame(() => activityDrawerClose.focus());
+}
+
+function closeActivityDrawer() {
+  if (!activityDrawer) return;
+  activeActivityId = "";
+  activityDrawer.hidden = true;
+  document.body.classList.remove("activity-open");
+}
+
+function renderAdminAnalytics() {
+  if (!analyticsKpiGrid) return;
+  if (currentAdminData.error) {
+    analyticsKpiGrid.innerHTML = analyticsEmpty("No se pudo cargar el inicio", displayError(currentAdminData.error));
+    analyticsActionStrip.innerHTML = "";
+    homeUrgentPanel.innerHTML = "";
+    homeRecentPanel.innerHTML = "";
+    return;
+  }
+  if (supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded) {
+    analyticsKpiGrid.innerHTML = [
+      ["Canjes pendientes", "...", "cargando solicitudes"],
+      ["Consumos hoy", "...", "cargando consumos"],
+      ["Clientes nuevos hoy", "...", "cargando registros"],
+      ["Puntos hoy", "...", "cargando actividad"]
+    ].map(([label, value, note], index) => `
+      <article class="analytics-kpi-card" data-kpi-tone="${index % 4}">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        <small>${escapeHtml(note)}</small>
+      </article>
+    `).join("");
+    analyticsActionStrip.innerHTML = "";
+    homeUrgentPanel.innerHTML = analyticsEmpty("Cargando datos del negocio", "Estamos trayendo clientes, consumos y canjes desde Supabase.");
+    homeRecentPanel.innerHTML = analyticsEmpty("Cargando actividad", "En unos segundos aparecen los ultimos registros.");
+    return;
+  }
+
+  const model = buildAnalyticsModel();
+  const todayPurchases = model.purchases.filter((event) => isToday(event.created_at));
+  const todayCustomers = currentAdminData.customers.filter((profile) => isToday(profile.created_at));
+  const todayPoints = currentAdminData.events
+    .filter((event) => isToday(event.created_at) && Number(event.points_delta || 0) > 0)
+    .reduce((sum, event) => sum + Number(event.points_delta || 0), 0);
+  const todayRevenue = todayPurchases.reduce((sum, event) => sum + Number(event.purchase_total || 0), 0);
+  const pendingRedemptions = model.pendingRedemptions
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  if (!pendingRedemptions.length) {
+    visibleUrgentRedemptions = urgentRedemptionsPageSize;
+  } else if (visibleUrgentRedemptions > pendingRedemptions.length) {
+    visibleUrgentRedemptions = Math.max(urgentRedemptionsPageSize, pendingRedemptions.length);
+  }
+  const visiblePendingRedemptions = pendingRedemptions.slice(0, visibleUrgentRedemptions);
+  const hiddenPendingRedemptions = Math.max(0, pendingRedemptions.length - visiblePendingRedemptions.length);
+  const recentActivity = recentHomeActivity(model);
+  homeRecentActivityItems = recentActivity;
+
+  analyticsKpiGrid.innerHTML = [
+    ["Canjes pendientes", pendingRedemptions.length, pendingRedemptions.length ? "requieren aprobacion" : "sin solicitudes abiertas"],
+    ["Consumos hoy", todayPurchases.length, `${formatCurrency(todayRevenue)} cargados`],
+    ["Clientes nuevos hoy", todayCustomers.length, "registrados desde el menu"],
+    ["Puntos hoy", formatNumber(todayPoints), "entregados por actividad"]
+  ].map(([label, value, note], index) => `
+    <article class="analytics-kpi-card" data-kpi-tone="${index % 4}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(note)}</small>
+    </article>
+  `).join("");
+
+  analyticsActionStrip.innerHTML = `
+    <button class="analytics-action-card" type="button" data-analytics-action="consumption">
+      <span>Accion rapida</span>
+      <strong>Cargar consumo</strong>
+      <small>Buscar cliente y registrar el consumo manualmente.</small>
+    </button>
+    <button class="analytics-action-card" type="button" data-analytics-action="scan-customer">
+      <span>Accion rapida</span>
+      <strong>Escanear QR de cliente</strong>
+      <small>Abrir camara para identificar al cliente en caja.</small>
+    </button>
+    <button class="analytics-action-card" type="button" data-analytics-action="menu-qr">
+      <span>Accion rapida</span>
+      <strong>Generar QR del menu</strong>
+      <small>Descargar un QR simple para mesa o mostrador.</small>
+    </button>
+    <button class="analytics-action-card" type="button" data-analytics-action="content">
+      <span>Accion rapida</span>
+      <strong>Crear promocion</strong>
+      <small>Preparar una pieza de contenido para redes.</small>
+    </button>
+    <button class="analytics-action-card" type="button" data-analytics-action="rewards">
+      <span>Accion rapida</span>
+      <strong>Agregar premio</strong>
+      <small>Ir a premios y canjes de fidelizacion.</small>
+    </button>
+  `;
+
+  homeUrgentPanel.innerHTML = `
+    <div class="admin-card-head">
+      <div>
+        <h2>Necesita atencion</h2>
+        <p>Solo lo que conviene resolver ahora. ${adminLiveSyncMarkup()}</p>
+      </div>
+      ${analyticsActionButton("Ver premios", "rewards")}
+    </div>
+    ${pendingRedemptions.length ? `
+      <div class="home-urgent-list">
+        ${visiblePendingRedemptions.map((redemption) => `
+          <article class="home-urgent-row">
+            <span>
+              <strong>${escapeHtml(customerName(redemption.customer_id))}</strong>
+              <small>${escapeHtml(redemption.reward_name)} - ${escapeHtml(timeLabel(redemption.created_at))}</small>
+            </span>
+            <b>${escapeHtml(redemption.points_cost || redemption.reward_cost || "")}${redemption.points_cost || redemption.reward_cost ? " pts" : ""}</b>
+            <span class="redemption-actions">
+              <button class="mini-action" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}">Aprobar</button>
+              <button class="mini-action danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}">Rechazar</button>
+            </span>
+          </article>
+        `).join("")}
+        ${hiddenPendingRedemptions ? `
+          <button class="home-load-more" type="button" data-home-action="more-redemptions">
+            Ver mas (${hiddenPendingRedemptions} pendientes)
+          </button>
+        ` : ""}
+      </div>
+    ` : analyticsEmpty("Sin urgencias por ahora", "No hay canjes pendientes ni acciones criticas para resolver en este momento.", analyticsActionButton("Cargar consumo", "consumption"))}
+  `;
+
+  homeRecentPanel.innerHTML = `
+    <div class="admin-card-head">
+      <div>
+        <h2>Actividad reciente</h2>
+        <p>Ultimos consumos, canjes y registros.</p>
+      </div>
+      ${analyticsActionButton("Ver clientes", "customers")}
+    </div>
+    ${recentActivity.length ? `
+      <div class="home-activity-list">
+        ${recentActivity.map((item) => `
+          <button class="home-activity-row" type="button" data-activity-id="${escapeAttribute(item.id)}" aria-label="Abrir detalle de ${escapeAttribute(item.title)}">
+            <span>${escapeHtml(item.type)}</span>
+            <strong>${escapeHtml(item.title)}</strong>
+            <small>${escapeHtml(item.meta)}</small>
+          </button>
+        `).join("")}
+      </div>
+    ` : analyticsEmpty("Todavia no hay actividad", "Cuando entren registros, consumos o canjes, aparecen en este resumen.", analyticsActionButton("Cargar consumo", "consumption"))}
+  `;
 }
 
 function renderAdminContent() {
@@ -3212,20 +6202,37 @@ function renderAdminLibrary() {
 
 function renderAdminRewards() {
   if (!adminRewardRows || !adminRedemptionRows) return;
+  if (loyaltyEarnRateInput) loyaltyEarnRateInput.value = Math.round((loyaltySettings.earnRate || 0) * 100);
+  if (loyaltySignupBonusInput) loyaltySignupBonusInput.value = loyaltySettings.signupBonusPoints || 0;
+  if (loyaltyReferralOwnerInput) loyaltyReferralOwnerInput.value = loyaltySettings.referralReferrerPoints || 0;
+  if (loyaltyReferralGuestInput) loyaltyReferralGuestInput.value = loyaltySettings.referralReferredPoints || 0;
+  if (loyaltyStreakWeeksInput) loyaltyStreakWeeksInput.value = loyaltySettings.streakBonusWeeks || 3;
+  if (loyaltyStreakBonusInput) loyaltyStreakBonusInput.value = loyaltySettings.streakBonusPoints || 0;
+  if (loyaltyTierSilverInput) loyaltyTierSilverInput.value = loyaltySettings.tierSilverPoints || 500;
+  if (loyaltyTierGoldInput) loyaltyTierGoldInput.value = loyaltySettings.tierGoldPoints || 1000;
+  if (loyaltyTierPlatinumInput) loyaltyTierPlatinumInput.value = loyaltySettings.tierPlatinumPoints || 2000;
+
   adminRewardsCount.textContent = rewardCatalog.length;
   adminRewardRows.innerHTML = rewardCatalog.length
     ? rewardCatalog
         .map((reward) => `
-          <article class="admin-list-row">
+          <article class="admin-list-row admin-reward-row ${reward.active ? "" : "is-inactive"}">
+            <span class="admin-reward-thumb ${reward.imageUrl ? "" : "is-empty"}" ${reward.imageUrl ? `style="background-image:url(&quot;${escapeAttribute(reward.imageUrl)}&quot;)"` : ""} aria-hidden="true"></span>
             <span>
               <strong>${escapeHtml(reward.name)}</strong>
-              <small>${escapeHtml(reward.description || "Premio activo")}</small>
+              <small>${escapeHtml(reward.description || "Premio activo")} ${reward.stock !== null ? `- Stock: ${escapeHtml(reward.stock)}` : ""} ${reward.validUntil ? `- Vigente hasta ${escapeHtml(reward.validUntil)}` : ""}</small>
             </span>
             <b>${escapeHtml(reward.cost)} pts</b>
+            <span class="status">${escapeHtml(reward.active ? "Activo" : "Inactivo")}</span>
+            <span class="redemption-actions">
+              <button class="mini-action" type="button" data-reward-action="edit" data-reward-key="${escapeAttribute(reward.rewardKey)}">Editar</button>
+              <button class="mini-action" type="button" data-reward-action="toggle" data-reward-key="${escapeAttribute(reward.rewardKey)}">${reward.active ? "Pausar" : "Activar"}</button>
+              <button class="mini-action danger" type="button" data-reward-action="delete" data-reward-key="${escapeAttribute(reward.rewardKey)}">Eliminar</button>
+            </span>
           </article>
         `)
         .join("")
-    : `<div class="admin-empty">No hay premios configurados.</div>`;
+    : `<div class="admin-empty">No hay premios configurados. Crea el primero desde este panel.</div>`;
 
   adminRedemptionsCount.textContent = currentAdminData.redemptions.length;
   adminRedemptionRows.innerHTML = currentAdminData.redemptions.length
@@ -3291,42 +6298,249 @@ function renderAdminSettings() {
       <strong>${escapeHtml(ownerStatus)}</strong>
       <small>Owners se administran en business_admins.</small>
     </article>
-    <article class="admin-setting-card admin-earn-rate-card">
-      <span>Puntos por consumo</span>
-      <strong>${escapeHtml(Math.round((loyaltySettings.earnRate || 0) * 100))}% del monto</strong>
-      <small>Default recomendado para caja. Solo owner puede editarlo.</small>
-      <label class="admin-inline-setting">
-        <input type="number" min="0" step="1" value="${escapeAttribute(Math.round((loyaltySettings.earnRate || 0) * 100))}" data-earn-rate-input ${isOwner() ? "" : "disabled"} />
-        <button type="button" data-save-earn-rate ${isOwner() ? "" : "disabled"}>Guardar</button>
-      </label>
+    <article class="admin-setting-card">
+      <span>Fidelizacion</span>
+      <strong>Reglas en su seccion</strong>
+      <small>Porcentaje, registro, referidos, rachas y premios se editan en Fidelizacion.</small>
     </article>
   `;
+}
+
+function resetAdminRewardForm() {
+  if (!adminRewardForm) return;
+  adminRewardForm.reset();
+  if (adminRewardEditingKey) adminRewardEditingKey.value = "";
+  if (adminRewardActiveInput) adminRewardActiveInput.checked = true;
+  if (adminRewardCancelEdit) adminRewardCancelEdit.hidden = true;
+}
+
+function editAdminReward(rewardKey) {
+  const reward = rewardCatalog.find((item) => item.rewardKey === rewardKey);
+  if (!reward || !adminRewardForm) return;
+  adminRewardEditingKey.value = reward.rewardKey;
+  adminRewardNameInput.value = reward.name || "";
+  adminRewardDescriptionInput.value = reward.description || "";
+  if (adminRewardImageInput) adminRewardImageInput.value = reward.imageUrl || "";
+  adminRewardCostInput.value = reward.cost || "";
+  adminRewardStockInput.value = reward.stock ?? "";
+  adminRewardMinTierInput.value = reward.minTier || "";
+  if (adminRewardValidUntilInput) adminRewardValidUntilInput.value = reward.validUntil || "";
+  adminRewardActiveInput.checked = reward.active !== false;
+  adminRewardCancelEdit.hidden = false;
+  adminRewardNameInput.focus();
+}
+
+async function saveAdminReward(event) {
+  event?.preventDefault();
+  const payload = rewardTablePayloadFromForm();
+  if (!payload.name || payload.points_cost <= 0) {
+    showToast("Completa nombre y puntos del premio.");
+    return;
+  }
+  if (!isOwner()) {
+    showToast("Esta cuenta no tiene permisos de owner.");
+    return;
+  }
+  if (!supabase || !isRemoteOwner()) {
+    const normalized = normalizeRewardDefinition({
+      ...payload,
+      id: payload.reward_key,
+      reward_key: payload.reward_key
+    });
+    rewardCatalog = [
+      normalized,
+      ...rewardCatalog.filter((reward) => reward.rewardKey !== normalized.rewardKey)
+    ];
+    resetAdminRewardForm();
+    renderAdminRewards();
+    renderLoyalty();
+    showToast("Premio actualizado localmente.");
+    return;
+  }
+  const { error } = await supabase
+    .from("business_rewards")
+    .upsert(payload, { onConflict: "business_id,reward_key" });
+  if (error) {
+    showToast(displayError(error));
+    return;
+  }
+  await loadBusinessRewards({ owner: true });
+  resetAdminRewardForm();
+  renderAdminRewards();
+  renderLoyalty();
+  showToast("Premio guardado.");
+}
+
+async function toggleAdminReward(rewardKey) {
+  const reward = rewardCatalog.find((item) => item.rewardKey === rewardKey);
+  if (!reward) return;
+  if (!isOwner()) {
+    showToast("Esta cuenta no tiene permisos de owner.");
+    return;
+  }
+  const payload = {
+    business_id: businessId,
+    reward_key: reward.rewardKey,
+    name: reward.name,
+    description: reward.description || "",
+    points_cost: reward.cost,
+    stock: reward.stock,
+    image_url: reward.imageUrl || null,
+    min_tier: reward.minTier || null,
+    valid_until: reward.validUntil || null,
+    active: !reward.active
+  };
+  if (!supabase || !isRemoteOwner()) {
+    reward.active = payload.active;
+    renderAdminRewards();
+    renderLoyalty();
+    return;
+  }
+  const { error } = await supabase
+    .from("business_rewards")
+    .upsert(payload, { onConflict: "business_id,reward_key" });
+  if (error) {
+    showToast(displayError(error));
+    return;
+  }
+  await loadBusinessRewards({ owner: true });
+  renderAdminRewards();
+  renderLoyalty();
+  showToast(payload.active ? "Premio activado." : "Premio pausado.");
+}
+
+async function deleteAdminReward(rewardKey) {
+  const reward = rewardCatalog.find((item) => item.rewardKey === rewardKey);
+  if (!reward) return;
+  if (!isOwner()) {
+    showToast("Esta cuenta no tiene permisos de owner.");
+    return;
+  }
+  if (!window.confirm(`Eliminar ${reward.name}? Los canjes historicos se conservan.`)) return;
+  if (!supabase || !isRemoteOwner()) {
+    rewardCatalog = rewardCatalog.filter((item) => item.rewardKey !== rewardKey);
+    renderAdminRewards();
+    renderLoyalty();
+    return;
+  }
+  const query = supabase
+    .from("business_rewards")
+    .delete()
+    .eq("business_id", businessId)
+    .eq("reward_key", reward.rewardKey);
+  const { error } = reward.databaseId ? await query.eq("id", reward.databaseId) : await query;
+  if (error) {
+    showToast(displayError(error));
+    return;
+  }
+  await loadBusinessRewards({ owner: true });
+  renderAdminRewards();
+  renderLoyalty();
+  showToast("Premio eliminado.");
+}
+
+async function saveLoyaltyRules(event) {
+  event?.preventDefault();
+  const rawThresholds = {
+    tierSilverPoints: Math.floor(Number(loyaltyTierSilverInput?.value || 500)),
+    tierGoldPoints: Math.floor(Number(loyaltyTierGoldInput?.value || 1000)),
+    tierPlatinumPoints: Math.floor(Number(loyaltyTierPlatinumInput?.value || 2000))
+  };
+  if (
+    rawThresholds.tierSilverPoints < 0
+    || rawThresholds.tierGoldPoints <= rawThresholds.tierSilverPoints
+    || rawThresholds.tierPlatinumPoints <= rawThresholds.tierGoldPoints
+  ) {
+    showToast("Los niveles deben cumplir Plata < Oro < Platino.");
+    return;
+  }
+  const nextSettings = {
+    earnRate: Math.max(0, Number(loyaltyEarnRateInput?.value || 0)) / 100,
+    signupBonusPoints: Math.max(0, Number(loyaltySignupBonusInput?.value || 0)),
+    referralReferrerPoints: Math.max(0, Number(loyaltyReferralOwnerInput?.value || 0)),
+    referralReferredPoints: Math.max(0, Number(loyaltyReferralGuestInput?.value || 0)),
+    streakBonusWeeks: Math.max(1, Number(loyaltyStreakWeeksInput?.value || 3)),
+    streakBonusPoints: Math.max(0, Number(loyaltyStreakBonusInput?.value || 0)),
+    ...rawThresholds
+  };
+  loyaltySettings = nextSettings;
+  recalculateLocalAccountTiers();
+  renderAuthState();
+  if (!supabase || !isOwner()) {
+    renderAdminRewards();
+    showToast("Reglas actualizadas localmente.");
+    return;
+  }
+  const { error } = await supabase
+    .from("business_loyalty_settings")
+    .upsert({
+      business_id: businessId,
+      earn_rate: nextSettings.earnRate,
+      signup_bonus_points: nextSettings.signupBonusPoints,
+      referral_referrer_points: nextSettings.referralReferrerPoints,
+      referral_referred_points: nextSettings.referralReferredPoints,
+      streak_bonus_weeks: nextSettings.streakBonusWeeks,
+      streak_bonus_points: nextSettings.streakBonusPoints,
+      tier_silver_points: nextSettings.tierSilverPoints,
+      tier_gold_points: nextSettings.tierGoldPoints,
+      tier_platinum_points: nextSettings.tierPlatinumPoints,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "business_id" });
+  if (error) {
+    showToast(displayError(error));
+    return;
+  }
+  showToast("Reglas de fidelizacion actualizadas.");
+  currentAdminData.loaded = false;
+  currentAdminData.remoteLoaded = false;
+  renderAdminRewards();
 }
 
 async function updateRedemptionStatus(redemptionId, status) {
   const redemption = currentAdminData.redemptions.find((item) => item.id === redemptionId);
   if (!redemption) return;
 
+  let updatedRedemption = { ...redemption, status };
+  let updatedAccount = null;
   if (supabase) {
-    const { error } = await supabase
-      .from("reward_redemptions")
-      .update({ status })
-      .eq("id", redemptionId)
-      .eq("business_id", businessId);
+    const { data, error } = await supabase.rpc("manage_reward_redemption_status", {
+      target_business_id: businessId,
+      target_redemption_id: redemptionId,
+      next_status: status
+    });
     if (error) {
       showToast(displayError(error));
       return;
     }
+    updatedRedemption = data?.redemption || updatedRedemption;
+    updatedAccount = data?.account || null;
   }
 
-  redemption.status = status;
+  Object.assign(redemption, updatedRedemption);
+  if (updatedAccount?.id) {
+    const account = currentAdminData.accounts.find((item) => item.id === updatedAccount.id);
+    if (account) Object.assign(account, updatedAccount);
+    if (currentCustomer?.account?.id === updatedAccount.id) {
+      currentCustomer.account = { ...currentCustomer.account, ...updatedAccount };
+      pointsBalance = updatedAccount.points_balance || 0;
+    }
+  }
+  const customerRedemption = currentCustomer?.redemptions?.find((item) => item.id === redemptionId);
+  if (customerRedemption) Object.assign(customerRedemption, updatedRedemption);
+
+  if (supabase) {
+    currentAdminData.loaded = false;
+    await ensureAdminData();
+  }
+  renderAdminPanel();
   renderAdminRewards();
+  renderLoyalty();
   showToast(status === "approved" ? "Canje aprobado." : status === "redeemed" ? "Canje marcado como entregado." : "Canje cancelado.");
 }
 
 async function saveLoyaltyEarnRate(ratePercent) {
   const earnRate = Math.max(0, Number(ratePercent || 0)) / 100;
-  loyaltySettings = { earnRate };
+  loyaltySettings = { ...normalizeLoyaltySettings(loyaltySettings), earnRate };
   renderAuthState();
   if (!supabase || !isOwner()) {
     showToast("Porcentaje actualizado localmente.");
@@ -3350,16 +6564,32 @@ async function saveLoyaltyEarnRate(ratePercent) {
 
 function renderAdminPanel() {
   if (!isOwner()) return;
+  if (!currentAdminData.loaded && !currentAdminData.error && !adminDataRequest && (!supabase || currentSession?.user)) {
+    ensureAdminData().then(() => renderAdminPanel());
+  }
+  if (supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded && !adminDataRetryTimer) {
+    adminDataRetryTimer = window.setTimeout(() => {
+      adminDataRetryTimer = null;
+      if (!currentAdminData.remoteLoaded && isOwner()) {
+        currentAdminData.loaded = false;
+        currentAdminData.error = null;
+        ensureAdminData().then(() => renderAdminPanel());
+      }
+    }, 1200);
+  }
   renderAdminHome();
   renderAdminMenu();
   renderAdminCustomers();
+  renderAdminConsumptions();
   renderAdminContent();
   renderAdminLibrary();
   renderAdminRewards();
+  renderAdminQrs();
+  renderAdminAnalytics();
   renderAdminSettings();
 }
 
-const adminRouteViews = new Set(["home", "customers", "menu", "content", "library", "rewards", "analytics", "settings"]);
+const adminRouteViews = new Set(["home", "customers", "consumptions", "menu", "content", "library", "rewards", "qrs", "settings"]);
 
 function pathForRoute(route, params = {}) {
   if (route === "landing") return "/";
@@ -3394,26 +6624,154 @@ function parseRoute() {
   if (parts[0] === "admin" && parts.length === 1) return { name: "admin-section", view: "home" };
   if (parts[0] === "admin" && parts[1] === "menu" && parts[2] && parts[3] === "edit") return { name: "admin-editor", dishId: parts[2] };
   if (parts[0] === "admin" && parts[1] === "menu" && parts[2] && parts[3] === "preview") return { name: "admin-preview", dishId: parts[2] };
+  if (parts[0] === "admin" && parts[1] === "analytics") return { name: "admin-section", view: "home", legacyAnalytics: true };
   if (parts[0] === "admin" && adminRouteViews.has(parts[1])) return { name: "admin-section", view: parts[1] };
   if (parts.length === 1 && menuItems.some((dish) => dish.id === parts[0])) return { name: "menu-detail", dishId: parts[0] };
   return { name: "menu" };
 }
 
 async function ensureAdminData() {
-  if (currentAdminData.loaded || currentAdminData.error) return;
-  try {
-    await loadAdminData();
-  } catch (error) {
-    currentAdminData = {
-      customers: [],
-      accounts: [],
-      events: [],
-      redemptions: [],
-      loaded: true,
-      error
-    };
-    showToast(displayError(error));
+  const needsRemoteReload = Boolean(supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded);
+  if ((currentAdminData.loaded || currentAdminData.error) && !needsRemoteReload) return;
+  if (adminDataRequest) return adminDataRequest;
+  adminDataRequest = (async () => {
+    try {
+      await loadAdminData();
+    } catch (error) {
+      currentAdminData = {
+        customers: [],
+        accounts: [],
+        events: [],
+        redemptions: [],
+        menuEvents: [],
+        consumptionCorrections: [],
+        loaded: true,
+        remoteLoaded: false,
+        error
+      };
+      exposeDebugState();
+      showToast(displayError(error));
+    } finally {
+      adminDataRequest = null;
+    }
+  })();
+  return adminDataRequest;
+}
+
+async function reloadAdminData({ silent = false } = {}) {
+  if (!supabase || !currentSession?.user || !isOwner()) return;
+  const previousData = currentAdminData;
+  const previousPendingIds = pendingRedemptionIdSet(previousData);
+  const wasRemoteLoaded = Boolean(previousData.remoteLoaded);
+
+  if (silent) {
+    if (adminDataRequest) return;
+    try {
+      await loadAdminData();
+      notifyNewPendingRedemptions(wasRemoteLoaded ? previousPendingIds : new Set(), currentAdminData);
+      renderAdminPanel();
+    } catch (error) {
+      currentAdminData = previousData;
+      adminLastRefreshError = displayError(error);
+      exposeDebugState();
+      renderAdminPanel();
+    }
+    return;
   }
+
+  currentAdminData.loaded = false;
+  currentAdminData.remoteLoaded = false;
+  currentAdminData.error = null;
+  try {
+    await ensureAdminData();
+    notifyNewPendingRedemptions(wasRemoteLoaded ? previousPendingIds : new Set(), currentAdminData);
+    renderAdminPanel();
+  } catch (error) {
+    if (!silent) showToast(displayError(error));
+  }
+}
+
+function shouldAutoRefreshAdmin() {
+  const route = parseRoute();
+  return Boolean(supabase && currentSession?.user && isOwner() && route.name.startsWith("admin"));
+}
+
+function stopAdminAutoRefresh() {
+  if (adminRefreshTimer) {
+    window.clearInterval(adminRefreshTimer);
+    adminRefreshTimer = null;
+  }
+  stopAdminRealtime();
+}
+
+async function refreshAdminIfVisible() {
+  if (adminRefreshInFlight || !shouldAutoRefreshAdmin() || document.hidden) return;
+  adminRefreshInFlight = true;
+  renderAdminPanel();
+  try {
+    await reloadAdminData({ silent: true });
+  } finally {
+    adminRefreshInFlight = false;
+    renderAdminPanel();
+  }
+}
+
+function scheduleAdminRealtimeRefresh() {
+  if (adminRealtimeRefreshTimer || !shouldAutoRefreshAdmin() || document.hidden) return;
+  adminRealtimeRefreshTimer = window.setTimeout(async () => {
+    adminRealtimeRefreshTimer = null;
+    await refreshAdminIfVisible();
+  }, 300);
+}
+
+function stopAdminRealtime() {
+  if (adminRealtimeRefreshTimer) {
+    window.clearTimeout(adminRealtimeRefreshTimer);
+    adminRealtimeRefreshTimer = null;
+  }
+  if (!adminRealtimeChannel || !supabase) {
+    adminRealtimeChannel = null;
+    adminRealtimeStatus = "";
+    return;
+  }
+  const channel = adminRealtimeChannel;
+  adminRealtimeChannel = null;
+  adminRealtimeStatus = "";
+  supabase.removeChannel(channel);
+}
+
+function startAdminRealtime() {
+  if (!supabase || !currentSession?.user || !isOwner() || adminRealtimeChannel || !shouldAutoRefreshAdmin()) return;
+  adminRealtimeStatus = "CONNECTING";
+  const channelName = `sumi-admin-redemptions-${businessId}-${currentSession.user.id}`;
+  adminRealtimeChannel = supabase
+    .channel(channelName)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "reward_redemptions",
+        filter: `business_id=eq.${businessId}`
+      },
+      () => scheduleAdminRealtimeRefresh()
+    )
+    .subscribe((status) => {
+      adminRealtimeStatus = status;
+      if (status === "SUBSCRIBED") {
+        adminLastRefreshError = "";
+        renderAdminPanel();
+      }
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        renderAdminPanel();
+      }
+    });
+}
+
+function startAdminAutoRefresh() {
+  if (adminRefreshTimer || !shouldAutoRefreshAdmin()) return;
+  startAdminRealtime();
+  adminRefreshTimer = window.setInterval(refreshAdminIfVisible, adminRefreshIntervalMs);
 }
 
 async function ensureAdminContentData() {
@@ -3434,6 +6792,7 @@ async function ensureAdminContentData() {
 }
 
 function hideAllSurfaces() {
+  stopAdminAutoRefresh();
   document.body.classList.remove("landing-active", "admin-active");
   detailView.classList.remove("open");
   editorPanel.classList.remove("open");
@@ -3448,6 +6807,7 @@ function showLanding() {
 function showPublicMenu() {
   hideAllSurfaces();
   renderList();
+  recordMenuEvent("menu_view");
 }
 
 function showPublicDetail(dishId) {
@@ -3458,6 +6818,7 @@ function showPublicDetail(dishId) {
   }
   showPublicMenu();
   openDetail(dish.id);
+  recordMenuEvent("dish_detail_view", dish.id);
 }
 
 async function showAdminSection(view = "home") {
@@ -3473,10 +6834,12 @@ async function showAdminSection(view = "home") {
   setAdminView(view);
   renderAdminPanel();
   await ensureAdminData();
-  if (view === "content" || view === "library") {
+  await loadBusinessRewards({ owner: true });
+  if (view === "home" || view === "content" || view === "library") {
     await ensureAdminContentData();
   }
   renderAdminPanel();
+  startAdminAutoRefresh();
   window.requestAnimationFrame(() => adminPanel.focus?.());
   return true;
 }
@@ -3532,6 +6895,10 @@ async function renderRoute() {
     return;
   }
   if (route.name === "admin-section") {
+    if (route.legacyAnalytics) {
+      navigate("admin-section", { view: "home" }, { replace: true });
+      return;
+    }
     await showAdminSection(route.view);
     return;
   }
@@ -3545,15 +6912,16 @@ async function renderRoute() {
 }
 
 function setAdminView(view) {
-  const validViews = new Set(["home", "customers", "menu", "content", "library", "rewards", "analytics", "settings"]);
+  const validViews = new Set(["home", "customers", "consumptions", "menu", "content", "library", "rewards", "qrs", "settings"]);
   currentAdminView = validViews.has(view) ? view : "home";
   adminHome.hidden = currentAdminView !== "home";
   adminCustomersSection.hidden = currentAdminView !== "customers";
+  adminConsumptionsSection.hidden = currentAdminView !== "consumptions";
   adminMenuSection.hidden = currentAdminView !== "menu";
   adminContentSection.hidden = currentAdminView !== "content";
   adminLibrarySection.hidden = currentAdminView !== "library";
   adminRewardsSection.hidden = currentAdminView !== "rewards";
-  adminAnalyticsSection.hidden = currentAdminView !== "analytics";
+  if (adminQrsSection) adminQrsSection.hidden = currentAdminView !== "qrs";
   adminSettingsSection.hidden = currentAdminView !== "settings";
   adminNavItems.forEach((item) => {
     const active = item.dataset.adminNav === currentAdminView;
@@ -3937,7 +7305,7 @@ function editorPresentations() {
 
 function validateEditorDraftForSave(draft) {
   const translations = ensureDishTranslations(draft);
-  const primaryText = translations.es || translations[currentEditorLang] || {};
+  const primaryText = translations[primaryLanguageCode] || translations[currentEditorLang] || {};
   if (!String(primaryText.name || "").trim()) {
     showToast("El nombre del platillo es obligatorio.");
     dishNameInput.focus();
@@ -3971,9 +7339,9 @@ function syncEditorDraftFromControls() {
   if (!draft) return null;
   commitEditorLanguageFields();
   const translations = ensureDishTranslations(draft);
-  const spanishText = translations.es || translations[currentEditorLang];
-  draft.name = spanishText?.name?.trim() || draft.name;
-  draft.description = spanishText?.description?.trim() || draft.description;
+  const primaryText = translations[primaryLanguageCode] || translations[currentEditorLang];
+  draft.name = primaryText?.name?.trim() || draft.name;
+  draft.description = primaryText?.description?.trim() || draft.description;
   draft.brand = brandSelect.value;
   draft.category = categorySelect.value;
   draft.visible = visibleToggle.checked;
@@ -3995,10 +7363,27 @@ function commitEditorLanguageFields() {
 }
 
 function renderEditorLanguageTabs() {
+  if (editorLanguageTabsContainer && (!editorLanguageTabs.length || editorLanguageTabs.length !== languages.length)) {
+    renderEditorLanguageTabsMarkup();
+  }
   editorLanguageTabs.forEach((tab) => {
     const active = tab.dataset.lang === currentEditorLang;
     tab.classList.toggle("active", active);
     tab.setAttribute("aria-selected", String(active));
+  });
+}
+
+function renderEditorLanguageTabsMarkup() {
+  if (!editorLanguageTabsContainer) return;
+  editorLanguageTabsContainer.innerHTML = languages.map((language) => `
+    <button class="tab ${language.code === currentEditorLang ? "active" : ""}" data-lang="${escapeAttribute(language.code)}" type="button" role="tab" aria-selected="${language.code === currentEditorLang}">
+      ${escapeHtml(language.label)}
+      <span></span>
+    </button>
+  `).join("");
+  editorLanguageTabs = editorLanguageTabsContainer.querySelectorAll(".tab[data-lang]");
+  editorLanguageTabs.forEach((tab) => {
+    tab.addEventListener("click", () => setEditorLanguage(tab.dataset.lang));
   });
 }
 
@@ -4067,22 +7452,22 @@ async function saveEditorDish({ silent = false } = {}) {
   let dish = menuItems.find((item) => item.id === currentEditorDishId);
   if (!draft) return null;
   if (!validateEditorDraftForSave(draft)) return null;
-  if (supabase && (!currentSession?.user || currentCustomer?.adminMembership?.role !== "owner")) {
+  if (supabase && !canPublishRemoteMenuCatalog() && !isLocalDevOwner()) {
     showToast("Inicia sesion como owner para publicar el menu para todos.");
     return null;
   }
   const previousItems = serializedMenuItems();
   const previousEditorDishId = currentEditorDishId;
   const translations = ensureDishTranslations(draft);
-  const spanishText = translations.es || translations[currentEditorLang];
+  const primaryText = translations[primaryLanguageCode] || translations[currentEditorLang];
   if (!dish) {
-    const nextId = uniqueDishId(spanishText?.name || draft.name);
+    const nextId = uniqueDishId(primaryText?.name || draft.name);
     dish = {
       id: nextId,
       brand: draft.brand,
       category: draft.category,
-      name: spanishText?.name?.trim() || draft.name,
-      description: spanishText?.description?.trim() || draft.description,
+      name: primaryText?.name?.trim() || draft.name,
+      description: primaryText?.description?.trim() || draft.description,
       presentations: [],
       photo: draft.photo,
       visible: Boolean(draft.visible),
@@ -4094,8 +7479,8 @@ async function saveEditorDish({ silent = false } = {}) {
     currentEditorDishId = dish.id;
   }
 
-  dish.name = spanishText?.name?.trim() || dish.name;
-  dish.description = spanishText?.description?.trim() || dish.description;
+  dish.name = primaryText?.name?.trim() || dish.name;
+  dish.description = primaryText?.description?.trim() || dish.description;
   dish.translations = JSON.parse(JSON.stringify(translations));
   dish.brand = brandSelect.value;
   dish.category = categorySelect.value;
@@ -4149,8 +7534,8 @@ function openNewAdminEditor() {
     editorDraft = newDishDraft();
     editorPreviewDraft = null;
   }
-  currentEditorLang = "es";
-  lastEditedEditorLang = "es";
+  currentEditorLang = primaryLanguageCode;
+  lastEditedEditorLang = primaryLanguageCode;
   ensureDishTranslations(editorDraft);
   renderEditorForm();
   editorPanel.classList.add("open");
@@ -4165,8 +7550,8 @@ function openAdminEditor(dishId) {
     editorDraft = cloneDishForEditor(dish);
     editorPreviewDraft = null;
   }
-  currentEditorLang = "es";
-  lastEditedEditorLang = "es";
+  currentEditorLang = primaryLanguageCode;
+  lastEditedEditorLang = primaryLanguageCode;
   ensureDishTranslations(editorDraft);
   renderEditorForm();
   editorPanel.classList.add("open");
@@ -4184,7 +7569,7 @@ async function translateEditorDish() {
   if (!dish) return;
   commitEditorLanguageFields();
   const translations = ensureDishTranslations(dish);
-  const sourceLang = lastEditedEditorLang || currentEditorLang || "es";
+  const sourceLang = lastEditedEditorLang || currentEditorLang || primaryLanguageCode;
   const source = normalizeTranslatedText(translations[sourceLang]);
 
   if (!source.name && !source.description) {
@@ -4207,12 +7592,12 @@ async function translateEditorDish() {
         businessId,
         sourceLang,
         source,
-        targetLangs: ["es", "en", "ar"]
+        targetLangs: languageCodes
       }
     });
     if (error) throw error;
     const translated = data?.translations || {};
-    ["es", "en", "ar"].forEach((lang) => {
+    languageCodes.forEach((lang) => {
       const text = normalizeTranslatedText(translated[lang]);
       if (text.name || text.description) {
         translations[lang] = {
@@ -4221,8 +7606,8 @@ async function translateEditorDish() {
         };
       }
     });
-    dish.name = translations.es?.name || dish.name;
-    dish.description = translations.es?.description || dish.description;
+    dish.name = translations[primaryLanguageCode]?.name || dish.name;
+    dish.description = translations[primaryLanguageCode]?.description || dish.description;
     editorTitle.textContent = dish.name;
     renderEditorLanguageFields(dish);
     showToast("Traducciones listas. Presiona Guardar para aplicar.");
@@ -4234,7 +7619,8 @@ async function translateEditorDish() {
   }
 }
 
-async function refreshAuthenticatedCustomer() {
+async function refreshAuthenticatedCustomer(options = {}) {
+  const silent = Boolean(options.silent);
   if (!currentSession?.user) {
     currentCustomer = null;
     pointsBalance = 0;
@@ -4247,14 +7633,45 @@ async function refreshAuthenticatedCustomer() {
   } catch (error) {
     currentCustomer = null;
     pointsBalance = 0;
-    showToast(displayError(error));
+    if (!silent) {
+      showToast(displayError(error));
+    } else if (import.meta.env.DEV) {
+      console.warn("[Sumi customer] refresh failed", error);
+    }
   }
   renderList();
+  renderLoyalty();
+  if (profileModal && !profileModal.hidden) renderProfile();
+}
+
+function shouldAutoRefreshCustomer() {
+  return Boolean(supabase && currentSession?.user && isAuthenticated() && !isStaff());
+}
+
+function stopCustomerAutoRefresh() {
+  if (!customerRefreshTimer) return;
+  window.clearInterval(customerRefreshTimer);
+  customerRefreshTimer = null;
+}
+
+function startCustomerAutoRefresh() {
+  if (customerRefreshTimer || !shouldAutoRefreshCustomer()) return;
+  customerRefreshTimer = window.setInterval(async () => {
+    if (customerRefreshInFlight || !shouldAutoRefreshCustomer() || document.hidden) return;
+    customerRefreshInFlight = true;
+    try {
+      await refreshAuthenticatedCustomer({ silent: true });
+    } finally {
+      customerRefreshInFlight = false;
+    }
+  }, customerRefreshIntervalMs);
 }
 
 async function handleSession(session) {
   currentSession = session;
   if (!session?.user) {
+    stopCustomerAutoRefresh();
+    stopAdminAutoRefresh();
     currentCustomer = null;
     pointsBalance = 0;
     await refreshDishLikes();
@@ -4269,9 +7686,24 @@ async function handleSession(session) {
     return;
   }
   await refreshAuthenticatedCustomer();
+  if (shouldAutoRefreshCustomer()) {
+    startCustomerAutoRefresh();
+  } else {
+    stopCustomerAutoRefresh();
+  }
+  if (shouldAutoRefreshAdmin()) {
+    startAdminAutoRefresh();
+  } else {
+    stopAdminAutoRefresh();
+  }
   await refreshDishLikes();
   await loadBusinessMenuSettings();
-  renderList();
+  const route = parseRoute();
+  if (route.name.startsWith("admin")) {
+    await renderRoute();
+  } else {
+    renderList();
+  }
 }
 
 async function initializeAuth() {
@@ -4418,6 +7850,35 @@ consumptionQrInput?.addEventListener("keydown", (event) => {
   }
 });
 
+consumptionCustomerSearch?.addEventListener("input", () => {
+  window.clearTimeout(consumptionCustomerSearch._sumiTimer);
+  consumptionCustomerSearch._sumiTimer = window.setTimeout(() => {
+    loadConsumptionCustomerResults(consumptionCustomerSearch.value.trim());
+  }, 180);
+});
+
+consumptionCustomerResultsEl?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-consumption-customer]");
+  if (!button) return;
+  selectConsumptionCustomer(button.dataset.consumptionCustomer);
+});
+
+consumptionStartForm?.addEventListener("click", () => {
+  renderConsumptionCustomer();
+  if (consumptionScannerStatus) consumptionScannerStatus.textContent = "Carga el monto. Los productos son opcionales.";
+  consumptionAmount?.focus();
+});
+
+consumptionShowRewards?.addEventListener("click", () => {
+  const rewards = customerAvailableRewards(activeConsumptionCustomer);
+  if (!rewards.length) {
+    showToast("Este cliente todavia no tiene premios disponibles.");
+    return;
+  }
+  consumptionQuickRewards?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  showToast("Premios disponibles visibles en la ficha.");
+});
+
 consumptionAmount?.addEventListener("input", updateConsumptionPointsPreview);
 
 consumptionCatalog?.addEventListener("click", (event) => {
@@ -4483,24 +7944,187 @@ adminHelpButton.addEventListener("click", () => {
   window.open(url, "_blank", "noopener,noreferrer");
 });
 
-adminActions.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-admin-action]");
+adminHome?.addEventListener("click", (event) => {
+  const redemptionButton = event.target.closest("[data-redemption-action]");
+  if (redemptionButton && !redemptionButton.disabled) {
+    updateRedemptionStatus(redemptionButton.dataset.redemptionId, redemptionButton.dataset.redemptionAction);
+    return;
+  }
+
+  const homeActionButton = event.target.closest("[data-home-action]");
+  if (homeActionButton?.dataset.homeAction === "more-redemptions") {
+    visibleUrgentRedemptions += urgentRedemptionsPageSize;
+    renderAdminAnalytics();
+    return;
+  }
+
+  const button = event.target.closest("[data-analytics-action]");
   if (!button) return;
-  const view = button.dataset.adminAction;
-  if (view === "consumption") {
+  const action = button.dataset.analyticsAction;
+  if (action === "consumption") {
+    openManualConsumptionModal(button);
+    return;
+  }
+  if (action === "scan-customer") {
     openConsumptionModal(button);
     return;
   }
-  if (!["menu", "customers", "rewards", "content", "analytics"].includes(view)) return;
-  navigate("admin-section", { view });
+  if (action === "menu-qr") {
+    navigate("admin-section", { view: "qrs" });
+    return;
+  }
+  if (action === "public-menu") {
+    navigate("menu");
+    return;
+  }
+  if (action === "content") {
+    const dishId = button.dataset.dishId;
+    if (dishId && menuItems.some((dish) => dish.id === dishId)) selectedContentDishId = dishId;
+    navigate("admin-section", { view: "content" });
+    return;
+  }
+  if (["menu", "customers", "consumptions", "rewards", "qrs", "library"].includes(action)) {
+    navigate("admin-section", { view: action });
+  }
 });
 
-adminSuggestionButton.addEventListener("click", () => {
-  navigate("admin-section", { view: "content" });
+homeRecentPanel?.addEventListener("click", (event) => {
+  const activityButton = event.target.closest("[data-activity-id]");
+  if (!activityButton) return;
+  openActivityDrawer(activityButton.dataset.activityId);
+});
+
+activityDrawerClose?.addEventListener("click", closeActivityDrawer);
+activityDrawer?.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-activity-close]")) {
+    closeActivityDrawer();
+    return;
+  }
+  const redemptionButton = event.target.closest("[data-redemption-action]");
+  if (redemptionButton && !redemptionButton.disabled) {
+    await updateRedemptionStatus(redemptionButton.dataset.redemptionId, redemptionButton.dataset.redemptionAction);
+    if (activeActivityId) {
+      const detail = activityDetail(activeActivityId);
+      if (detail) {
+        activityDrawerKicker.textContent = detail.kicker;
+        activityDrawerTitle.textContent = detail.title;
+        activityDrawerBody.innerHTML = detail.body;
+      } else {
+        closeActivityDrawer();
+      }
+    }
+    return;
+  }
+  const actionButton = event.target.closest("[data-activity-action]");
+  if (!actionButton) return;
+  const action = actionButton.dataset.activityAction;
+  if (action === "view-customer") {
+    closeActivityDrawer();
+    const customerId = actionButton.dataset.customerId || "";
+    if (adminCustomerSearchInput) adminCustomerSearchInput.value = "";
+    activeAdminCustomerId = customerId;
+    navigate("admin-section", { view: "customers" });
+    if (customerId) window.requestAnimationFrame(() => openAdminCustomerDetail(customerId));
+    return;
+  }
+  if (action === "load-consumption") {
+    closeActivityDrawer();
+    openManualConsumptionModal(actionButton);
+  }
 });
 
 adminSearchInput.addEventListener("input", renderAdminMenu);
-adminCustomerSearchInput.addEventListener("input", renderAdminCustomers);
+adminCustomerSearchInput?.addEventListener("input", renderAdminCustomers);
+[adminCustomerTierFilter, adminCustomerStatusFilter, adminCustomerActivityFilter, adminCustomerSortFilter]
+  .forEach((filter) => filter?.addEventListener("change", renderAdminCustomers));
+adminCustomerRows?.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-customer-action]");
+  const row = event.target.closest("[data-customer-id]");
+  const customerId = actionButton?.dataset.customerId || row?.dataset.customerId || "";
+  if (!customerId) return;
+  const action = actionButton?.dataset.customerAction || "detail";
+  if (action === "consume") {
+    openConsumptionModalForCustomer(customerId, actionButton || row);
+    return;
+  }
+  if (action === "qr") {
+    openAdminCustomerQr(customerId, actionButton || row);
+    return;
+  }
+  openAdminCustomerDetail(customerId);
+});
+adminCustomerDetailPanel?.addEventListener("click", (event) => {
+  const redemptionButton = event.target.closest("[data-redemption-action]");
+  if (redemptionButton && !redemptionButton.disabled) {
+    updateRedemptionStatus(redemptionButton.dataset.redemptionId, redemptionButton.dataset.redemptionAction);
+    return;
+  }
+  const actionButton = event.target.closest("[data-customer-action]");
+  if (!actionButton) return;
+  const customerId = actionButton.dataset.customerId || activeAdminCustomerId;
+  if (actionButton.dataset.customerAction === "consume") {
+    openConsumptionModalForCustomer(customerId, actionButton);
+    return;
+  }
+  if (actionButton.dataset.customerAction === "qr") {
+    openAdminCustomerQr(customerId, actionButton);
+    return;
+  }
+  if (actionButton.dataset.customerAction === "status") {
+    const select = [...adminCustomerDetailPanel.querySelectorAll("[data-customer-status-select]")]
+      .find((element) => element.dataset.customerStatusSelect === customerId);
+    updateAdminCustomerStatus(customerId, select?.value || "active", actionButton);
+    return;
+  }
+  if (actionButton.dataset.customerAction === "adjust-points") {
+    adjustAdminCustomerPoints(customerId, actionButton);
+  }
+});
+adminCustomerDetailClose?.addEventListener("click", closeAdminCustomerDetail);
+[
+  adminConsumptionDateFromFilter,
+  adminConsumptionDateToFilter,
+  adminConsumptionClientFilter,
+  adminConsumptionMinFilter,
+  adminConsumptionMaxFilter,
+  adminConsumptionProductFilter,
+  adminConsumptionNoteFilter
+].forEach((filter) => filter?.addEventListener("input", renderAdminConsumptions));
+[adminConsumptionCategoryFilter, adminConsumptionEmployeeFilter, adminConsumptionMethodFilter, adminConsumptionStatusFilter]
+  .forEach((filter) => filter?.addEventListener("change", renderAdminConsumptions));
+adminConsumptionFilterReset?.addEventListener("click", resetAdminConsumptionFilters);
+adminConsumptionRows?.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-consumption-action]");
+  const row = event.target.closest("[data-consumption-id]");
+  const consumptionId = actionButton?.dataset.consumptionId || row?.dataset.consumptionId || "";
+  if (!consumptionId) return;
+  openAdminConsumptionDetail(consumptionId);
+});
+adminConsumptionDetailPanel?.addEventListener("click", (event) => {
+  const consumptionButton = event.target.closest("[data-consumption-action]");
+  if (consumptionButton?.dataset.consumptionAction === "cancel") {
+    cancelConsumption(consumptionButton.dataset.consumptionId);
+    return;
+  }
+  if (consumptionButton?.dataset.consumptionAction === "correct") {
+    correctConsumption(consumptionButton.dataset.consumptionId, consumptionButton);
+    return;
+  }
+  const customerButton = event.target.closest("[data-customer-action]");
+  if (customerButton?.dataset.customerAction === "consume") {
+    openConsumptionModalForCustomer(customerButton.dataset.customerId || "", customerButton);
+    return;
+  }
+  const activityButton = event.target.closest("[data-activity-action]");
+  if (activityButton?.dataset.activityAction === "view-customer") {
+    const customerId = activityButton.dataset.customerId || "";
+    closeAdminConsumptionDetail();
+    activeAdminCustomerId = customerId;
+    navigate("admin-section", { view: "customers" });
+    if (customerId) window.requestAnimationFrame(() => openAdminCustomerDetail(customerId));
+  }
+});
+adminConsumptionDetailClose?.addEventListener("click", closeAdminConsumptionDetail);
 adminLibrarySearchInput.addEventListener("input", renderAdminLibrary);
 adminLibraryFilters?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-library-filter]");
@@ -4675,12 +8299,9 @@ adminContentRows.addEventListener("input", (event) => {
   }
 });
 
-adminSettingsGrid?.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-save-earn-rate]");
-  if (!button) return;
-  const input = adminSettingsGrid.querySelector("[data-earn-rate-input]");
-  saveLoyaltyEarnRate(input?.value || 10);
-});
+adminLoyaltyRulesForm?.addEventListener("submit", saveLoyaltyRules);
+adminRewardForm?.addEventListener("submit", saveAdminReward);
+adminRewardCancelEdit?.addEventListener("click", resetAdminRewardForm);
 
 adminLibraryGrid.addEventListener("click", async (event) => {
   const openButton = event.target.closest("[data-admin-open-content]");
@@ -4734,6 +8355,34 @@ adminRedemptionRows.addEventListener("click", (event) => {
   if (!button || button.disabled) return;
   updateRedemptionStatus(button.dataset.redemptionId, button.dataset.redemptionAction);
 });
+
+adminRewardRows?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-reward-action]");
+  if (!button) return;
+  const rewardKey = button.dataset.rewardKey || "";
+  if (button.dataset.rewardAction === "edit") {
+    editAdminReward(rewardKey);
+    return;
+  }
+  if (button.dataset.rewardAction === "toggle") {
+    toggleAdminReward(rewardKey);
+    return;
+  }
+  if (button.dataset.rewardAction === "delete") {
+    deleteAdminReward(rewardKey);
+  }
+});
+
+[adminQrUse, adminQrGoal, adminQrTone, adminQrStyle, adminQrColor].forEach((control) => {
+  control?.addEventListener("change", () => {
+    if (adminQrText) adminQrText.value = adminQrSuggestedText();
+    renderAdminQrs();
+  });
+});
+adminQrText?.addEventListener("input", () => renderAdminQrs());
+adminQrRefreshPreview?.addEventListener("click", renderAdminQrs);
+adminQrDownloadPng?.addEventListener("click", downloadAdminQrPoster);
+adminQrDownloadPdf?.addEventListener("click", downloadAdminQrPdf);
 
 adminDishRows.addEventListener("click", async (event) => {
   const row = event.target.closest("[data-admin-dish]");
@@ -4940,10 +8589,6 @@ visibleToggle.addEventListener("change", () => {
   renderEditorMeta(dish);
 });
 
-editorLanguageTabs.forEach((tab) => {
-  tab.addEventListener("click", () => setEditorLanguage(tab.dataset.lang));
-});
-
 translateButton.addEventListener("click", translateEditorDish);
 
 addPresentationButton.addEventListener("click", () => {
@@ -5045,6 +8690,20 @@ profileLogoutButton.addEventListener("click", async () => {
   showToast(labels[currentLang].profileLoggedOut || "Sesion cerrada");
 });
 
+profileReferralButton?.addEventListener("click", async () => {
+  const link = customerReferralLink();
+  if (!link) {
+    showToast("Todavia no hay codigo de referido.");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(link);
+    showToast("Link de referido copiado.");
+  } catch {
+    showToast(link);
+  }
+});
+
 signupForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const label = labels[currentLang];
@@ -5091,7 +8750,8 @@ signupForm.addEventListener("submit", async (event) => {
       options: {
         data: {
           name: signupName.value.trim(),
-          business_id: businessId
+          business_id: businessId,
+          referrer_code: activeReferralCode()
         },
         emailRedirectTo: authRedirectUrl()
       }
@@ -5108,6 +8768,7 @@ signupForm.addEventListener("submit", async (event) => {
     } else {
       showToast(label.authSignupCheckEmail || "Revisa tu correo para confirmar la cuenta.");
     }
+    recordMenuEvent("signup_complete", "", { once: false });
 
     closeSignupModal();
     signupForm.reset();
@@ -5200,7 +8861,8 @@ rewardStrip.addEventListener("click", async (event) => {
         business_id: businessId,
         reward_id: reward.id,
         reward_name: reward.name,
-        points_cost: reward.cost
+        points_cost: reward.cost,
+        status: "requested"
       }).select("*").single();
       if (error) {
         showToast(displayError(error));
@@ -5223,7 +8885,7 @@ rewardStrip.addEventListener("click", async (event) => {
       currentCustomer.redemptions = [createdRedemption, ...(currentCustomer.redemptions || [])];
       renderLoyalty();
     }
-    showToast(`${labels[currentLang].redeemed}: ${reward.name}`);
+    showToast(`Solicitud enviada: mostra esta pantalla al empleado para confirmar ${reward.name}.`);
   } finally {
     button.dataset.pending = "false";
     button.removeAttribute("aria-busy");
@@ -5370,6 +9032,10 @@ document.addEventListener("keydown", (event) => {
     closeProfileModal();
     return;
   }
+  if (event.key === "Escape" && activityDrawer && !activityDrawer.hidden) {
+    closeActivityDrawer();
+    return;
+  }
   if (event.key === "Escape" && assetModal && !assetModal.hidden) {
     closeAssetModal();
     return;
@@ -5382,6 +9048,7 @@ document.addEventListener("keydown", (event) => {
   trapQrFocus(event);
   trapConsumptionFocus(event);
   trapProfileFocus(event);
+  trapActivityFocus(event);
   trapAssetFocus(event);
   trapPhotoAiFocus(event);
   if (event.key === "Escape" && detailView.classList.contains("open")) {
@@ -5395,11 +9062,26 @@ document.addEventListener("keydown", (event) => {
 });
 
 applyBusinessShell();
+captureReferralCodeFromUrl();
 bindBrandButtons();
 updateSignupShell();
 updateQrShell();
 updateProfileShell();
 window.addEventListener("hashchange", () => {
   renderRoute();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  if (shouldAutoRefreshAdmin()) {
+    startAdminAutoRefresh();
+    refreshAdminIfVisible();
+  } else {
+    stopAdminAutoRefresh();
+  }
+  if (shouldAutoRefreshCustomer()) {
+    startCustomerAutoRefresh();
+    refreshAuthenticatedCustomer({ silent: true });
+  }
 });
 await initializeAuth();

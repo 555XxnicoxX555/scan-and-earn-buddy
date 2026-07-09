@@ -23,6 +23,10 @@
         <path d="M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9L12 3Z" />
         <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z" />
       </symbol>
+      <symbol id="icon-pin" viewBox="0 0 24 24">
+        <path d="M12 17v5" />
+        <path d="M7 3h10l-1 7 3 3v2H5v-2l3-3-1-7Z" />
+      </symbol>
       <symbol id="icon-library" viewBox="0 0 24 24">
         <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z" />
         <path d="M8 4v16" />
@@ -265,14 +269,32 @@
             <input id="consumptionQrInput" type="text" autocomplete="off" placeholder="Pegar codigo QR si la camara falla" />
             <button id="consumptionQrSubmit" type="button">Buscar</button>
           </div>
+          <div class="consumption-customer-picker" id="consumptionCustomerPicker" hidden>
+            <label>
+              <span>Buscar cliente</span>
+              <input id="consumptionCustomerSearch" type="search" autocomplete="off" placeholder="Nombre, email o QR" />
+            </label>
+            <div class="consumption-customer-results" id="consumptionCustomerResults"></div>
+          </div>
         </section>
         <section class="consumption-form">
+          <div class="consumption-quick-profile" id="consumptionQuickProfile" hidden>
+            <span>Cliente identificado</span>
+            <strong id="consumptionQuickName">Cliente</strong>
+            <small id="consumptionQuickMeta">0 pts actuales</small>
+            <div class="consumption-quick-stats" id="consumptionQuickStats"></div>
+            <div class="consumption-quick-rewards" id="consumptionQuickRewards"></div>
+            <div class="consumption-quick-actions">
+              <button class="primary" id="consumptionStartForm" type="button">Cargar consumo</button>
+              <button class="outline" id="consumptionShowRewards" type="button">Canjear premio</button>
+            </div>
+          </div>
           <div class="consumption-customer-card" id="consumptionCustomerCard" hidden>
             <span>Cliente</span>
             <strong id="consumptionCustomerName">Escanea un QR</strong>
             <small id="consumptionCustomerMeta">Sin cliente seleccionado</small>
           </div>
-          <label class="consumption-amount-field">
+          <label class="consumption-amount-field" data-consumption-form-step>
             <span>Monto total consumido</span>
             <span class="consumption-money-field">
               <b aria-hidden="true">$</b>
@@ -280,15 +302,27 @@
             </span>
             <small id="consumptionPointsPreview">0 pts a acreditar</small>
           </label>
-          <div class="consumption-section-head">
-            <span>Productos consumidos</span>
-            <small>Toca imagenes para sumar.</small>
+          <div class="consumption-meta-grid" data-consumption-form-step>
+            <label>
+              <span>Categoria</span>
+              <select id="consumptionCategory">
+                <option value="">Inferir por productos</option>
+              </select>
+            </label>
+            <label>
+              <span>Nota interna</span>
+              <input id="consumptionNote" type="text" maxlength="180" placeholder="Opcional: mesa, aclaracion o correccion" />
+            </label>
           </div>
-          <div class="consumption-catalog-wrap">
+          <div class="consumption-section-head" data-consumption-form-step>
+            <span>Productos consumidos</span>
+            <small>Opcional. Toca imagenes para sumar.</small>
+          </div>
+          <div class="consumption-catalog-wrap" data-consumption-form-step>
             <div class="consumption-catalog" id="consumptionCatalog"></div>
           </div>
-          <div class="consumption-items-list" id="consumptionItemsList"></div>
-          <button class="primary consumption-save" id="consumptionSave" type="button">Registrar consumo</button>
+          <div class="consumption-items-list" id="consumptionItemsList" data-consumption-form-step></div>
+          <button class="primary consumption-save" id="consumptionSave" type="button" data-consumption-form-step>Registrar consumo</button>
         </section>
       </div>
     </section>
@@ -406,6 +440,10 @@
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
           Clientes
         </a>
+        <a href="#" class="nav-item" data-admin-nav="consumptions">
+          <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
+          Consumos
+        </a>
         <a href="#" class="nav-item" data-admin-nav="menu">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
           Mi menu
@@ -420,11 +458,11 @@
         </a>
         <a href="#" class="nav-item" data-admin-nav="rewards">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-library"></use></svg>
-          Premios
+          Fidelizacion
         </a>
-        <a href="#" class="nav-item" data-admin-nav="analytics">
-          <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
-          Estadisticas
+        <a href="#" class="nav-item" data-admin-nav="qrs">
+          <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-qr"></use></svg>
+          QRs
         </a>
         <a href="#" class="nav-item" data-admin-nav="settings">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-settings"></use></svg>
@@ -446,50 +484,22 @@
 
     <main class="shell admin-panel" id="adminPanel" hidden>
       <section class="admin-section admin-home" id="adminHome">
-        <header class="admin-hero">
-          <p class="eyebrow" id="adminDate">Panel del dueno</p>
-          <h1 id="adminGreeting">Buenos dias, Karim</h1>
-          <p id="adminSummary">Tu menu se vio 347 veces ayer. Aqui esta el resumen.</p>
+        <header class="admin-hero admin-dashboard-hero">
+          <div>
+            <p class="eyebrow" id="adminDate">Panel del dueno</p>
+            <h1 id="adminGreeting">Bienvenido, Karim</h1>
+            <p id="adminSummary">Consumos, clientes, premios y menu digital en una sola vista.</p>
+          </div>
+          <div class="admin-hero-actions" id="adminHeroActions"></div>
         </header>
 
-        <section class="admin-stats" id="adminStats" aria-label="Resumen del negocio"></section>
+        <section class="analytics-action-strip" id="analyticsActionStrip" aria-label="Acciones recomendadas"></section>
+        <section class="analytics-kpi-grid" id="analyticsKpiGrid" aria-label="Indicadores principales"></section>
 
-        <div class="admin-grid">
-          <section class="admin-card admin-actions-card">
-            <div>
-              <h2>Que hacemos hoy?</h2>
-              <p>Atajos a las tareas que mas usas.</p>
-            </div>
-            <div class="admin-actions" id="adminActions"></div>
-          </section>
-
-          <section class="admin-card admin-suggestion">
-            <p>Sugerencia de hoy</p>
-            <h2 id="adminSuggestionTitle">Es viernes en CDMX. Que tal empujar Argile para la noche?</h2>
-            <span id="adminSuggestionText">Llevas 3 semanas sin postear Argile y los viernes generan mas interes.</span>
-            <button class="primary" id="adminSuggestionButton" type="button">
-              <svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
-              Generar post de Argile
-            </button>
-          </section>
+        <div class="home-task-grid">
+          <section class="admin-card home-task-panel" id="homeUrgentPanel"></section>
+          <section class="admin-card home-task-panel" id="homeRecentPanel"></section>
         </div>
-      </section>
-
-      <section class="admin-section admin-analytics-section" id="adminAnalyticsSection" hidden>
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">Estadisticas</p>
-            <h1>Resumen del negocio</h1>
-            <p>Base para medir consumos, puntos, clientes y productos mas cargados.</p>
-          </div>
-        </header>
-
-        <section class="admin-card admin-note-card">
-          <div>
-            <h2>Proximamente</h2>
-            <p>Esta seccion queda reservada para graficos simples de consumo, puntos acreditados y actividad del staff.</p>
-          </div>
-        </section>
       </section>
 
       <section class="admin-section admin-menu-section" id="adminMenuSection" hidden>
@@ -529,28 +539,177 @@
           <div class="topbar-actions">
             <label class="search">
               <svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
-              <input id="adminCustomerSearchInput" type="search" placeholder="Buscar por nombre, Gmail o ID..." />
+              <input id="adminCustomerSearchInput" type="search" placeholder="Buscar por nombre, email o telefono..." />
             </label>
           </div>
         </header>
 
-        <section class="admin-card admin-note-card">
-          <div>
-            <h2>Lectura de QR</h2>
-            <p>El QR identifica al cliente para consultar su cuenta. La acreditacion de puntos debe ocurrir desde un flujo owner/backend.</p>
-          </div>
+        <section class="admin-card admin-customer-filters" aria-label="Filtros de clientes">
+          <label>
+            <span>Nivel</span>
+            <select id="adminCustomerTierFilter">
+              <option value="all">Todos</option>
+            </select>
+          </label>
+          <label>
+            <span>Estado</span>
+            <select id="adminCustomerStatusFilter">
+              <option value="all">Todos</option>
+              <option value="good">Activos</option>
+              <option value="warn">En riesgo</option>
+              <option value="bad">Inactivos</option>
+              <option value="neutral">Sin visitas</option>
+              <option value="operational:blocked">Bloqueados</option>
+              <option value="operational:deleted">Eliminados</option>
+              <option value="operational:incomplete">Sin completar</option>
+            </select>
+          </label>
+          <label>
+            <span>Actividad</span>
+            <select id="adminCustomerActivityFilter">
+              <option value="all">Todos</option>
+              <option value="points">Con mas puntos</option>
+              <option value="inactive">Sin actividad reciente</option>
+              <option value="streak">Con racha activa</option>
+            </select>
+          </label>
+          <label>
+            <span>Orden</span>
+            <select id="adminCustomerSortFilter">
+              <option value="lastVisit">Ultima visita</option>
+              <option value="points">Puntos</option>
+              <option value="visits">Consumos</option>
+              <option value="spent">Total gastado</option>
+              <option value="name">Nombre</option>
+            </select>
+          </label>
         </section>
 
-        <section class="menu-board" aria-label="Clientes registrados">
-          <div class="table-head admin-customers-head">
-            <span>Cliente</span>
-            <span>Puntos</span>
-            <span>Nivel</span>
-            <span>QR visible</span>
-            <span>Alta</span>
+        <div class="admin-customers-layout">
+          <section class="menu-board admin-customers-board" aria-label="Clientes registrados">
+            <div class="table-head admin-customers-head">
+              <span>Cliente</span>
+              <span>Puntos</span>
+              <span>Nivel</span>
+              <span>Ultima visita</span>
+              <span>Racha</span>
+              <span>Consumos</span>
+              <span>Total</span>
+              <span></span>
+            </div>
+            <div id="adminCustomerRows"></div>
+          </section>
+
+          <aside class="admin-card admin-customer-detail" id="adminCustomerDetailPanel" hidden>
+            <button class="icon-button admin-customer-detail-close" id="adminCustomerDetailClose" type="button" aria-label="Cerrar detalle">
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+            </button>
+            <div id="adminCustomerDetailContent"></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="admin-section admin-consumptions-section" id="adminConsumptionsSection" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Consumos</p>
+            <h1>Historial de compras cargadas</h1>
           </div>
-          <div id="adminCustomerRows"></div>
+          <div class="topbar-actions">
+            <button class="primary" type="button" data-analytics-action="consumption">
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+              Cargar consumo
+            </button>
+          </div>
+        </header>
+
+        <section class="consumption-summary-grid" id="adminConsumptionSummary" aria-label="Resumen de consumos"></section>
+
+        <section class="admin-card admin-consumption-filters" aria-label="Filtros de consumos">
+          <label>
+            <span>Desde</span>
+            <input id="adminConsumptionDateFromFilter" type="date" />
+          </label>
+          <label>
+            <span>Hasta</span>
+            <input id="adminConsumptionDateToFilter" type="date" />
+          </label>
+          <label>
+            <span>Cliente</span>
+            <input id="adminConsumptionClientFilter" type="search" placeholder="Nombre o email" />
+          </label>
+          <label>
+            <span>Monto minimo</span>
+            <input id="adminConsumptionMinFilter" type="number" min="0" inputmode="decimal" placeholder="0" />
+          </label>
+          <label>
+            <span>Monto maximo</span>
+            <input id="adminConsumptionMaxFilter" type="number" min="0" inputmode="decimal" placeholder="Sin limite" />
+          </label>
+          <label>
+            <span>Producto</span>
+            <input id="adminConsumptionProductFilter" type="search" placeholder="Producto cargado" />
+          </label>
+          <label>
+            <span>Categoria</span>
+            <select id="adminConsumptionCategoryFilter">
+              <option value="all">Todas</option>
+            </select>
+          </label>
+          <label>
+            <span>Nota</span>
+            <input id="adminConsumptionNoteFilter" type="search" placeholder="Observacion interna" />
+          </label>
+          <label>
+            <span>Empleado</span>
+            <select id="adminConsumptionEmployeeFilter">
+              <option value="all">Todos</option>
+            </select>
+          </label>
+          <label>
+            <span>Tipo</span>
+            <select id="adminConsumptionMethodFilter">
+              <option value="all">Todos</option>
+              <option value="qr">QR</option>
+              <option value="manual">Manual</option>
+              <option value="api">API</option>
+              <option value="adjustment">Ajuste</option>
+            </select>
+          </label>
+          <label>
+            <span>Estado</span>
+            <select id="adminConsumptionStatusFilter">
+              <option value="all">Todos</option>
+              <option value="confirmed">Confirmado</option>
+              <option value="cancelled">Cancelado</option>
+              <option value="corrected">Corregido</option>
+            </select>
+          </label>
+          <button class="outline admin-consumption-filter-reset" id="adminConsumptionFilterReset" type="button">Limpiar filtros</button>
         </section>
+
+        <div class="admin-consumptions-layout">
+          <section class="menu-board admin-consumptions-board" aria-label="Consumos registrados">
+            <div class="table-head admin-consumptions-head">
+              <span>Cliente</span>
+              <span>Monto</span>
+              <span>Productos</span>
+              <span>Puntos</span>
+              <span>Empleado</span>
+              <span>Metodo</span>
+              <span>Fecha</span>
+              <span></span>
+            </div>
+            <div id="adminConsumptionRows"></div>
+          </section>
+
+          <aside class="admin-card admin-consumption-detail" id="adminConsumptionDetailPanel" hidden>
+            <button class="icon-button admin-consumption-detail-close" id="adminConsumptionDetailClose" type="button" aria-label="Cerrar detalle">
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+            </button>
+            <div id="adminConsumptionDetailContent"></div>
+          </aside>
+        </div>
       </section>
 
       <section class="admin-section admin-content-section" id="adminContentSection" hidden>
@@ -683,24 +842,117 @@
       <section class="admin-section admin-rewards-section" id="adminRewardsSection" hidden>
         <header class="topbar">
           <div>
-            <p class="eyebrow">Premios</p>
-            <h1>Catalogo y canjes</h1>
+            <p class="eyebrow">Fidelizacion</p>
+            <h1>Puntos, premios y canjes</h1>
           </div>
         </header>
 
-        <div class="admin-split-grid">
-          <section class="admin-card">
+        <div class="admin-loyalty-layout">
+          <section class="admin-card admin-loyalty-rules-card">
             <div class="admin-card-head">
               <div>
-                <h2>Premios activos</h2>
-                <p>Se leen desde el config estatico de la plantilla.</p>
+                <h2>Reglas de puntos</h2>
+                <p>Configura lo central del programa de fidelizacion.</p>
+              </div>
+            </div>
+            <form class="admin-loyalty-rules" id="adminLoyaltyRulesForm">
+              <label>
+                <span>% del consumo</span>
+                <input id="loyaltyEarnRateInput" type="number" min="0" step="1" inputmode="numeric" />
+              </label>
+              <label>
+                <span>Puntos por registro</span>
+                <input id="loyaltySignupBonusInput" type="number" min="0" step="1" inputmode="numeric" />
+              </label>
+              <label>
+                <span>Referidor</span>
+                <input id="loyaltyReferralOwnerInput" type="number" min="0" step="1" inputmode="numeric" />
+              </label>
+              <label>
+                <span>Referido</span>
+                <input id="loyaltyReferralGuestInput" type="number" min="0" step="1" inputmode="numeric" />
+              </label>
+              <label>
+                <span>Racha semanal</span>
+                <input id="loyaltyStreakWeeksInput" type="number" min="1" step="1" inputmode="numeric" />
+              </label>
+              <label>
+                <span>Bonus de racha</span>
+                <input id="loyaltyStreakBonusInput" type="number" min="0" step="1" inputmode="numeric" />
+              </label>
+              <label>
+                <span>Plata desde</span>
+                <input id="loyaltyTierSilverInput" type="number" min="0" step="1" inputmode="numeric" />
+              </label>
+              <label>
+                <span>Oro desde</span>
+                <input id="loyaltyTierGoldInput" type="number" min="1" step="1" inputmode="numeric" />
+              </label>
+              <label>
+                <span>Platino desde</span>
+                <input id="loyaltyTierPlatinumInput" type="number" min="1" step="1" inputmode="numeric" />
+              </label>
+              <button class="primary" type="submit">Guardar reglas</button>
+            </form>
+          </section>
+
+          <section class="admin-card admin-reward-editor-card">
+            <div class="admin-card-head">
+              <div>
+                <h2>Crear premio</h2>
+                <p>Premios activos aparecen en la tarjeta del cliente.</p>
               </div>
               <span class="admin-count-pill" id="adminRewardsCount">0</span>
             </div>
-            <div class="admin-compact-list" id="adminRewardRows"></div>
+            <form class="admin-reward-form" id="adminRewardForm">
+              <input id="adminRewardEditingKey" type="hidden" />
+              <label>
+                <span>Nombre</span>
+                <input id="adminRewardNameInput" type="text" placeholder="Cafe gratis" required />
+              </label>
+              <label>
+                <span>Descripcion</span>
+                <input id="adminRewardDescriptionInput" type="text" placeholder="Valido en mostrador" />
+              </label>
+              <label>
+                <span>Imagen</span>
+                <input id="adminRewardImageInput" type="url" placeholder="https://..." />
+              </label>
+              <label>
+                <span>Puntos necesarios</span>
+                <input id="adminRewardCostInput" type="number" min="1" step="1" inputmode="numeric" required />
+              </label>
+              <label>
+                <span>Stock</span>
+                <input id="adminRewardStockInput" type="number" min="0" step="1" inputmode="numeric" placeholder="Sin limite" />
+              </label>
+              <label>
+                <span>Nivel minimo</span>
+                <select id="adminRewardMinTierInput">
+                  <option value="">Cualquier nivel</option>
+                  <option value="bronze">Bronce</option>
+                  <option value="silver">Plata</option>
+                  <option value="gold">Oro</option>
+                  <option value="platinum">Platino</option>
+                </select>
+              </label>
+              <label>
+                <span>Vigencia</span>
+                <input id="adminRewardValidUntilInput" type="date" />
+              </label>
+              <label class="admin-checkbox">
+                <input id="adminRewardActiveInput" type="checkbox" checked />
+                <span>Activo en la tarjeta</span>
+              </label>
+              <div class="admin-form-actions">
+                <button class="primary" type="submit">Guardar premio</button>
+                <button class="outline" id="adminRewardCancelEdit" type="button" hidden>Cancelar edicion</button>
+              </div>
+            </form>
+            <div class="admin-compact-list admin-reward-list" id="adminRewardRows"></div>
           </section>
 
-          <section class="admin-card">
+          <section class="admin-card admin-redemptions-card">
             <div class="admin-card-head">
               <div>
                 <h2>Canjes recientes</h2>
@@ -722,6 +974,84 @@
         </header>
 
         <div class="admin-settings-grid" id="adminSettingsGrid"></div>
+      </section>
+
+      <section class="admin-section admin-qrs-section" id="adminQrsSection" hidden>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">QRs</p>
+            <h1>Codigos para el negocio</h1>
+          </div>
+        </header>
+
+        <div class="admin-qrs-layout">
+          <section class="admin-card admin-qr-builder">
+            <div class="admin-card-head">
+              <div>
+                <h2>Generar QR</h2>
+                <p>El codigo apunta al dominio publico del negocio.</p>
+              </div>
+            </div>
+            <label>
+              <span>Uso</span>
+              <select id="adminQrUse">
+                <option value="mesa">Mesa</option>
+                <option value="mostrador">Mostrador</option>
+                <option value="redes">Redes</option>
+                <option value="flyer">Flyer</option>
+              </select>
+            </label>
+            <label>
+              <span>Objetivo</span>
+              <select id="adminQrGoal">
+                <option value="menu">Menu y puntos</option>
+                <option value="registro">Registro al club</option>
+                <option value="premios">Premios exclusivos</option>
+                <option value="promo">Promocion</option>
+              </select>
+            </label>
+            <label>
+              <span>Tono</span>
+              <select id="adminQrTone">
+                <option value="directo">Directo</option>
+                <option value="elegante">Elegante</option>
+                <option value="divertido">Divertido</option>
+                <option value="premium">Premium</option>
+              </select>
+            </label>
+            <label>
+              <span>Estilo visual</span>
+              <select id="adminQrStyle">
+                <option value="editorial">Editorial</option>
+                <option value="simple">Simple</option>
+                <option value="sello">Sello del club</option>
+              </select>
+            </label>
+            <label>
+              <span>Color principal</span>
+              <select id="adminQrColor">
+                <option value="marca">Marca</option>
+                <option value="ambar">Ambar</option>
+                <option value="oliva">Oliva</option>
+                <option value="vino">Vino</option>
+              </select>
+            </label>
+            <label>
+              <span>Texto principal</span>
+              <input id="adminQrText" type="text" value="Pedi, suma y canjea." />
+            </label>
+            <div class="admin-form-actions">
+              <button class="primary" id="adminQrDownloadPng" type="button">Descargar PNG</button>
+              <button class="outline" id="adminQrDownloadPdf" type="button">Descargar PDF</button>
+              <button class="outline" id="adminQrRefreshPreview" type="button">Actualizar vista</button>
+            </div>
+            <p class="admin-qr-url" id="adminQrUrl"></p>
+          </section>
+
+          <section class="admin-card admin-qr-preview-card">
+            <canvas id="adminQrPreview" width="900" height="1200" aria-label="Vista previa del QR"></canvas>
+          </section>
+        </div>
       </section>
     </main>
 
@@ -770,6 +1100,7 @@
           <button id="rewardsButton" type="button">Ver premios</button>
         </div>
         <div class="reward-strip" id="rewardStrip"></div>
+        <div class="reward-status-note" id="rewardStatusNote" hidden></div>
       </section>
 
       <section class="staff-consumption-card" id="staffConsumptionCard" aria-label="Carga de consumo" hidden>
@@ -798,7 +1129,7 @@
       <nav class="category-strip" id="categoryStrip" aria-label="Categorias"></nav>
 
       <section class="recommendation">
-        <p>Hoy te recomendamos</p>
+        <p>Producto destacado</p>
         <button class="hero-card" id="recommendedCard" type="button">
           <span class="badge">Mas pedido</span>
           <strong>Shawarma de carne</strong>
@@ -874,11 +1205,18 @@
           <span id="profilePointsLabel">Puntos disponibles</span>
           <strong><span id="profilePoints">0</span> pts</strong>
           <small id="profileLevel">Nivel Bronce</small>
+          <small id="profileStreak">Racha semanal: 0</small>
         </div>
         <div class="profile-actions" aria-label="Accesos del perfil">
           <button id="profileAdminButton" type="button" hidden>Panel de admin</button>
           <button id="profileQrButton" type="button">QR de cliente recurrente</button>
+          <button id="profileReferralButton" type="button">Compartir referido</button>
           <button id="profileLogoutButton" type="button">Cerrar sesion</button>
+        </div>
+        <div class="profile-referral" id="profileReferralBox" hidden>
+          <span>Tu codigo</span>
+          <strong id="profileReferralCode">SUMI</strong>
+          <small id="profileReferralText">Comparte tu link para que ambos sumen puntos.</small>
         </div>
         <details class="profile-history" id="profileHistory">
           <summary>
@@ -888,6 +1226,18 @@
           <div id="profileHistoryList"></div>
         </details>
       </div>
+    </section>
+
+    <section class="activity-drawer" id="activityDrawer" role="dialog" aria-modal="true" aria-labelledby="activityDrawerTitle" hidden>
+      <div class="signup-backdrop" data-activity-close></div>
+      <aside class="activity-sheet">
+        <button class="signup-close activity-close" id="activityDrawerClose" type="button" aria-label="Cerrar actividad">
+          <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+        </button>
+        <p class="activity-kicker" id="activityDrawerKicker">Actividad reciente</p>
+        <h1 id="activityDrawerTitle">Detalle de actividad</h1>
+        <div id="activityDrawerBody"></div>
+      </aside>
     </section>
 
     <section class="editor" id="editorPanel" aria-label="Editor de producto">
@@ -909,7 +1259,7 @@
                 <button class="outline" id="translateButton" type="button"><svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg> Traducir con IA</button>
               </div>
 
-              <div class="tabs" role="tablist">
+              <div class="tabs" id="editorLanguageTabs" role="tablist">
                 <button class="tab active" data-lang="es" type="button">Espanol <span></span></button>
                 <button class="tab" data-lang="en" type="button">English <span></span></button>
                 <button class="tab" data-lang="ar" type="button">&#1575;&#1604;&#1593;&#1585;&#1576;&#1610;&#1577; <span></span></button>
