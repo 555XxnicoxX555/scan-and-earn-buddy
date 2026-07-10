@@ -7366,6 +7366,13 @@ async function improveEditorPhotoWithAi() {
     showToast("Conecta Supabase y entra como owner para usar IA.");
     return;
   }
+  await loadAiCreditBalance().catch(() => aiCreditBalance);
+  if ((aiCreditBalance.remaining ?? aiMonthlyCreditLimit) < aiGenerationCreditCost) {
+    setPhotoAiStatus("No quedan creditos suficientes para generar otra mejora.", "error");
+    showToast("No quedan creditos suficientes este mes.");
+    renderAdminContent();
+    return;
+  }
 
   const productImage = await imageReferenceForGeneration(dish.photo);
   if (!productImage) {
@@ -7405,6 +7412,8 @@ async function improveEditorPhotoWithAi() {
     if (!data?.imageUrl || data?.source !== "kie-ai") {
       throw new Error("La IA no devolvio una imagen valida.");
     }
+    updateAiCreditBalanceFromGeneration(data);
+    await loadAiCreditEvents().catch(() => aiCreditEvents);
     editorAiImprovedPhoto = data.imageUrl;
     editorAiCompressedPhoto = "";
     showPhotoAiComparison(editorAiOriginalPhoto || dish.photo, editorAiImprovedPhoto);
@@ -7412,9 +7421,20 @@ async function improveEditorPhotoWithAi() {
     photoAiApply.disabled = false;
     if (photoAiDownload) photoAiDownload.disabled = false;
     if (photoAiRegenerate) photoAiRegenerate.hidden = true;
-    setPhotoAiStatus("Mejora lista. Arrastra para comparar.", "success");
+    setPhotoAiStatus(`Mejora lista. Quedan ${aiCreditBalance.remaining ?? aiMonthlyCreditLimit} creditos.`, "success");
+    renderAdminContent();
     showToast("Mejora lista. Compara y decide si conservarla.");
   } catch (error) {
+    if (error?.context?.json) {
+      const body = await error.context.json().catch(() => null);
+      if (body?.code === "insufficient_credits") {
+        updateAiCreditBalanceFromGeneration(body);
+        renderAdminContent();
+        setPhotoAiStatus("No quedan creditos suficientes para generar otra mejora.", "error");
+        showToast("No quedan creditos suficientes este mes.");
+        return;
+      }
+    }
     const message = displayError(error);
     setPhotoAiStatus(message, "error");
     showToast(message);

@@ -179,6 +179,17 @@ Configurar esos limites en `business.config.json`:
 El admin muestra uso mensual, creditos restantes, generaciones disponibles y el
 ultimo movimiento para que el owner entienda el costo antes de generar.
 
+Politica recomendada para venderlo:
+
+- Plan inicial: 60 creditos/mes.
+- Plan base: 150 creditos/mes.
+- Plan pro: 400 creditos/mes.
+- Cada pieza de contenido o mejora de foto de producto consume
+  `generationCreditCost`.
+- Descargar, conservar, editar textos o subir referencias no consume creditos.
+- Al quedarse sin saldo, la UI bloquea nuevas generaciones y el backend vuelve a
+  validar con `insufficient_credits`.
+
 ## 6. Entrega y operacion
 
 Antes de entregar:

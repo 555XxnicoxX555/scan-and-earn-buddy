@@ -2,6 +2,7 @@ const KIE_API_KEY = Deno.env.get("KIE_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 const STORAGE_BUCKET = "generated-content";
+const DEFAULT_CREDIT_COST = 2;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -116,6 +117,69 @@ async function isBusinessAdmin(authHeader: string, businessId: string, userId: s
   if (!response.ok) return false;
   const rows = await response.json() as Array<{ id: string }>;
   return rows.length > 0;
+}
+
+async function callSupabaseRpc<T>(authHeader: string, functionName: string, payload: Record<string, unknown>) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Missing Supabase environment");
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${functionName}`, {
+    method: "POST",
+    headers: {
+      Authorization: authHeader,
+      apikey: SUPABASE_ANON_KEY,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = safeString((body as { message?: unknown }).message) || `Supabase RPC ${functionName} failed`;
+    throw new Error(message);
+  }
+
+  return body as T;
+}
+
+async function ensureCredits(authHeader: string, businessId: string) {
+  return await callSupabaseRpc<{
+    business_id: string;
+    period_month: string;
+    monthly_limit: number;
+    credits_remaining: number;
+  }>(authHeader, "ensure_business_ai_credit_balance", {
+    target_business_id: businessId
+  });
+}
+
+async function creditSettings(authHeader: string, businessId: string) {
+  const body = await callSupabaseRpc<Array<{
+    monthly_limit: number;
+    generation_credit_cost: number;
+  }> | {
+    monthly_limit: number;
+    generation_credit_cost: number;
+  }>(authHeader, "business_ai_credit_settings", {
+    target_business_id: businessId
+  });
+  const settings = Array.isArray(body) ? body[0] : body;
+  return {
+    monthlyLimit: Number(settings?.monthly_limit || 150),
+    generationCreditCost: Math.max(1, Number(settings?.generation_credit_cost || DEFAULT_CREDIT_COST))
+  };
+}
+
+async function consumeCredits(authHeader: string, businessId: string, taskId: string, creditCost: number) {
+  return await callSupabaseRpc<{
+    business_id: string;
+    period_month: string;
+    monthly_limit: number;
+    credits_remaining: number;
+  }>(authHeader, "consume_business_ai_credits", {
+    target_business_id: businessId,
+    credits_to_consume: creditCost,
+    event_reason: "product_photo_improvement",
+    kie_task_id: taskId
+  });
 }
 
 async function uploadReferenceImageToKie(dataUrl: string, folder: string) {
@@ -284,15 +348,32 @@ Deno.serve(async (req) => {
     if (!user?.id) return jsonResponse({ error: "Unauthorized" }, 401);
     if (!await isBusinessAdmin(authHeader, businessId, user.id)) return jsonResponse({ error: "Forbidden" }, 403);
 
+    const settings = await creditSettings(authHeader, businessId);
+    let creditBalance = await ensureCredits(authHeader, businessId);
+    if (creditBalance.credits_remaining < settings.generationCreditCost) {
+      return jsonResponse({
+        error: "Insufficient AI credits",
+        code: "insufficient_credits",
+        creditsRemaining: creditBalance.credits_remaining,
+        monthlyLimit: creditBalance.monthly_limit,
+        periodMonth: creditBalance.period_month
+      }, 402);
+    }
+
     const task = await createKieTask(input);
     const imageUrl = task.imageUrl || await pollKieTask(task.taskId);
     const storedImage = await uploadImprovedImage(authHeader, businessId, imageUrl);
+    creditBalance = await consumeCredits(authHeader, businessId, task.taskId, settings.generationCreditCost);
     return jsonResponse({
       imageUrl: storedImage.publicUrl,
       storagePath: storedImage.storagePath,
       originalImageUrl: imageUrl,
       taskId: task.taskId,
       model: "gpt-image-2-image-to-image",
+      creditsUsed: settings.generationCreditCost,
+      creditsRemaining: creditBalance.credits_remaining,
+      monthlyLimit: creditBalance.monthly_limit,
+      periodMonth: creditBalance.period_month,
       source: "kie-ai"
     });
   } catch (error) {

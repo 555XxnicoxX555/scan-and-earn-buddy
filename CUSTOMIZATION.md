@@ -656,18 +656,34 @@ Creditos:
 - La plantilla demo usa 150 creditos por mes.
 - Cada generacion consume `aiCredits.generationCreditCost`; la plantilla demo
   usa 2 creditos.
+- Por ahora consumen creditos las generaciones de piezas de contenido y las
+  mejoras de imagen de producto del menu.
+- No consumen creditos: descargar piezas ya generadas, conservar una imagen ya
+  generada, subir fondos de referencia ni editar texto del menu.
 - `aiCredits.planName` nombra el paquete comercial visible para el owner.
 - `aiCredits.lowBalanceWarningThreshold` define desde cuando el panel muestra
   alerta de saldo bajo.
 - La seccion Crear contenido muestra uso mensual, creditos restantes,
   generaciones disponibles y ultimo movimiento.
+- Si no quedan creditos suficientes, la UI bloquea el boton antes de llamar a
+  la IA y la Edge Function responde `insufficient_credits` como control final.
 - El saldo se restablece al limite mensual configurado al cambiar de mes; no se
   acumula.
 - El control real ocurre en Supabase mediante
   `business_ai_settings`, `business_ai_credit_balances`,
-  `business_ai_credit_events` y la Edge Function.
+  `business_ai_credit_events` y las Edge Functions de IA.
 - `scripts/prepare-client.mjs` copia estos valores al config generado y al seed
   del cliente.
+
+Planes comerciales sugeridos:
+
+- `Plan inicial`: 60 creditos/mes para negocios que solo prueban contenido.
+- `Plan base`: 150 creditos/mes para uso semanal de contenido y menu.
+- `Plan pro`: 400 creditos/mes para locales con campañas frecuentes.
+
+Si el comercio supera el cupo, vender paquete extra o pasar al plan superior. No
+prometer generaciones ilimitadas: Sumi debe mostrar siempre cupo, costo por
+accion y ultimo movimiento.
 
 Referencias de diseno usadas para loading states:
 
