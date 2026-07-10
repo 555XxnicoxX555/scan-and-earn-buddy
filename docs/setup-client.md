@@ -32,6 +32,21 @@ Objetivo: adaptar la plantilla sin mezclar datos demo con datos reales.
    npm run prepare:client -- --config business.config.json
    ```
 
+8. Verificar que la instancia generada esta lista para migraciones/deploy:
+
+   ```powershell
+   npm run check:client:e2e -- --config business.config.json
+   ```
+
+   Este chequeo confirma que existen `businesses/<business-id>/config.js`,
+   `supabase/seed.client.generated.sql`, migraciones clave, URL publica y
+   variables `.env` esperadas. Para validar la plantilla demo sin bloquear por
+   placeholders:
+
+   ```powershell
+   npm run check:client:e2e -- --config business.config.example.json --allow-template
+   ```
+
 El comando crea `businesses/<business-id>/config.js` y
 `supabase/seed.client.generated.sql`. Revisar ambos antes de publicar.
 

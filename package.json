@@ -6,6 +6,7 @@
     "smoke:ui": "node scripts/smoke-ui.mjs",
     "check:supabase": "node scripts/check-supabase.mjs",
     "check:client": "node scripts/check-client-readiness.mjs",
+    "check:client:e2e": "node scripts/check-client-e2e.mjs",
     "prepare:client": "node scripts/prepare-client.mjs"
   },
   "devDependencies": {
