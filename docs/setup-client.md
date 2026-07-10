@@ -47,6 +47,16 @@ Objetivo: adaptar la plantilla sin mezclar datos demo con datos reales.
    npm run check:client:e2e -- --config business.config.example.json --allow-template
    ```
 
+9. Verificar que canjes en vivo tienen Realtime y polling de respaldo:
+
+   ```powershell
+   npm run check:live-sync
+   ```
+
+   Esta compuerta revisa que `reward_redemptions` este en la migracion de
+   Realtime, que el frontend escuche cambios de Supabase y que conserve el
+   polling fallback para proyectos donde Realtime demore o no este habilitado.
+
 El comando crea `businesses/<business-id>/config.js` y
 `supabase/seed.client.generated.sql`. Revisar ambos antes de publicar.
 
