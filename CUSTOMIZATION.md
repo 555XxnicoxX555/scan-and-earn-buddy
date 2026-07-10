@@ -331,18 +331,21 @@ El Inicio muestra solo:
 - Accesos rapidos: cargar consumo, escanear QR, generar QR del menu, crear
   promocion y agregar premio.
 - Actividad reciente: ultimos consumos, canjes y registros.
+- Oportunidades compactas: productos vistos vs comprados, producto para empujar
+  con contenido y clientes en riesgo.
 
 No poner en Inicio:
 
-- Rankings de clientes.
-- Clientes en riesgo o inactivos.
-- Productos mas/menos vendidos.
-- Conversiones del menu digital.
+- Rankings largos de clientes.
+- Listas extensas de inactivos.
+- Productos mas/menos vendidos sin accion clara.
+- Conversiones del menu digital sin recomendacion.
 - Impacto de contenido.
 - Tablas largas o textos tecnicos.
 
 Esa informacion debe vivir en secciones especificas como Clientes, Premios,
-Contenido o futuras pantallas de Consumos/Estadisticas avanzadas.
+Contenido o futuras pantallas de Consumos/Estadisticas avanzadas si necesita
+detalle profundo. En Inicio solo se permite una version breve con accion.
 
 El MVP actual usa datos reales de estas fuentes:
 
@@ -365,9 +368,11 @@ Reglas para personalizar negocios:
    `Cargar consumo`, `Crear contenido`, `Gestionar canjes` o `Generar QR`.
 2. Mantener las metricas conectadas a una accion navegable.
 3. Evitar graficos decorativos y rankings largos en Inicio.
-4. Usar `point_events.id` como identificador interno de una compra registrada y
+4. Mostrar conversiones solo si hay `business_menu_events`; si no, usar estado
+   vacio que invite a abrir/generar QR del menu.
+5. Usar `point_events.id` como identificador interno de una compra registrada y
    `request_id` como llave idempotente del intento de carga.
-5. Si el volumen crece, mover los calculos pesados a RPCs SQL, pero conservar
+6. Si el volumen crece, mover los calculos pesados a RPCs SQL, pero conservar
    Inicio como pantalla de control rapido.
 
 ## Como editar productos

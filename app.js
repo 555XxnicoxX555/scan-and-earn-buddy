@@ -456,6 +456,7 @@ const adminSettingsSection = document.querySelector("#adminSettingsSection");
 const adminHeroActions = document.querySelector("#adminHeroActions");
 const analyticsKpiGrid = document.querySelector("#analyticsKpiGrid");
 const analyticsActionStrip = document.querySelector("#analyticsActionStrip");
+const homeInsightGrid = document.querySelector("#homeInsightGrid");
 const homeUrgentPanel = document.querySelector("#homeUrgentPanel");
 const homeRecentPanel = document.querySelector("#homeRecentPanel");
 const adminDishRows = document.querySelector("#adminDishRows");
@@ -5604,6 +5605,96 @@ function renderAnalyticsTable(rows, options = {}) {
   `;
 }
 
+function conversionPercent(value) {
+  if (!Number.isFinite(Number(value))) return "0%";
+  return `${Math.round(Number(value) * 100)}%`;
+}
+
+function conversionTone(item) {
+  if (!item.value) return "neutral";
+  if (item.conversion >= 0.35) return "good";
+  if (item.conversion >= 0.12) return "warn";
+  return "bad";
+}
+
+function renderHomeInsights(model) {
+  if (!homeInsightGrid) return;
+  const hasMenuTracking = model.menu.events.length > 0;
+  const opportunity = model.opportunity;
+  const conversionRows = [...model.menu.productConversions]
+    .sort((a, b) => b.value - a.value || a.conversion - b.conversion)
+    .slice(0, 6);
+  const riskRows = model.riskCustomers.slice(0, 5);
+  const opportunityBody = opportunity
+    ? `
+      <div class="analytics-opportunity">
+        <span class="analytics-status is-${escapeAttribute(opportunity.value > 0 ? conversionTone(opportunity) : "warn")}">
+          ${escapeHtml(opportunity.value > 0 ? "Visto, pero vende poco" : "Sin consumos")}
+        </span>
+        <strong>${escapeHtml(opportunity.label)}</strong>
+        <small>${escapeHtml(opportunity.value > 0
+          ? `${opportunity.value} vistas · ${opportunity.purchases || 0} compras · ${conversionPercent(opportunity.conversion)} conversion`
+          : `Producto visible sin consumos registrados · ${opportunity.category || "Sin categoria"}`)}</small>
+        ${analyticsActionButton("Crear promocion", "content", opportunity.dishId ? `data-dish-id="${escapeAttribute(opportunity.dishId)}"` : "")}
+      </div>
+    `
+    : analyticsEmpty("Sin oportunidad clara", "Cuando haya vistas o consumos, Sumi va a sugerir que producto empujar.", analyticsActionButton("Crear contenido", "content"));
+
+  homeInsightGrid.innerHTML = `
+    <section class="analytics-panel analytics-panel-wide">
+      <div class="admin-card-head">
+        <div>
+          <h2>Menu digital</h2>
+          <p>Vistas del menu, productos consultados y compras cargadas.</p>
+        </div>
+        ${analyticsActionButton("Ver menu", "menu")}
+      </div>
+      ${hasMenuTracking ? renderAnalyticsTable(conversionRows, {
+        limit: 6,
+        emptyTitle: "Todavia no hay vistas de productos",
+        emptyBody: "Cuando los clientes abran detalles del menu, se compara contra compras cargadas.",
+        columns: [
+          { label: "Producto", width: "minmax(180px, 1.5fr)", render: (row) => `<strong>${escapeHtml(row.label)}</strong><small>${escapeHtml(dishById(row.dishId)?.category || "Sin categoria")}</small>` },
+          { label: "Vistas", render: (row) => escapeHtml(row.value) },
+          { label: "Compras", render: (row) => escapeHtml(row.purchases || 0) },
+          { label: "Conversion", render: (row) => `<span class="analytics-status is-${escapeAttribute(conversionTone(row))}">${escapeHtml(conversionPercent(row.conversion))}</span>` }
+        ]
+      }) : analyticsEmpty("Sin tracking de menu aun", "Abre el menu publico y detalles de productos para empezar a medir interes.", analyticsActionButton("Abrir menu", "public-menu"))}
+    </section>
+
+    <section class="analytics-panel">
+      <div class="admin-card-head">
+        <div>
+          <h2>Oportunidad</h2>
+          <p>Que conviene empujar ahora.</p>
+        </div>
+      </div>
+      ${opportunityBody}
+    </section>
+
+    <section class="analytics-panel">
+      <div class="admin-card-head">
+        <div>
+          <h2>Clientes en riesgo</h2>
+          <p>Clientes que conviene recuperar.</p>
+        </div>
+        ${analyticsActionButton("Ver clientes", "customers")}
+      </div>
+      ${riskRows.length ? renderAnalyticsRank(riskRows.map((customer) => ({
+        label: customer.profile?.name || customer.profile?.email || "Cliente",
+        value: customer.lastVisit ? Math.max(1, Math.floor((Date.now() - new Date(customer.lastVisit).getTime()) / 86400000)) : 0,
+        visits: customer.visits,
+        totalSpent: customer.totalSpent,
+        status: customer.status?.label
+      })), {
+        limit: 5,
+        meta: (item) => `${item.visits} visitas · ${formatCurrency(item.totalSpent)} gastados · ${item.status}`,
+        value: (item) => `${item.value} d`
+      }) : analyticsEmpty("Sin clientes en riesgo", "Cuando alguien deje de venir 31 dias o mas, aparece aca.", analyticsActionButton("Ver clientes", "customers"))}
+    </section>
+  `;
+}
+
 function isToday(dateValue) {
   if (!dateValue) return false;
   const date = new Date(dateValue);
@@ -5894,6 +5985,7 @@ function renderAdminAnalytics() {
     analyticsActionStrip.innerHTML = "";
     homeUrgentPanel.innerHTML = "";
     homeRecentPanel.innerHTML = "";
+    if (homeInsightGrid) homeInsightGrid.innerHTML = "";
     return;
   }
   if (supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded) {
@@ -5912,6 +6004,7 @@ function renderAdminAnalytics() {
     analyticsActionStrip.innerHTML = "";
     homeUrgentPanel.innerHTML = analyticsEmpty("Cargando datos del negocio", "Estamos trayendo clientes, consumos y canjes desde Supabase.");
     homeRecentPanel.innerHTML = analyticsEmpty("Cargando actividad", "En unos segundos aparecen los ultimos registros.");
+    if (homeInsightGrid) homeInsightGrid.innerHTML = "";
     return;
   }
 
@@ -6027,6 +6120,7 @@ function renderAdminAnalytics() {
       </div>
     ` : analyticsEmpty("Todavia no hay actividad", "Cuando entren registros, consumos o canjes, aparecen en este resumen.", analyticsActionButton("Cargar consumo", "consumption"))}
   `;
+  renderHomeInsights(model);
 }
 
 function renderAiCreditPanel() {

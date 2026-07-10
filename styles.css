@@ -4025,6 +4025,31 @@ body.admin-active .admin-content-preview {
   text-transform: uppercase;
 }
 
+.analytics-opportunity {
+  min-height: 100%;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.analytics-opportunity > strong {
+  color: var(--deep);
+  font-family: var(--font-serif);
+  font-size: clamp(26px, 3vw, 38px);
+  font-style: italic;
+  line-height: 0.95;
+}
+
+.analytics-opportunity > small {
+  color: rgba(36, 51, 41, 0.72);
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.analytics-opportunity .ghost {
+  justify-self: start;
+}
+
 .analytics-table {
   overflow-x: auto;
   scrollbar-gutter: stable;

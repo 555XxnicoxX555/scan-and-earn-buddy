@@ -157,6 +157,12 @@ El panel de tareas tambien lee:
 - `customer_profiles` y `loyalty_accounts` para clientes nuevos y nombres.
 - `reward_redemptions` para canjes pendientes.
 
+El Inicio compara `business_menu_events.event_type = 'dish_detail_view'` contra
+`point_events.purchase_items[].dishId` para mostrar productos vistos vs
+comprados. Si un producto recibe vistas pero pocas compras, aparece como
+oportunidad para crear contenido/promocion. Tambien muestra clientes en riesgo
+como lista corta accionable; el detalle profundo queda para la seccion Clientes.
+
 Los canjes se piden desde el cliente con `request_reward_redemption`, no con un
 insert directo desde la interfaz. Cada solicitud pendiente vence a los 15
 minutos (`requested_expires_at`) para reducir abuso por capturas viejas. Si el
