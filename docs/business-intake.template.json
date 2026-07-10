@@ -1,0 +1,134 @@
+{
+  "business": {
+    "name": "",
+    "legalName": "",
+    "businessType": "restaurante",
+    "serviceModes": ["local", "take-away"],
+    "address": "",
+    "hours": "",
+    "domain": "https://tu-dominio.com/",
+    "whatsapp": "",
+    "instagram": "",
+    "website": "",
+    "logoFile": "",
+    "tagline": ""
+  },
+  "operations": {
+    "ownerEmail": "",
+    "employeeEmails": [],
+    "estimatedCustomersPerMonth": 0,
+    "estimatedConsumptionsPerDay": 0,
+    "staffSecurity": {
+      "maxEmployeePurchaseTotal": 250000,
+      "maxEmployeeDailyTotal": 1000000,
+      "maxEmployeeDailyCount": 80,
+      "requireQrForEmployee": false,
+      "reviewer": ""
+    }
+  },
+  "menu": {
+    "hasUpdatedMenu": false,
+    "sourceFiles": [],
+    "hasProductPhotos": false,
+    "catalogs": [
+      {
+        "name": "Catalogo principal",
+        "categories": [],
+        "products": []
+      }
+    ],
+    "featuredProducts": [],
+    "blockedPromotionProducts": []
+  },
+  "loyalty": {
+    "earnRate": 0.1,
+    "signupBonusPoints": 0,
+    "referralReferrerPoints": 0,
+    "referralReferredPoints": 0,
+    "pointsExpire": false,
+    "pointsExpireMonths": 0,
+    "levels": ["bronze", "silver", "gold", "platinum"],
+    "tierThresholds": {
+      "silver": 500,
+      "gold": 1000,
+      "platinum": 2000
+    },
+    "streak": {
+      "enabled": true,
+      "type": "weekly",
+      "bonusWeeks": 3,
+      "bonusPoints": 0,
+      "benefitDescription": ""
+    }
+  },
+  "rewards": [
+    {
+      "name": "",
+      "description": "",
+      "pointsCost": 0,
+      "stock": null,
+      "imageFile": "",
+      "minTier": "",
+      "validUntil": "",
+      "active": true
+    }
+  ],
+  "languages": {
+    "defaultLang": "es",
+    "items": [
+      {
+        "code": "es",
+        "label": "Espanol",
+        "helper": "Continuar en espanol",
+        "flag": "mx",
+        "dir": "ltr",
+        "primary": true
+      },
+      {
+        "code": "en",
+        "label": "English",
+        "helper": "Continue in English",
+        "flag": "us",
+        "dir": "ltr"
+      }
+    ],
+    "autoTranslateInitial": true,
+    "reviewTranslationsBeforePublish": true,
+    "doNotTranslateTerms": []
+  },
+  "content": {
+    "tone": "cercano",
+    "socialNetworks": [],
+    "commonPhrases": [],
+    "frequentPromotions": [],
+    "starProducts": [],
+    "importantDates": []
+  },
+  "aiCredits": {
+    "wantsIncludedAi": true,
+    "planName": "Plan base",
+    "monthlyLimit": 150,
+    "generationCreditCost": 2,
+    "lowBalanceWarningThreshold": 20
+  },
+  "qr": {
+    "rootTarget": "https://tu-dominio.com/",
+    "initialUses": ["mesa", "mostrador"],
+    "primaryGoal": "menu",
+    "tone": "directo",
+    "style": "editorial",
+    "color": "marca",
+    "mainText": "Pedi, suma y canjea.",
+    "needsTablePrint": true,
+    "needsSocialVersion": true
+  },
+  "brandCall": {
+    "paletteNotes": "",
+    "typographyNotes": "",
+    "visualStyle": "",
+    "formalityLevel": "",
+    "mustRespect": [],
+    "dislikes": [],
+    "referenceBusinesses": []
+  }
+}

@@ -2,10 +2,24 @@
 
 Objetivo: adaptar la plantilla sin mezclar datos demo con datos reales.
 
-## 1. Preparar configuracion
+## 1. Completar intake del negocio
+
+1. Copiar `docs/business-intake.template.json` como `business-intake.json`.
+2. Completar datos desde `docs/client-onboarding-form.md`.
+3. Validar que no falten datos operativos:
+
+   ```powershell
+   npm run check:onboarding -- --intake business-intake.json
+   ```
+
+   El comando falla si faltan datos bloqueantes como owner, dominio, fuentes de
+   menu, flags de idiomas, limites de staff o creditos IA. Las advertencias no
+   bloquean, pero conviene resolverlas antes de armar una instancia real.
+
+## 2. Preparar configuracion
 
 1. Copiar `business.config.example.json` como `business.config.json`.
-2. Completar datos desde `docs/client-onboarding-form.md`.
+2. Pasar los datos validados de `business-intake.json` a `business.config.json`.
 3. Definir `publicAppUrl`, por ejemplo `https://sumi.business/` o `https://cliente.com/`.
 4. Revisar `qr.defaultUse`, `qr.defaultGoal`, `qr.defaultTone`, `qr.defaultStyle`,
    `qr.defaultColor` y `qr.defaultCta` para que el primer poster impreso salga
@@ -60,7 +74,7 @@ Objetivo: adaptar la plantilla sin mezclar datos demo con datos reales.
 El comando crea `businesses/<business-id>/config.js` y
 `supabase/seed.client.generated.sql`. Revisar ambos antes de publicar.
 
-## 2. Base de datos
+## 3. Base de datos
 
 Modelo recomendado para primeros clientes: un proyecto Supabase por cliente.
 
@@ -94,7 +108,7 @@ Pasos:
    `supabase/seed.client.generated.sql`.
 8. Verificar RLS con una cuenta cliente, una cuenta employee y una cuenta owner.
 
-## 3. Variables
+## 4. Variables
 
 Configurar:
 
@@ -109,7 +123,7 @@ El QR impreso debe apuntar al dominio raiz, no a una ruta interna con hash.
 usa `publicAppUrl` o `qr.defaultTarget` del config generado para mantener QRs
 validos en entornos de prueba.
 
-## 4. Checklist funcional
+## 5. Checklist funcional
 
 - Cliente se registra.
 - Cliente ve puntos, QR y premios.
@@ -141,7 +155,7 @@ validos en entornos de prueba.
 - QR de negocio descarga PNG y PDF.
 - Biblioteca tiene contraste legible.
 
-## 5. Credenciales y costos
+## 6. Credenciales y costos
 
 Para primeros clientes, Sumi gestiona infraestructura y APIs.
 
@@ -190,7 +204,7 @@ Politica recomendada para venderlo:
 - Al quedarse sin saldo, la UI bloquea nuevas generaciones y el backend vuelve a
   validar con `insufficient_credits`.
 
-## 6. Entrega y operacion
+## 7. Entrega y operacion
 
 Antes de entregar:
 

@@ -2,6 +2,19 @@
 
 Este formulario junta datos objetivos. Las decisiones visuales finas se validan en llamada.
 
+Formato operativo:
+
+1. Copiar `docs/business-intake.template.json` como `business-intake.json`.
+2. Completar el JSON con las respuestas de este formulario.
+3. Validar antes de crear la config:
+
+```powershell
+npm run check:onboarding -- --intake business-intake.json
+```
+
+Ese check no reemplaza la llamada, pero evita avanzar con datos clave faltantes:
+owner, dominio, fuentes de menu, idiomas, flags, limites de staff y creditos IA.
+
 ## Datos basicos
 
 - Nombre del negocio:
