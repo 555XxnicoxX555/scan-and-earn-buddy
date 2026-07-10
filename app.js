@@ -20,6 +20,7 @@ const businessId = businessConfig.businessId || "business";
 const initialMenuItems = menuItems.map((dish) => ({
   ...dish,
   translations: dish.translations ? JSON.parse(JSON.stringify(dish.translations)) : undefined,
+  translationReview: dish.translationReview ? JSON.parse(JSON.stringify(dish.translationReview)) : undefined,
   presentations: Array.isArray(dish.presentations)
     ? dish.presentations.map((presentation) => ({ ...presentation }))
     : []
@@ -50,6 +51,7 @@ const languages = normalizeBusinessLanguages(businessConfig.languages || fallbac
 const languageCodes = languages.map((language) => language.code);
 const primaryLanguageCode = languages.find((language) => language.primary)?.code || businessConfig.defaultLang || languageCodes[0] || "es";
 const labels = normalizeBusinessLabels(rawLabels, languageCodes, primaryLanguageCode);
+const translationReviewRequired = Boolean(businessConfig.menu?.reviewTranslationsBeforePublish);
 const menuStateStorageKey = `sumi:menu:${businessId}:state`;
 const contentLibraryStorageKey = `sumi:content:${businessId}:library`;
 const dishLikesStorageKey = `sumi:likes:${businessId}:counts`;
@@ -83,6 +85,7 @@ function serializedMenuItems() {
     lastEditedAt: dish.lastEditedAt || "",
     lastEditedBy: dish.lastEditedBy || "",
     translations: dish.translations,
+    translationReview: dish.translationReview,
     presentations: dish.presentations
   }));
 }
@@ -97,6 +100,7 @@ function applyMenuItemsState(items) {
       const item = {
         ...baseItem,
         translations: baseItem.translations ? JSON.parse(JSON.stringify(baseItem.translations)) : undefined,
+        translationReview: baseItem.translationReview ? JSON.parse(JSON.stringify(baseItem.translationReview)) : undefined,
         presentations: Array.isArray(baseItem.presentations)
           ? baseItem.presentations.map((presentation) => ({ ...presentation }))
           : []
@@ -114,10 +118,13 @@ function applyMenuItemsState(items) {
       if (savedItem.translations && typeof savedItem.translations === "object") {
         item.translations = JSON.parse(JSON.stringify(savedItem.translations));
       }
+      if (savedItem.translationReview && typeof savedItem.translationReview === "object") {
+        item.translationReview = JSON.parse(JSON.stringify(savedItem.translationReview));
+      }
       item.translations = item.translations && typeof item.translations === "object" ? item.translations : {};
-      item.translations.es = {
-        name: item.name || item.translations.es?.name || "",
-        description: item.description || item.translations.es?.description || ""
+      item.translations[primaryLanguageCode] = {
+        name: item.name || item.translations[primaryLanguageCode]?.name || "",
+        description: item.description || item.translations[primaryLanguageCode]?.description || ""
       };
       if (Array.isArray(savedItem.presentations) && savedItem.presentations.length) {
         item.presentations = savedItem.presentations.map((presentation) => ({
@@ -129,6 +136,7 @@ function applyMenuItemsState(items) {
       if (!Array.isArray(item.presentations) || !item.presentations.length) {
         item.presentations = [{ name: "Plato", price: "0", note: "" }];
       }
+      normalizeTranslationReview(item);
       return item;
     });
   menuItems.splice(0, menuItems.length, ...restoredItems);
@@ -3750,6 +3758,64 @@ function ensureDishTranslations(dish) {
   });
 
   return dish.translations;
+}
+
+function translationHasText(text = {}) {
+  return Boolean(String(text.name || "").trim() || String(text.description || "").trim());
+}
+
+function normalizeTranslationReview(dish) {
+  if (!dish) return {};
+  const translations = ensureDishTranslations(dish);
+  if (!dish.translationReview || typeof dish.translationReview !== "object") {
+    dish.translationReview = {};
+  }
+  languageCodes.forEach((lang) => {
+    const existing = dish.translationReview[lang] || {};
+    const isPrimary = lang === primaryLanguageCode;
+    const hasText = translationHasText(translations[lang]);
+    dish.translationReview[lang] = {
+      status: existing.status || (isPrimary ? "base" : hasText ? "reviewed" : "missing"),
+      source: existing.source || (isPrimary ? "manual" : "existing"),
+      updatedAt: existing.updatedAt || ""
+    };
+  });
+  return dish.translationReview;
+}
+
+function markTranslationReview(dish, lang, status, source = "manual") {
+  if (!dish || !lang) return;
+  const review = normalizeTranslationReview(dish);
+  review[lang] = {
+    status,
+    source,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function markEditorTranslationReviewed(lang = currentEditorLang) {
+  const dish = editorDish();
+  if (!dish) return;
+  markTranslationReview(dish, lang, lang === primaryLanguageCode ? "base" : "reviewed", "manual");
+}
+
+function markSecondaryTranslationsOutdated(dish) {
+  if (!translationReviewRequired || !dish) return;
+  const translations = ensureDishTranslations(dish);
+  languageCodes
+    .filter((lang) => lang !== primaryLanguageCode && translationHasText(translations[lang]))
+    .forEach((lang) => markTranslationReview(dish, lang, "needs_review", "source_changed"));
+}
+
+function editorTranslationStatus(lang) {
+  const dish = editorDish();
+  const translations = dish ? ensureDishTranslations(dish) : {};
+  const review = dish ? normalizeTranslationReview(dish) : {};
+  if (lang === primaryLanguageCode) return { label: "Base", className: "base" };
+  if (!translationHasText(translations[lang])) return { label: "Falta", className: "missing" };
+  const status = review[lang]?.status;
+  if (status === "needs_review") return { label: "Revisar", className: "needs-review" };
+  return { label: "Listo", className: "reviewed" };
 }
 
 function dishText(dish, lang) {
@@ -7410,6 +7476,9 @@ function cloneDishForEditor(dish) {
     translations: dish.translations
       ? JSON.parse(JSON.stringify(dish.translations))
       : undefined,
+    translationReview: dish.translationReview
+      ? JSON.parse(JSON.stringify(dish.translationReview))
+      : undefined,
     presentations: Array.isArray(dish.presentations)
       ? dish.presentations.map((presentation) => ({ ...presentation }))
       : []
@@ -7420,6 +7489,15 @@ function newDishDraft() {
   const brand = currentBrand || brandSwitcher[0]?.name || "Catalogo";
   const category = currentCategory || categoryOrder[brand]?.[0] || Object.values(categoryOrder).flat()[0] || "General";
   const photo = menuItems[0]?.photo || businessConfig.photos?.hummus || "";
+  const emptyTranslations = Object.fromEntries(languageCodes.map((lang) => [lang, { name: "", description: "" }]));
+  const translationReview = Object.fromEntries(languageCodes.map((lang) => [
+    lang,
+    {
+      status: lang === primaryLanguageCode ? "base" : "missing",
+      source: lang === primaryLanguageCode ? "manual" : "empty",
+      updatedAt: ""
+    }
+  ]));
   return {
     id: uniqueDishId("nuevo-platillo"),
     brand,
@@ -7430,11 +7508,8 @@ function newDishDraft() {
     photo,
     visible: true,
     soldOut: false,
-    translations: {
-      es: { name: "", description: "" },
-      en: { name: "", description: "" },
-      ar: { name: "", description: "" }
-    },
+    translations: emptyTranslations,
+    translationReview,
     isNew: true
   };
 }
@@ -7537,6 +7612,10 @@ function commitEditorLanguageFields() {
     name: dishNameInput.value.trim(),
     description: dishDescriptionInput.value.trim()
   };
+  markEditorTranslationReviewed(currentEditorLang);
+  if (currentEditorLang === primaryLanguageCode) {
+    markSecondaryTranslationsOutdated(dish);
+  }
   return translations[currentEditorLang];
 }
 
@@ -7546,19 +7625,30 @@ function renderEditorLanguageTabs() {
   }
   editorLanguageTabs.forEach((tab) => {
     const active = tab.dataset.lang === currentEditorLang;
+    const status = editorTranslationStatus(tab.dataset.lang);
     tab.classList.toggle("active", active);
+    tab.classList.toggle("needs-review", status.className === "needs-review");
+    tab.classList.toggle("missing", status.className === "missing");
     tab.setAttribute("aria-selected", String(active));
+    const statusElement = tab.querySelector(".translation-status");
+    if (statusElement) {
+      statusElement.textContent = status.label;
+      statusElement.className = `translation-status ${status.className}`;
+    }
   });
 }
 
 function renderEditorLanguageTabsMarkup() {
   if (!editorLanguageTabsContainer) return;
-  editorLanguageTabsContainer.innerHTML = languages.map((language) => `
-    <button class="tab ${language.code === currentEditorLang ? "active" : ""}" data-lang="${escapeAttribute(language.code)}" type="button" role="tab" aria-selected="${language.code === currentEditorLang}">
+  editorLanguageTabsContainer.innerHTML = languages.map((language) => {
+    const status = editorTranslationStatus(language.code);
+    return `
+    <button class="tab ${language.code === currentEditorLang ? "active" : ""} ${status.className === "needs-review" ? "needs-review" : ""} ${status.className === "missing" ? "missing" : ""}" data-lang="${escapeAttribute(language.code)}" type="button" role="tab" aria-selected="${language.code === currentEditorLang}">
       ${escapeHtml(language.label)}
-      <span></span>
+      <span class="translation-status ${escapeAttribute(status.className)}">${escapeHtml(status.label)}</span>
     </button>
-  `).join("");
+  `;
+  }).join("");
   editorLanguageTabs = editorLanguageTabsContainer.querySelectorAll(".tab[data-lang]");
   editorLanguageTabs.forEach((tab) => {
     tab.addEventListener("click", () => setEditorLanguage(tab.dataset.lang));
@@ -7660,6 +7750,8 @@ async function saveEditorDish({ silent = false } = {}) {
   dish.name = primaryText?.name?.trim() || dish.name;
   dish.description = primaryText?.description?.trim() || dish.description;
   dish.translations = JSON.parse(JSON.stringify(translations));
+  normalizeTranslationReview(draft);
+  dish.translationReview = JSON.parse(JSON.stringify(draft.translationReview || {}));
   dish.brand = brandSelect.value;
   dish.category = categorySelect.value;
   dish.photo = draft.photo;
@@ -7673,6 +7765,7 @@ async function saveEditorDish({ silent = false } = {}) {
   editorDraft = cloneDishForEditor(dish);
   editorPreviewDraft = null;
   ensureDishTranslations(editorDraft);
+  normalizeTranslationReview(editorDraft);
   try {
     await publishMenuCatalog();
   } catch (error) {
@@ -7715,6 +7808,7 @@ function openNewAdminEditor() {
   currentEditorLang = primaryLanguageCode;
   lastEditedEditorLang = primaryLanguageCode;
   ensureDishTranslations(editorDraft);
+  normalizeTranslationReview(editorDraft);
   renderEditorForm();
   editorPanel.classList.add("open");
 }
@@ -7731,6 +7825,7 @@ function openAdminEditor(dishId) {
   currentEditorLang = primaryLanguageCode;
   lastEditedEditorLang = primaryLanguageCode;
   ensureDishTranslations(editorDraft);
+  normalizeTranslationReview(editorDraft);
   renderEditorForm();
   editorPanel.classList.add("open");
 }
@@ -7782,6 +7877,12 @@ async function translateEditorDish() {
           name: text.name || translations[lang]?.name || dish.name,
           description: text.description || translations[lang]?.description || dish.description
         };
+        markTranslationReview(
+          dish,
+          lang,
+          lang === primaryLanguageCode ? "base" : translationReviewRequired ? "needs_review" : "reviewed",
+          lang === sourceLang ? "manual" : "ai"
+        );
       }
     });
     dish.name = translations[primaryLanguageCode]?.name || dish.name;

@@ -487,6 +487,20 @@ Mapa de implementacion:
 - Funcion frontend: `translateEditorDish()` en `app.js`.
 - Funcion backend segura: `translate-menu-item` en Supabase Edge Functions.
 
+Si `businessConfig.menu.reviewTranslationsBeforePublish` esta activo, el editor
+guarda en cada producto un objeto `translationReview` por idioma:
+
+- `Base`: idioma principal del negocio.
+- `Revisar`: texto generado o afectado por IA que todavia debe mirar el owner.
+- `Listo`: idioma revisado manualmente.
+- `Falta`: idioma sin texto cargado.
+
+Cuando el owner modifica el idioma base, los idiomas secundarios existentes
+vuelven a quedar en `Revisar`. Cuando usa `Traducir con IA`, las traducciones
+secundarias tambien quedan en `Revisar` hasta que el owner abre el idioma y
+edita o confirma el texto guardando el producto. Ese estado se publica junto al
+catalogo remoto para que no quede solo en la cuenta administradora.
+
 `business.config.example.json` incluye `defaultLang` y `languages` a nivel raiz.
 `scripts/prepare-client.mjs --dry-run` devuelve `missingFlags` para detectar
 banderas que falten en `assets/flags/<flag>.svg` antes de entregar el cliente.
