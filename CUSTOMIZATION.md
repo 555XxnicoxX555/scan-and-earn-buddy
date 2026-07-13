@@ -60,6 +60,10 @@ adaptarla para un negocio, separar mentalmente estos niveles:
   a las variables CSS principales de la app y tambien al QR estilo marca.
 - `docs/client-onboarding-form.md`: formulario para el negocio. La llamada se
   reserva para identidad visual y decisiones subjetivas.
+- `docs/onboarding-platform.md`: aplicacion B2B privada, consola de operadores,
+  Storage y estados de revision.
+- `docs/visual-system.md`: reglas compartidas de componentes, movimiento,
+  drawers, popovers y pruebas responsive.
 - `docs/setup-client.md`: pasos para crear una instancia real, aplicar
   migraciones, seeds, variables y dominio.
 - `docs/codex-client-prompt.md`: prompt operativo para pedir una adaptacion
@@ -98,7 +102,8 @@ Para adaptar un negocio sin romper la plantilla:
 1. Mantener `businesses/sumi/` como demo y banco de pruebas.
 2. Copiar `business.config.example.json` como `business.config.json`.
 3. Completar marca, contacto, menu, premios, QRs, creditos IA y roles iniciales
-   en ese JSON. `operations.adminOwnerEmail` genera el owner y
+   en ese JSON. `operations.adminOwnerEmail` genera el owner,
+   `operations.managerEmails` genera responsables operativos y
    `operations.employeeEmails` genera empleados de caja cuando esos usuarios ya
    existen en Auth.
 4. Ejecutar `npm run prepare:client -- --config business.config.json --dry-run`.
@@ -229,10 +234,12 @@ salir con su tematica inicial sin tocar `app.js`.
 
 ## QR, staff y carga de consumo
 
-La plantilla diferencia tres experiencias:
+La plantilla diferencia cuatro experiencias:
 
 - Cliente: ve puntos, premios y su QR de fidelidad.
 - `employee`: no ve la tarjeta de puntos; puede escanear QR y cargar consumos.
+- `manager`: usa Inicio, Clientes, Consumos, Menu y gestion de canjes. No edita
+  reglas, contenido, QRs ni ajustes sensibles.
 - `owner`: puede cargar consumos y tambien administrar menu, clientes, premios,
   contenido, ajustes y estadisticas.
 
@@ -315,7 +322,7 @@ con `overflow`.
 
 ## Inicio y estadisticas accionables
 
-El Inicio del admin (`#/admin`) contiene la bienvenida del owner y un panel de
+El Inicio del admin (`#/admin`) contiene la bienvenida del owner o manager y un panel de
 tareas. No existe una seccion separada de Estadisticas: la primera pantalla debe
 responder rapido que requiere atencion en el negocio.
 
@@ -357,7 +364,7 @@ El MVP actual usa datos reales de estas fuentes:
 - `business_menu_events` para vistas del menu, detalles de productos y registro.
 
 Los canjes pendientes se refrescan con Supabase Realtime sobre
-`reward_redemptions` cuando el owner esta dentro del panel admin. Si aparece una
+`reward_redemptions` cuando el owner o manager esta dentro del panel admin. Si aparece una
 solicitud nueva, el panel recarga datos, avisa con toast y actualiza
 `Necesita atencion`. El polling liviano cada 7 segundos queda como respaldo
 cuando Realtime esta con demora, falla o no esta habilitado para ese proyecto.

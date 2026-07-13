@@ -38,8 +38,12 @@ try {
 
   const initialLang = await page.evaluate(() => document.documentElement.lang);
   await page.locator("#languageToggle").click();
+  await page.waitForSelector("#languageMenu:not([hidden])");
+  const languageChoices = page.locator('#languageMenu [data-enter-lang][aria-checked="false"]');
+  if (await languageChoices.count() < 1) throw new Error("Language menu did not expose another language.");
+  await languageChoices.first().click();
   const nextLang = await page.evaluate(() => document.documentElement.lang);
-  if (initialLang === nextLang) throw new Error("Language toggle did not update the document language.");
+  if (initialLang === nextLang) throw new Error("Language menu did not update the document language.");
 
   await page.locator("#signupCta").click();
   await page.waitForSelector("#signupModal:not([hidden])");
@@ -172,6 +176,25 @@ try {
   await page.goto(`${baseUrl}/#/admin/library`, { waitUntil: "networkidle" });
   await page.waitForSelector("#adminLibrarySection:not([hidden])");
 
+  await page.goto(`${baseUrl}/#/admin/rewards`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#adminRewardsSection:not([hidden])");
+  await page.locator("#adminRewardImageInput").setInputFiles("assets/menu/americano.png");
+  await page.waitForFunction(() => {
+    const preview = document.querySelector("#adminRewardImagePreview");
+    return preview && !preview.classList.contains("is-empty") && preview.style.backgroundImage.includes("blob:");
+  });
+  const redemptionDisclosure = page.locator(".admin-redemptions-disclosure");
+  if (await redemptionDisclosure.count() !== 1) throw new Error("Recent redemptions did not render as a disclosure section.");
+  if (await redemptionDisclosure.evaluate((element) => element.open)) throw new Error("Recent redemptions should be collapsed initially.");
+  await redemptionDisclosure.locator("summary").click();
+  await page.waitForSelector("#adminRedemptionSearchInput:visible");
+  await page.locator("#adminRedemptionSearchInput").fill("franco");
+  const filteredRedemptionCount = await page.locator("#adminRedemptionsVisibleCount").innerText();
+  if (!filteredRedemptionCount) throw new Error("Redemption search did not update its result count.");
+  await page.locator("#adminRedemptionStatusFilter").selectOption("approved");
+  const filteredStatus = await page.locator("#adminRedemptionStatusFilter").inputValue();
+  if (filteredStatus !== "approved") throw new Error("Redemption status filter did not update.");
+
   await page.goto(`${baseUrl}/#/admin/menu`, { waitUntil: "networkidle" });
   page.once("dialog", (dialog) => dialog.accept());
   await page.locator("#adminDishRows .admin-dish-row", { hasText: dishName }).locator("[data-admin-row-action='delete']").click();
@@ -188,7 +211,7 @@ try {
     throw new Error(`Browser console errors:\n${consoleErrors.join("\n")}`);
   }
 
-  console.log(`Smoke UI passed: ${cardCount} public cards, search, language, signup modal, detail route, mobile overflow, admin guard, create dish, recommend/popular, save, visibility, preview, content library, and delete checked.`);
+  console.log(`Smoke UI passed: ${cardCount} public cards, search, language, signup modal, detail route, mobile overflow, admin guard, redemption disclosure/search/filter, create dish, recommend/popular, save, visibility, preview, content library, and delete checked.`);
 } finally {
   await browser.close();
 }

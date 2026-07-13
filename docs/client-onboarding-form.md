@@ -1,6 +1,10 @@
 # Formulario de onboarding para negocios Sumi
 
-Este formulario junta datos objetivos. Las decisiones visuales finas se validan en llamada.
+Este documento es el respaldo manual del formulario privado publicado en
+`onboarding.sumi.business`. La consola y el flujo técnico están documentados en
+`docs/onboarding-platform.md`.
+
+El formulario junta datos objetivos. Las decisiones visuales finas se validan en llamada.
 
 Formato operativo:
 
@@ -29,6 +33,7 @@ owner, dominio, fuentes de menu, idiomas, flags, limites de staff y creditos IA.
 - Tipo de atencion: local / take away / delivery.
 - Dominio deseado o existente:
 - Email del owner:
+- Emails de managers iniciales:
 - Emails de empleados iniciales:
 
 ## Menu

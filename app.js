@@ -177,8 +177,8 @@ async function loadRemoteMenuCatalog() {
 
 async function saveRemoteMenuCatalog() {
   if (!supabase) return false;
-  if (!currentSession?.user || currentCustomer?.adminMembership?.role !== "owner") {
-    throw new Error("Inicia sesion como owner para publicar el menu para todos.");
+  if (!currentSession?.user || !["owner", "manager"].includes(currentCustomer?.adminMembership?.role)) {
+    throw new Error("Esta cuenta no puede publicar el menu.");
   }
   const { error } = await supabase
     .from("business_menu_catalog")
@@ -193,7 +193,7 @@ async function saveRemoteMenuCatalog() {
 }
 
 function canPublishRemoteMenuCatalog() {
-  return Boolean(supabase && currentSession?.user && currentCustomer?.adminMembership?.role === "owner");
+  return Boolean(supabase && currentSession?.user && ["owner", "manager"].includes(currentCustomer?.adminMembership?.role));
 }
 
 async function publishMenuCatalog() {
@@ -203,7 +203,7 @@ async function publishMenuCatalog() {
     return true;
   }
   if (supabase && !isLocalDevOwner()) {
-    throw new Error("Inicia sesion como owner para publicar el menu para todos.");
+    throw new Error("Esta cuenta no puede publicar el menu.");
   }
   return false;
 }
@@ -293,6 +293,11 @@ let homeRecentActivityItems = [];
 let activeActivityId = "";
 const urgentRedemptionsPageSize = 5;
 let visibleUrgentRedemptions = urgentRedemptionsPageSize;
+const adminRedemptionsPageSize = 8;
+let visibleAdminRedemptions = adminRedemptionsPageSize;
+let adminRedemptionSearch = "";
+let adminRedemptionStatus = "all";
+let adminRewardImageDraft = { file: null, imageUrl: "", imagePath: "", objectUrl: "" };
 const customerRefreshIntervalMs = 5000;
 const adminRefreshIntervalMs = 7000;
 let activeAdminCustomerId = "";
@@ -339,6 +344,7 @@ const restaurantName = document.querySelector(".restaurant-lockup strong");
 const restaurantSubtitle = document.querySelector(".restaurant-lockup span");
 const searchToggle = document.querySelector("#searchToggle");
 const languageToggle = document.querySelector("#languageToggle");
+const languageMenu = document.querySelector("#languageMenu");
 const currentLanguageFlag = document.querySelector("#currentLanguageFlag");
 const signupCta = document.querySelector("#signupCta");
 const profileToggle = document.querySelector("#profileToggle");
@@ -527,6 +533,9 @@ const adminLibraryGrid = document.querySelector("#adminLibraryGrid");
 const adminRewardsCount = document.querySelector("#adminRewardsCount");
 const adminRewardRows = document.querySelector("#adminRewardRows");
 const adminRedemptionsCount = document.querySelector("#adminRedemptionsCount");
+const adminRedemptionSearchInput = document.querySelector("#adminRedemptionSearchInput");
+const adminRedemptionStatusFilter = document.querySelector("#adminRedemptionStatusFilter");
+const adminRedemptionsVisibleCount = document.querySelector("#adminRedemptionsVisibleCount");
 const adminRedemptionRows = document.querySelector("#adminRedemptionRows");
 const adminLoyaltyRulesForm = document.querySelector("#adminLoyaltyRulesForm");
 const loyaltyEarnRateInput = document.querySelector("#loyaltyEarnRateInput");
@@ -543,6 +552,9 @@ const adminRewardEditingKey = document.querySelector("#adminRewardEditingKey");
 const adminRewardNameInput = document.querySelector("#adminRewardNameInput");
 const adminRewardDescriptionInput = document.querySelector("#adminRewardDescriptionInput");
 const adminRewardImageInput = document.querySelector("#adminRewardImageInput");
+const adminRewardImagePicker = document.querySelector("#adminRewardImagePicker");
+const adminRewardImagePreview = document.querySelector("#adminRewardImagePreview");
+const adminRewardImageRemove = document.querySelector("#adminRewardImageRemove");
 const adminRewardCostInput = document.querySelector("#adminRewardCostInput");
 const adminRewardStockInput = document.querySelector("#adminRewardStockInput");
 const adminRewardMinTierInput = document.querySelector("#adminRewardMinTierInput");
@@ -911,12 +923,25 @@ function isOwner() {
   return isLocalDevOwner() || currentCustomer?.adminMembership?.role === "owner";
 }
 
+function isManager() {
+  return currentCustomer?.adminMembership?.role === "manager";
+}
+
+function canAccessAdmin() {
+  return isOwner() || isManager();
+}
+
+function canAccessAdminView(view) {
+  if (isOwner()) return true;
+  return isManager() && ["home", "customers", "consumptions", "menu", "rewards"].includes(view);
+}
+
 function isRemoteOwner() {
   return Boolean(supabase && currentSession?.user && currentCustomer?.adminMembership?.role === "owner");
 }
 
 function isStaff() {
-  return isOwner() || currentCustomer?.adminMembership?.role === "employee";
+  return canAccessAdmin() || currentCustomer?.adminMembership?.role === "employee";
 }
 
 function displayError(error) {
@@ -942,6 +967,8 @@ function exposeDebugState() {
       localDevOwner: isLocalDevOwner(),
       remoteOwner: isRemoteOwner(),
       owner: isOwner(),
+      manager: isManager(),
+      adminAccess: canAccessAdmin(),
       adminRole: currentCustomer?.adminMembership?.role || "",
       loaded: currentAdminData.loaded,
       remoteLoaded: currentAdminData.remoteLoaded,
@@ -1098,6 +1125,40 @@ function primaryPresentationPrice(dish) {
   return presentation?.price ? `$${presentation.price}` : priceRange(dish);
 }
 
+function localPresentationName(presentation) {
+  const translated = presentation?.translations?.[currentLang]?.name;
+  if (translated) return translated;
+  const source = String(presentation?.name || "Presentacion").trim();
+  const key = source.toLocaleLowerCase("es");
+  const common = {
+    en: {
+      plato: "Plate",
+      "medio kilo": "Half kilo",
+      taza: "Cup",
+      unidad: "Unit",
+      grande: "Large",
+      mediano: "Medium",
+      chico: "Small"
+    },
+    ar: {
+      plato: "طبق",
+      "medio kilo": "نصف كيلو",
+      taza: "كوب",
+      unidad: "وحدة",
+      grande: "كبير",
+      mediano: "متوسط",
+      chico: "صغير"
+    }
+  };
+  return common[currentLang]?.[key] || source;
+}
+
+function presentationAvailableLabel() {
+  if (currentLang === "en") return "Available presentation";
+  if (currentLang === "ar") return "الخيار متاح";
+  return "Presentacion disponible";
+}
+
 function presentationBadges(dish, options = {}) {
   const limit = options.limit || Infinity;
   const presentationsList = (dish.presentations || []).slice(0, limit);
@@ -1105,7 +1166,7 @@ function presentationBadges(dish, options = {}) {
   const badges = presentationsList
     .map((presentation) => `
       <b>
-        <span>${escapeHtml(presentation.name || "Presentacion")}</span>
+        <span>${escapeHtml(localPresentationName(presentation))}</span>
         <strong>$${escapeHtml(presentation.price || "0")}</strong>
       </b>
     `)
@@ -2074,6 +2135,7 @@ function normalizeRewardDefinition(reward = {}, index = 0) {
     cost: Number(reward.points_cost ?? reward.cost ?? 0),
     stock: reward.stock ?? null,
     imageUrl: reward.image_url || reward.imageUrl || "",
+    imagePath: reward.image_path || reward.imagePath || "",
     minTier: reward.min_tier || reward.minTier || "",
     validUntil: reward.valid_until || reward.validUntil || "",
     active: reward.active !== false,
@@ -2093,11 +2155,72 @@ function rewardTablePayloadFromForm() {
     description: adminRewardDescriptionInput?.value.trim() || "",
     points_cost: cost,
     stock: adminRewardStockInput?.value === "" ? null : Math.max(0, Number(adminRewardStockInput?.value || 0)),
-    image_url: adminRewardImageInput?.value.trim() || null,
+    image_url: adminRewardImageDraft.imageUrl || null,
+    image_path: adminRewardImageDraft.imagePath || null,
     min_tier: adminRewardMinTierInput?.value || null,
     valid_until: adminRewardValidUntilInput?.value || null,
     active: Boolean(adminRewardActiveInput?.checked)
   };
+}
+
+function clearRewardImageDraftObjectUrl() {
+  if (adminRewardImageDraft.objectUrl) URL.revokeObjectURL(adminRewardImageDraft.objectUrl);
+}
+
+function renderAdminRewardImagePicker() {
+  if (!adminRewardImagePreview || !adminRewardImagePicker) return;
+  const hasImage = Boolean(adminRewardImageDraft.imageUrl);
+  adminRewardImagePreview.classList.toggle("is-empty", !hasImage);
+  adminRewardImagePreview.style.backgroundImage = hasImage
+    ? `url("${adminRewardImageDraft.imageUrl.replace(/"/g, "\\\"")}")`
+    : "";
+  adminRewardImagePicker.classList.toggle("has-image", hasImage);
+  adminRewardImagePicker.setAttribute("aria-label", hasImage ? "Cambiar imagen del premio" : "Subir o pegar imagen del premio");
+  if (adminRewardImageRemove) adminRewardImageRemove.hidden = !hasImage;
+}
+
+function setAdminRewardImageDraft({ file = null, imageUrl = "", imagePath = "" } = {}) {
+  clearRewardImageDraftObjectUrl();
+  const objectUrl = file ? URL.createObjectURL(file) : "";
+  adminRewardImageDraft = {
+    file,
+    imageUrl: objectUrl || imageUrl,
+    imagePath: file ? "" : imagePath,
+    objectUrl
+  };
+  renderAdminRewardImagePicker();
+}
+
+async function compressRewardImage(file) {
+  if (!file?.type?.startsWith("image/")) throw new Error("Elige una imagen PNG, JPG o WebP.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("La imagen no puede superar 5 MB.");
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImageBitmapUrl(objectUrl);
+    const maxSize = 1200;
+    const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await canvasToImageBlob(canvas, "image/jpeg", 0.84);
+    if (!blob) throw new Error("No se pudo preparar la imagen.");
+    return blob;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function uploadRewardImage(file, rewardKey) {
+  if (!supabase || !isRemoteOwner()) throw new Error("Inicia sesion como owner para subir imagenes.");
+  const blob = await compressRewardImage(file);
+  const path = `${businessId}/${rewardKey}/${Date.now().toString(36)}.jpg`;
+  const { error } = await supabase.storage
+    .from("reward-images")
+    .upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false });
+  if (error) throw error;
+  const { data } = supabase.storage.from("reward-images").getPublicUrl(path);
+  return { path, imageUrl: data.publicUrl };
 }
 
 async function loadBusinessRewards({ owner = false } = {}) {
@@ -2274,7 +2397,7 @@ async function loadAdminDashboardRpc() {
 }
 
 async function loadAdminData() {
-  if (!supabase || !isOwner()) {
+  if (!supabase || !canAccessAdmin()) {
     currentAdminData = { customers: [], accounts: [], events: [], redemptions: [], menuEvents: [], consumptionCorrections: [], loaded: false, remoteLoaded: false, error: null };
     exposeDebugState();
     return currentAdminData;
@@ -2424,7 +2547,7 @@ function notifyNewPendingRedemptions(previousIds, nextData = currentAdminData) {
 }
 
 function adminLiveSyncMarkup() {
-  if (!supabase || !isOwner()) return "";
+  if (!supabase || !canAccessAdmin()) return "";
   if (adminRefreshInFlight) {
     return `<span class="admin-live-sync is-loading">Actualizando...</span>`;
   }
@@ -2505,8 +2628,7 @@ async function loadCustomerData(session = currentSession, options = {}) {
       .select("business_id, role")
       .eq("auth_user_id", session.user.id)
       .eq("business_id", businessId)
-      .in("role", ["owner", "employee"])
-      .order("role", { ascending: false })
+      .in("role", ["owner", "manager", "employee"])
       .limit(1)
       .maybeSingle(),
     supabase
@@ -2531,7 +2653,7 @@ async function loadCustomerData(session = currentSession, options = {}) {
     redemptions: redemptions || [],
     adminMembership
   };
-  if (adminMembership?.role === "owner") {
+  if (["owner", "manager"].includes(adminMembership?.role)) {
     currentAdminData = {
       customers: [],
       accounts: [],
@@ -2549,7 +2671,7 @@ async function loadCustomerData(session = currentSession, options = {}) {
   if (!loyaltySettingsError) {
     loyaltySettings = normalizeLoyaltySettings(businessLoyaltySettings || {});
   }
-  await loadBusinessRewards({ owner: adminMembership?.role === "owner" });
+  await loadBusinessRewards({ owner: ["owner", "manager"].includes(adminMembership?.role) });
   return currentCustomer;
 }
 
@@ -2594,20 +2716,7 @@ function applyBusinessShell() {
   setText(".help-box button", businessConfig.admin?.helpButton);
   setText(".mini-logo", businessConfig.admin?.brandMark);
 
-  languageOptions.innerHTML = languages
-    .map(
-      (language) => `
-        <button class="language-option ${language.code === currentLang ? "selected" : ""}" data-enter-lang="${escapeAttribute(language.code)}" type="button">
-          <span class="flag ${escapeAttribute(language.flag)}" ${flagStyle(language.flag)} aria-hidden="true"></span>
-          <span dir="${escapeAttribute(language.dir || "ltr")}">
-            <strong>${escapeHtml(language.label)}</strong>
-            <small>${escapeHtml(language.helper)}</small>
-          </span>
-          <i aria-hidden="true">&rarr;</i>
-        </button>
-      `
-    )
-    .join("");
+  renderLanguageChoices();
   renderEditorLanguageTabsMarkup();
 
   brandSwitch.innerHTML = brandSwitcher
@@ -2668,6 +2777,50 @@ function setSignupMode(mode) {
   });
   signupRecoveryText.hidden = !isLogin;
   updateSignupShell();
+}
+
+function languageChoiceMarkup(language, { compact = false } = {}) {
+  const selected = language.code === currentLang;
+  return `
+    <button class="language-option ${compact ? "is-compact" : ""} ${selected ? "selected" : ""}"
+      data-enter-lang="${escapeAttribute(language.code)}" type="button"
+      ${compact ? `role="menuitemradio" aria-checked="${selected}"` : ""}>
+      <span class="flag ${escapeAttribute(language.flag)}" ${flagStyle(language.flag)} aria-hidden="true"></span>
+      <span dir="${escapeAttribute(language.dir || "ltr")}">
+        <strong>${escapeHtml(language.label)}</strong>
+        ${compact ? "" : `<small>${escapeHtml(language.helper)}</small>`}
+      </span>
+      <i aria-hidden="true">${selected ? "&#10003;" : "&rarr;"}</i>
+    </button>
+  `;
+}
+
+function renderLanguageChoices() {
+  const fullMarkup = languages.map((language) => languageChoiceMarkup(language)).join("");
+  const menuMarkup = languages.map((language) => languageChoiceMarkup(language, { compact: true })).join("");
+  if (languageOptions) languageOptions.innerHTML = fullMarkup;
+  if (languageMenu) languageMenu.innerHTML = menuMarkup;
+}
+
+function closeLanguageMenu({ restoreFocus = false } = {}) {
+  if (!languageMenu || !languageToggle) return;
+  languageMenu.hidden = true;
+  languageToggle.setAttribute("aria-expanded", "false");
+  if (restoreFocus) languageToggle.focus();
+}
+
+function setCurrentLanguage(languageCode, { navigateToMenu = false } = {}) {
+  if (!languageCodes.includes(languageCode)) return;
+  currentLang = languageCode;
+  renderLanguageChoices();
+  closeLanguageMenu();
+  updateSignupShell();
+  updateQrShell();
+  updateProfileShell();
+  if (!qrModal.hidden) renderCustomerQr();
+  if (!profileModal.hidden) renderProfile();
+  if (navigateToMenu) navigate("menu");
+  else renderRoute();
 }
 
 function setSignupLoading(isLoading) {
@@ -4319,7 +4472,7 @@ function renderProfile() {
       ? `Comparte tu link: tu ganas ${ownerPoints} pts y tu invitado ${guestPoints} pts.`
       : "Tu codigo se generara al completar el registro.";
   }
-  profileAdminButton.hidden = !isOwner();
+  profileAdminButton.hidden = !canAccessAdmin();
   const profileMovements = [
     ...(currentCustomer.events || []).map((event) => ({
       kind: "points",
@@ -4357,7 +4510,7 @@ function renderProfile() {
 
 function renderAdminHome() {
   if (!adminPanel) return;
-  const ownerName = currentCustomer?.profile?.name || "Owner";
+  const ownerName = currentCustomer?.profile?.name || (isManager() ? "Manager" : "Owner");
   const today = new Intl.DateTimeFormat("es-MX", {
     weekday: "long",
     day: "numeric",
@@ -4373,10 +4526,10 @@ function renderAdminHome() {
         <svg class="ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
         Cargar consumo
       </button>
-      <button class="outline" type="button" data-analytics-action="content">
+      ${isOwner() ? `<button class="outline" type="button" data-analytics-action="content">
         <svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
         Crear contenido
-      </button>
+      </button>` : ""}
     `;
   }
 }
@@ -4464,7 +4617,7 @@ function renderAdminCustomers() {
     adminCustomerRows.innerHTML = `<div class="admin-empty">No se pudieron cargar clientes: ${escapeHtml(displayError(currentAdminData.error))}</div>`;
     return;
   }
-  if (supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded) {
+  if (supabase && currentSession?.user && canAccessAdmin() && !currentAdminData.remoteLoaded) {
     adminCustomerRows.innerHTML = `<div class="admin-empty">Cargando clientes del negocio...</div>`;
     return;
   }
@@ -5127,7 +5280,7 @@ function renderAdminConsumptions() {
     adminConsumptionRows.innerHTML = `<div class="admin-empty">No se pudieron cargar consumos: ${escapeHtml(displayError(currentAdminData.error))}</div>`;
     return;
   }
-  if (supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded) {
+  if (supabase && currentSession?.user && canAccessAdmin() && !currentAdminData.remoteLoaded) {
     adminConsumptionRows.innerHTML = `<div class="admin-empty">Cargando consumos del negocio...</div>`;
     return;
   }
@@ -6054,7 +6207,7 @@ function renderAdminAnalytics() {
     if (homeInsightGrid) homeInsightGrid.innerHTML = "";
     return;
   }
-  if (supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded) {
+  if (supabase && currentSession?.user && canAccessAdmin() && !currentAdminData.remoteLoaded) {
     analyticsKpiGrid.innerHTML = [
       ["Canjes pendientes", "...", "cargando solicitudes"],
       ["Consumos hoy", "...", "cargando consumos"],
@@ -6117,7 +6270,7 @@ function renderAdminAnalytics() {
       <strong>Escanear QR de cliente</strong>
       <small>Abrir camara para identificar al cliente en caja.</small>
     </button>
-    <button class="analytics-action-card" type="button" data-analytics-action="menu-qr">
+    ${isOwner() ? `<button class="analytics-action-card" type="button" data-analytics-action="menu-qr">
       <span>Accion rapida</span>
       <strong>Generar QR del menu</strong>
       <small>Descargar un QR simple para mesa o mostrador.</small>
@@ -6126,11 +6279,11 @@ function renderAdminAnalytics() {
       <span>Accion rapida</span>
       <strong>Crear promocion</strong>
       <small>Preparar una pieza de contenido para redes.</small>
-    </button>
+    </button>` : ""}
     <button class="analytics-action-card" type="button" data-analytics-action="rewards">
       <span>Accion rapida</span>
-      <strong>Agregar premio</strong>
-      <small>Ir a premios y canjes de fidelizacion.</small>
+      <strong>${isOwner() ? "Agregar premio" : "Gestionar canjes"}</strong>
+      <small>${isOwner() ? "Ir a premios y canjes de fidelizacion." : "Revisar solicitudes y entregas pendientes."}</small>
     </button>
   `;
 
@@ -6444,6 +6597,59 @@ function renderAdminLibrary() {
     : `<div class="admin-empty admin-library-empty">Todavia no hay contenido guardado en este filtro. Crea una pieza desde Crear contenido.</div>`;
 }
 
+function renderAdminRedemptions() {
+  if (!adminRedemptionRows) return;
+  const search = adminRedemptionSearch.trim().toLowerCase();
+  const total = currentAdminData.redemptions.length;
+  const filtered = currentAdminData.redemptions.filter((redemption) => {
+    const statusMatches = adminRedemptionStatus === "all" || redemption.status === adminRedemptionStatus;
+    if (!statusMatches) return false;
+    if (!search) return true;
+    const customer = currentAdminData.customers.find((profile) => profile.id === redemption.customer_id);
+    const haystack = [customer?.name, customer?.email, redemption.reward_name, redemption.status]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(search);
+  });
+  const visible = filtered.slice(0, visibleAdminRedemptions);
+  const hidden = Math.max(0, filtered.length - visible.length);
+
+  if (adminRedemptionsVisibleCount) {
+    adminRedemptionsVisibleCount.textContent = filtered.length === total
+      ? `${filtered.length} resultado${filtered.length === 1 ? "" : "s"}`
+      : `${filtered.length} de ${total} resultados`;
+  }
+  if (!filtered.length) {
+    adminRedemptionRows.innerHTML = `<div class="admin-empty">No hay canjes que coincidan con este filtro.</div>`;
+    return;
+  }
+
+  adminRedemptionRows.innerHTML = `${visible.map((redemption) => {
+    const customer = currentAdminData.customers.find((profile) => profile.id === redemption.customer_id);
+    const requested = redemptionIsActionableRequest(redemption);
+    const approved = redemption.status === "approved";
+    return `
+      <article class="admin-list-row admin-redemption-row">
+        <span>
+          <strong>${escapeHtml(redemption.reward_name)}</strong>
+          <small>${escapeHtml(customer?.name || "Cliente")} &middot; ${escapeHtml(formatEventDate(redemption.created_at))}</small>
+        </span>
+        <span class="status">${escapeHtml(redemptionDisplayStatusLabel(redemption))}</span>
+        <span class="redemption-actions">
+          <button class="mini-action" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}" ${requested ? "" : "disabled"}>Aprobar</button>
+          <button class="mini-action" type="button" data-redemption-action="redeemed" data-redemption-id="${escapeAttribute(redemption.id)}" ${approved ? "" : "disabled"}>Entregado</button>
+          <button class="mini-action danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}" ${redemption.status === "cancelled" || redemption.status === "redeemed" ? "disabled" : ""}>Cancelar</button>
+        </span>
+      </article>
+    `;
+  }).join("")}${hidden ? `
+    <button class="home-load-more" type="button" data-redemptions-more="true">
+      Ver mas (${hidden} canjes)
+    </button>
+  ` : ""}`;
+}
+
 function renderAdminRewards() {
   if (!adminRewardRows || !adminRedemptionRows) return;
   if (loyaltyEarnRateInput) loyaltyEarnRateInput.value = Math.round((loyaltySettings.earnRate || 0) * 100);
@@ -6479,29 +6685,7 @@ function renderAdminRewards() {
     : `<div class="admin-empty">No hay premios configurados. Crea el primero desde este panel.</div>`;
 
   adminRedemptionsCount.textContent = currentAdminData.redemptions.length;
-  adminRedemptionRows.innerHTML = currentAdminData.redemptions.length
-    ? currentAdminData.redemptions
-        .map((redemption) => {
-          const customer = currentAdminData.customers.find((profile) => profile.id === redemption.customer_id);
-          const requested = redemptionIsActionableRequest(redemption);
-          const approved = redemption.status === "approved";
-          return `
-            <article class="admin-list-row admin-redemption-row">
-              <span>
-                <strong>${escapeHtml(redemption.reward_name)}</strong>
-                <small>${escapeHtml(customer?.name || "Cliente")} &middot; ${escapeHtml(formatEventDate(redemption.created_at))}</small>
-              </span>
-              <span class="status">${escapeHtml(redemptionDisplayStatusLabel(redemption))}</span>
-              <span class="redemption-actions">
-                <button class="mini-action" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}" ${requested ? "" : "disabled"}>Aprobar</button>
-                <button class="mini-action" type="button" data-redemption-action="redeemed" data-redemption-id="${escapeAttribute(redemption.id)}" ${approved ? "" : "disabled"}>Entregado</button>
-                <button class="mini-action danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}" ${redemption.status === "cancelled" || redemption.status === "redeemed" ? "disabled" : ""}>Cancelar</button>
-              </span>
-            </article>
-          `;
-        })
-        .join("")
-    : `<div class="admin-empty">Todavia no hay solicitudes de canje.</div>`;
+  renderAdminRedemptions();
 }
 
 function renderAdminSettings() {
@@ -6553,6 +6737,7 @@ function renderAdminSettings() {
 function resetAdminRewardForm() {
   if (!adminRewardForm) return;
   adminRewardForm.reset();
+  setAdminRewardImageDraft();
   if (adminRewardEditingKey) adminRewardEditingKey.value = "";
   if (adminRewardActiveInput) adminRewardActiveInput.checked = true;
   if (adminRewardCancelEdit) adminRewardCancelEdit.hidden = true;
@@ -6564,7 +6749,7 @@ function editAdminReward(rewardKey) {
   adminRewardEditingKey.value = reward.rewardKey;
   adminRewardNameInput.value = reward.name || "";
   adminRewardDescriptionInput.value = reward.description || "";
-  if (adminRewardImageInput) adminRewardImageInput.value = reward.imageUrl || "";
+  setAdminRewardImageDraft({ imageUrl: reward.imageUrl || "", imagePath: reward.imagePath || "" });
   adminRewardCostInput.value = reward.cost || "";
   adminRewardStockInput.value = reward.stock ?? "";
   adminRewardMinTierInput.value = reward.minTier || "";
@@ -6585,7 +6770,13 @@ async function saveAdminReward(event) {
     showToast("Esta cuenta no tiene permisos de owner.");
     return;
   }
+  const previousImagePath = adminRewardImageDraft.imagePath;
+  let uploadedImagePath = "";
   if (!supabase || !isRemoteOwner()) {
+    if (adminRewardImageDraft.file) {
+      payload.image_url = await fileToDataUrl(adminRewardImageDraft.file);
+      payload.image_path = null;
+    }
     const normalized = normalizeRewardDefinition({
       ...payload,
       id: payload.reward_key,
@@ -6601,12 +6792,27 @@ async function saveAdminReward(event) {
     showToast("Premio actualizado localmente.");
     return;
   }
+  try {
+    if (adminRewardImageDraft.file) {
+      const uploaded = await uploadRewardImage(adminRewardImageDraft.file, payload.reward_key);
+      payload.image_url = uploaded.imageUrl;
+      payload.image_path = uploaded.path;
+      uploadedImagePath = uploaded.path;
+    }
+  } catch (error) {
+    showToast(displayError(error));
+    return;
+  }
   const { error } = await supabase
     .from("business_rewards")
     .upsert(payload, { onConflict: "business_id,reward_key" });
   if (error) {
+    if (uploadedImagePath) await supabase.storage.from("reward-images").remove([uploadedImagePath]).catch(() => null);
     showToast(displayError(error));
     return;
+  }
+  if (uploadedImagePath && previousImagePath && previousImagePath !== uploadedImagePath) {
+    await supabase.storage.from("reward-images").remove([previousImagePath]).catch(() => null);
   }
   await loadBusinessRewards({ owner: true });
   resetAdminRewardForm();
@@ -6630,6 +6836,7 @@ async function toggleAdminReward(rewardKey) {
     points_cost: reward.cost,
     stock: reward.stock,
     image_url: reward.imageUrl || null,
+    image_path: reward.imagePath || null,
     min_tier: reward.minTier || null,
     valid_until: reward.validUntil || null,
     active: !reward.active
@@ -6672,11 +6879,13 @@ async function deleteAdminReward(rewardKey) {
     .delete()
     .eq("business_id", businessId)
     .eq("reward_key", reward.rewardKey);
+  const imagePath = reward.imagePath;
   const { error } = reward.databaseId ? await query.eq("id", reward.databaseId) : await query;
   if (error) {
     showToast(displayError(error));
     return;
   }
+  if (imagePath) await supabase.storage.from("reward-images").remove([imagePath]).catch(() => null);
   await loadBusinessRewards({ owner: true });
   renderAdminRewards();
   renderLoyalty();
@@ -6715,6 +6924,7 @@ async function saveLoyaltyRules(event) {
     showToast("Reglas actualizadas localmente.");
     return;
   }
+  const imagePath = reward.imagePath;
   const { error } = await supabase
     .from("business_loyalty_settings")
     .upsert({
@@ -6734,6 +6944,7 @@ async function saveLoyaltyRules(event) {
     showToast(displayError(error));
     return;
   }
+  if (imagePath) await supabase.storage.from("reward-images").remove([imagePath]).catch(() => null);
   showToast("Reglas de fidelizacion actualizadas.");
   currentAdminData.loaded = false;
   currentAdminData.remoteLoaded = false;
@@ -6807,14 +7018,14 @@ async function saveLoyaltyEarnRate(ratePercent) {
 }
 
 function renderAdminPanel() {
-  if (!isOwner()) return;
+  if (!canAccessAdmin()) return;
   if (!currentAdminData.loaded && !currentAdminData.error && !adminDataRequest && (!supabase || currentSession?.user)) {
     ensureAdminData().then(() => renderAdminPanel());
   }
-  if (supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded && !adminDataRetryTimer) {
+  if (supabase && currentSession?.user && canAccessAdmin() && !currentAdminData.remoteLoaded && !adminDataRetryTimer) {
     adminDataRetryTimer = window.setTimeout(() => {
       adminDataRetryTimer = null;
-      if (!currentAdminData.remoteLoaded && isOwner()) {
+      if (!currentAdminData.remoteLoaded && canAccessAdmin()) {
         currentAdminData.loaded = false;
         currentAdminData.error = null;
         ensureAdminData().then(() => renderAdminPanel());
@@ -6831,6 +7042,38 @@ function renderAdminPanel() {
   renderAdminQrs();
   renderAdminAnalytics();
   renderAdminSettings();
+  applyAdminRolePermissions();
+}
+
+function applyAdminRolePermissions() {
+  document.body.classList.toggle("admin-manager", isManager());
+  adminNavItems.forEach((item) => {
+    item.hidden = !canAccessAdminView(item.dataset.adminNav);
+  });
+  document.querySelectorAll(".nav-group-label").forEach((label) => {
+    let sibling = label.nextElementSibling;
+    let hasVisibleItem = false;
+    while (sibling && !sibling.classList.contains("nav-group-label")) {
+      if (sibling.matches?.("[data-admin-nav]") && !sibling.hidden) hasVisibleItem = true;
+      sibling = sibling.nextElementSibling;
+    }
+    label.hidden = !hasVisibleItem;
+  });
+  const ownerOnlyCards = [
+    adminLoyaltyRulesForm?.closest(".admin-card"),
+    adminRewardForm?.closest(".admin-card")
+  ].filter(Boolean);
+  ownerOnlyCards.forEach((card) => { card.hidden = !isOwner(); });
+  if (translateButton) translateButton.hidden = !isOwner();
+  if (improvePhotoButton) improvePhotoButton.hidden = !isOwner();
+  document.querySelectorAll('[data-customer-action="status"], [data-customer-action="adjust-points"], [data-consumption-action="correct"], [data-consumption-action="cancel"]').forEach((control) => {
+    control.hidden = !isOwner();
+  });
+  document.querySelectorAll('[data-analytics-action="content"], [data-analytics-action="menu-qr"], [data-analytics-action="qrs"]').forEach((control) => {
+    control.hidden = !isOwner();
+  });
+  const panelLabel = document.querySelector(".sidebar .brand span");
+  if (panelLabel) panelLabel.textContent = isManager() ? "Panel operativo" : "Panel del dueño";
 }
 
 const adminRouteViews = new Set(["home", "customers", "consumptions", "menu", "content", "library", "rewards", "qrs", "settings"]);
@@ -6875,7 +7118,7 @@ function parseRoute() {
 }
 
 async function ensureAdminData() {
-  const needsRemoteReload = Boolean(supabase && currentSession?.user && isOwner() && !currentAdminData.remoteLoaded);
+  const needsRemoteReload = Boolean(supabase && currentSession?.user && canAccessAdmin() && !currentAdminData.remoteLoaded);
   if ((currentAdminData.loaded || currentAdminData.error) && !needsRemoteReload) return;
   if (adminDataRequest) return adminDataRequest;
   adminDataRequest = (async () => {
@@ -6903,7 +7146,7 @@ async function ensureAdminData() {
 }
 
 async function reloadAdminData({ silent = false } = {}) {
-  if (!supabase || !currentSession?.user || !isOwner()) return;
+  if (!supabase || !currentSession?.user || !canAccessAdmin()) return;
   const previousData = currentAdminData;
   const previousPendingIds = pendingRedemptionIdSet(previousData);
   const wasRemoteLoaded = Boolean(previousData.remoteLoaded);
@@ -6937,7 +7180,7 @@ async function reloadAdminData({ silent = false } = {}) {
 
 function shouldAutoRefreshAdmin() {
   const route = parseRoute();
-  return Boolean(supabase && currentSession?.user && isOwner() && route.name.startsWith("admin"));
+  return Boolean(supabase && currentSession?.user && canAccessAdmin() && route.name.startsWith("admin"));
 }
 
 function stopAdminAutoRefresh() {
@@ -6985,7 +7228,7 @@ function stopAdminRealtime() {
 }
 
 function startAdminRealtime() {
-  if (!supabase || !currentSession?.user || !isOwner() || adminRealtimeChannel || !shouldAutoRefreshAdmin()) return;
+  if (!supabase || !currentSession?.user || !canAccessAdmin() || adminRealtimeChannel || !shouldAutoRefreshAdmin()) return;
   adminRealtimeStatus = "CONNECTING";
   const channelName = `sumi-admin-redemptions-${businessId}-${currentSession.user.id}`;
   adminRealtimeChannel = supabase
@@ -7037,7 +7280,7 @@ async function ensureAdminContentData() {
 
 function hideAllSurfaces() {
   stopAdminAutoRefresh();
-  document.body.classList.remove("landing-active", "admin-active");
+  document.body.classList.remove("landing-active", "admin-active", "admin-manager");
   detailView.classList.remove("open");
   editorPanel.classList.remove("open");
   adminPanel.hidden = true;
@@ -7066,8 +7309,8 @@ function showPublicDetail(dishId) {
 }
 
 async function showAdminSection(view = "home") {
-  if (!isOwner()) {
-    showToast("Esta cuenta no tiene permisos de owner.");
+  if (!canAccessAdmin() || !canAccessAdminView(view)) {
+    showToast("Esta cuenta no tiene permisos para abrir esa seccion.");
     navigate("menu", {}, { replace: true });
     return false;
   }
@@ -7078,7 +7321,7 @@ async function showAdminSection(view = "home") {
   setAdminView(view);
   renderAdminPanel();
   await ensureAdminData();
-  await loadBusinessRewards({ owner: true });
+  await loadBusinessRewards({ owner: canAccessAdmin() });
   if (view === "home" || view === "content" || view === "library") {
     await ensureAdminContentData();
   }
@@ -7106,8 +7349,8 @@ async function showAdminEditor(dishId) {
 }
 
 async function showAdminPreview(dishId) {
-  if (!isOwner()) {
-    showToast("Esta cuenta no tiene permisos de owner.");
+  if (!canAccessAdminView("menu")) {
+    showToast("Esta cuenta no tiene permisos para editar el menu.");
     navigate("menu", {}, { replace: true });
     return;
   }
@@ -7157,7 +7400,7 @@ async function renderRoute() {
 
 function setAdminView(view) {
   const validViews = new Set(["home", "customers", "consumptions", "menu", "content", "library", "rewards", "qrs", "settings"]);
-  currentAdminView = validViews.has(view) ? view : "home";
+  currentAdminView = validViews.has(view) && canAccessAdminView(view) ? view : "home";
   adminHome.hidden = currentAdminView !== "home";
   adminCustomersSection.hidden = currentAdminView !== "customers";
   adminConsumptionsSection.hidden = currentAdminView !== "consumptions";
@@ -8055,8 +8298,8 @@ function openDetail(idOrDish, options = {}) {
       (presentation, index) => `
         <button class="detail-option ${index === 0 ? "selected" : ""}" data-presentation-index="${index}" type="button" aria-pressed="${index === 0}">
           <span></span>
-          <strong>${escapeHtml(presentation.name)}</strong>
-          <small>${escapeHtml(presentation.note || "Presentacion disponible")}</small>
+          <strong>${escapeHtml(localPresentationName(presentation))}</strong>
+          <small>${escapeHtml(presentation.translations?.[currentLang]?.note || (currentLang === primaryLanguageCode ? presentation.note : "") || presentationAvailableLabel())}</small>
           <b>$${escapeHtml(presentation.price)}</b>
         </button>
       `
@@ -8089,17 +8332,27 @@ function openDetail(idOrDish, options = {}) {
 languageOptions.addEventListener("click", (event) => {
   const button = event.target.closest("[data-enter-lang]");
   if (!button) return;
-  currentLang = button.dataset.enterLang;
-  updateSignupShell();
-  updateQrShell();
-  updateProfileShell();
-  navigate("menu");
+  setCurrentLanguage(button.dataset.enterLang, { navigateToMenu: true });
+});
+
+languageMenu?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-enter-lang]");
+  if (!button) return;
+  setCurrentLanguage(button.dataset.enterLang);
 });
 
 signupCta.addEventListener("click", () => openSignupModal(signupCta));
 signupClose.addEventListener("click", closeSignupModal);
 signupModal.addEventListener("click", (event) => {
   if (event.target.closest("[data-signup-close]")) closeSignupModal();
+  const passwordToggle = event.target.closest("[data-password-target]");
+  if (!passwordToggle) return;
+  const input = document.getElementById(passwordToggle.dataset.passwordTarget || "");
+  if (!(input instanceof HTMLInputElement)) return;
+  const showPassword = input.type === "password";
+  input.type = showPassword ? "text" : "password";
+  passwordToggle.setAttribute("aria-label", showPassword ? "Ocultar contrasena" : "Mostrar contrasena");
+  passwordToggle.querySelector("use")?.setAttribute("href", showPassword ? "#icon-eye-off" : "#icon-eye");
 });
 
 signupModeToggle.addEventListener("click", () => {
@@ -8651,10 +8904,56 @@ adminLibraryGrid.addEventListener("click", async (event) => {
 });
 
 adminRedemptionRows.addEventListener("click", (event) => {
+  const moreButton = event.target.closest("[data-redemptions-more]");
+  if (moreButton) {
+    visibleAdminRedemptions += adminRedemptionsPageSize;
+    renderAdminRedemptions();
+    return;
+  }
   const button = event.target.closest("[data-redemption-action]");
   if (!button || button.disabled) return;
   updateRedemptionStatus(button.dataset.redemptionId, button.dataset.redemptionAction);
 });
+
+adminRedemptionSearchInput?.addEventListener("input", (event) => {
+  adminRedemptionSearch = event.target.value || "";
+  visibleAdminRedemptions = adminRedemptionsPageSize;
+  renderAdminRedemptions();
+});
+
+adminRedemptionStatusFilter?.addEventListener("change", (event) => {
+  adminRedemptionStatus = event.target.value || "all";
+  visibleAdminRedemptions = adminRedemptionsPageSize;
+  renderAdminRedemptions();
+});
+
+adminRewardImagePicker?.addEventListener("click", () => adminRewardImageInput?.click());
+
+adminRewardImageInput?.addEventListener("change", (event) => {
+  const [file] = event.target.files || [];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    showToast("Elige una imagen PNG, JPG o WebP.");
+    event.target.value = "";
+    return;
+  }
+  setAdminRewardImageDraft({ file });
+  event.target.value = "";
+});
+
+adminRewardImagePicker?.addEventListener("paste", (event) => {
+  const item = [...(event.clipboardData?.items || [])].find((candidate) => candidate.type.startsWith("image/"));
+  const file = item?.getAsFile();
+  if (!file) {
+    showToast("Copia una imagen y vuelve a pegarla aqui.");
+    return;
+  }
+  event.preventDefault();
+  setAdminRewardImageDraft({ file });
+  showToast("Imagen pegada. Guarda el premio para publicarla.");
+});
+
+adminRewardImageRemove?.addEventListener("click", () => setAdminRewardImageDraft());
 
 adminRewardRows?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-reward-action]");
@@ -9312,16 +9611,26 @@ searchToggle.addEventListener("click", () => {
 });
 
 languageToggle.addEventListener("click", () => {
-  const langs = languages.map((language) => language.code);
-  currentLang = langs[(langs.indexOf(currentLang) + 1) % langs.length];
-  updateQrShell();
-  updateProfileShell();
-  if (!qrModal.hidden) renderCustomerQr();
-  if (!profileModal.hidden) renderProfile();
-  renderRoute();
+  if (!languageMenu) return;
+  const nextOpen = languageMenu.hidden;
+  languageMenu.hidden = !nextOpen;
+  languageToggle.setAttribute("aria-expanded", String(nextOpen));
+  if (nextOpen) {
+    const selected = languageMenu.querySelector('[aria-checked="true"]');
+    window.requestAnimationFrame(() => selected?.focus());
+  }
+});
+
+document.addEventListener("click", (event) => {
+  if (!languageMenu || languageMenu.hidden || event.target.closest(".language-control")) return;
+  closeLanguageMenu();
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && languageMenu && !languageMenu.hidden) {
+    closeLanguageMenu({ restoreFocus: true });
+    return;
+  }
   if (event.key === "Escape" && !signupModal.hidden) {
     closeSignupModal();
     return;

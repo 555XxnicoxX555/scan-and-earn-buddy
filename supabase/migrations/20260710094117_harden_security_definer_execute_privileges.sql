@@ -1,0 +1,34 @@
+revoke execute on function public.adjust_customer_points(text, uuid, integer, text, text) from public, anon;
+revoke execute on function public.cancel_customer_consumption(text, uuid) from public, anon;
+revoke execute on function public.customer_weekly_purchase_streak(text, uuid) from public, anon;
+revoke execute on function public.get_business_admin_dashboard(text) from public, anon;
+revoke execute on function public.is_business_admin(text) from public, anon;
+revoke execute on function public.is_business_manager(text) from public, anon;
+revoke execute on function public.is_business_staff(text) from public, anon;
+revoke execute on function public.is_platform_operator() from public, anon;
+revoke execute on function public.lookup_loyalty_customer_by_qr(text, uuid) from public, anon;
+revoke execute on function public.lookup_loyalty_customers_for_consumption(text, text) from public, anon;
+revoke execute on function public.loyalty_tier_for_points(text, integer) from public, anon;
+revoke execute on function public.manage_reward_redemption_status(text, uuid, text) from public, anon;
+revoke execute on function public.record_customer_consumption(text, uuid, numeric, jsonb, text) from public, anon;
+revoke execute on function public.record_customer_consumption_v2(text, uuid, numeric, text, jsonb, text, text, text) from public, anon;
+
+grant execute on function public.adjust_customer_points(text, uuid, integer, text, text) to authenticated;
+grant execute on function public.cancel_customer_consumption(text, uuid) to authenticated;
+grant execute on function public.customer_weekly_purchase_streak(text, uuid) to authenticated;
+grant execute on function public.get_business_admin_dashboard(text) to authenticated;
+grant execute on function public.is_business_admin(text) to authenticated;
+grant execute on function public.is_business_manager(text) to authenticated;
+grant execute on function public.is_business_staff(text) to authenticated;
+grant execute on function public.is_platform_operator() to authenticated;
+grant execute on function public.lookup_loyalty_customer_by_qr(text, uuid) to authenticated;
+grant execute on function public.lookup_loyalty_customers_for_consumption(text, text) to authenticated;
+grant execute on function public.loyalty_tier_for_points(text, integer) to authenticated;
+grant execute on function public.manage_reward_redemption_status(text, uuid, text) to authenticated;
+grant execute on function public.record_customer_consumption(text, uuid, numeric, jsonb, text) to authenticated;
+grant execute on function public.record_customer_consumption_v2(text, uuid, numeric, text, jsonb, text, text, text) to authenticated;
+
+revoke execute on function public.handle_new_loyalty_user() from public, anon, authenticated;
+revoke execute on function public.refresh_loyalty_account_tiers_for_business() from public, anon, authenticated;
+revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+revoke execute on function public.sync_loyalty_account_tier() from public, anon, authenticated;

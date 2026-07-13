@@ -15,6 +15,7 @@
   },
   "operations": {
     "ownerEmail": "",
+    "managerEmails": [],
     "employeeEmails": [],
     "estimatedCustomersPerMonth": 0,
     "estimatedConsumptionsPerDay": 0,

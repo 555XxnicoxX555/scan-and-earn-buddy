@@ -85,6 +85,9 @@ async function main() {
   array(intake.operations?.employeeEmails).forEach((email, index) => {
     if (!isEmail(email)) add(blockers, "employee_email_invalid", `operations.employeeEmails[${index}] no es un email valido.`);
   });
+  array(intake.operations?.managerEmails).forEach((email, index) => {
+    if (!isEmail(email)) add(blockers, "manager_email_invalid", `operations.managerEmails[${index}] no es un email valido.`);
+  });
 
   if (!text(intake.business?.whatsapp) && !text(intake.business?.instagram) && !text(intake.business?.website)) {
     add(warnings, "contact_channel_missing", "Conviene tener WhatsApp, Instagram o sitio web del negocio.");

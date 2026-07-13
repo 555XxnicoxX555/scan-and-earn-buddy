@@ -280,8 +280,10 @@ function seedSql(config, rewards) {
   const businessId = requiredString(config.businessId, "businessId");
   const brandName = requiredString(config.brand?.name, "brand.name");
   const ownerEmail = String(config.operations?.adminOwnerEmail || "").trim().toLowerCase();
-  const employeeEmails = normalizedEmails(config.operations?.employeeEmails || [])
+  const managerEmails = normalizedEmails(config.operations?.managerEmails || [])
     .filter((email) => email !== ownerEmail);
+  const employeeEmails = normalizedEmails(config.operations?.employeeEmails || [])
+    .filter((email) => email !== ownerEmail && !managerEmails.includes(email));
   const loyalty = config.loyalty || {};
   const streak = loyalty.streak || {};
   const tierThresholds = loyalty.tierThresholds || loyalty.tiers || {};
@@ -384,6 +386,13 @@ select ${sqlString(businessId)}, id, 'owner'
 from auth.users
 where lower(email) = ${sqlString(ownerEmail)}
 on conflict (business_id, auth_user_id) do update set role = excluded.role;` : "-- Completar operations.adminOwnerEmail para generar el owner inicial."}
+
+${managerEmails.length ? `-- Ejecutar despues de crear/confirmar los usuarios manager en Auth.
+insert into public.business_admins (business_id, auth_user_id, role)
+select ${sqlString(businessId)}, id, 'manager'
+from auth.users
+where lower(email) in (${managerEmails.map(sqlString).join(", ")})
+on conflict (business_id, auth_user_id) do update set role = excluded.role;` : "-- Completar operations.managerEmails si el negocio tendra managers iniciales."}
 
 ${employeeEmails.length ? `-- Ejecutar despues de crear/confirmar los usuarios employee en Auth.
 insert into public.business_admins (business_id, auth_user_id, role)

@@ -20,9 +20,13 @@ Reglas:
 - Si algo cambia por cliente, documentarlo.
 - Los QR deben apuntar al dominio publico raiz configurado en publicAppUrl, por ejemplo https://sumi.business/ o https://tu-dominio.com/.
 - El owner ve Fidelizacion, Clientes, Consumos, QRs, Menu, Contenido y Biblioteca.
+- El manager ve Inicio, Clientes, Consumos, Menu y gestion de canjes; no puede
+  cambiar configuracion, reglas, contenido ni QRs.
 - El employee solo opera carga de consumo y aprobacion de canjes.
 - Usar `operations.employeeEmails` para generar membresias employee iniciales
   en `business_admins` cuando esos usuarios ya existan en Auth.
+- Usar `operations.managerEmails` para responsables con panel operativo y sin
+  permisos de configuracion owner.
 - Los clientes no ven panel admin ni tarjetas de staff.
 
 Verificacion:

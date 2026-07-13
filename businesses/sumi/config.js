@@ -46,7 +46,7 @@ const labels = {
     signupTitle: "Registrate y empieza a ganar puntos",
     signupText: "Crea tu cuenta, guarda tus visitas y desbloquea premios cada vez que compras.",
     signupName: "Nombre",
-    signupEmail: "Gmail",
+    signupEmail: "Correo Gmail",
     signupPassword: "Contraseña",
     signupConfirm: "Repetir contraseña",
     signupSubmit: "Crear cuenta",
@@ -116,7 +116,7 @@ const labels = {
     signupTitle: "Sign up and start earning points",
     signupText: "Create your account, save your visits, and unlock rewards every time you buy.",
     signupName: "Name",
-    signupEmail: "Gmail",
+    signupEmail: "Gmail address",
     signupPassword: "Password",
     signupConfirm: "Repeat password",
     signupSubmit: "Create account",
@@ -397,9 +397,9 @@ menuItems.forEach((dish) => {
 });
 
 const rewardCatalog = [
-  { id: "coffee", name: "Cafe gratis", cost: 120 },
-  { id: "dessert", name: "Postre sorpresa", cost: 240 },
-  { id: "shawarma", name: "Shawarma 2x1", cost: 520 }
+  { id: "coffee", name: "Cafe gratis", cost: 120, imageUrl: "assets/menu/americano.png" },
+  { id: "dessert", name: "Postre sorpresa", cost: 240, imageUrl: "assets/menu/brownie-helado.png" },
+  { id: "shawarma", name: "Shawarma 2x1", cost: 520, imageUrl: "assets/menu/shawarma-carne.png" }
 ];
 
   window.SUMI_BUSINESS_CONFIG = {

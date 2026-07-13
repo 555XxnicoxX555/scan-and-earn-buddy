@@ -4,9 +4,12 @@ Objetivo: adaptar la plantilla sin mezclar datos demo con datos reales.
 
 ## 1. Completar intake del negocio
 
-1. Copiar `docs/business-intake.template.json` como `business-intake.json`.
-2. Completar datos desde `docs/client-onboarding-form.md`.
-3. Validar que no falten datos operativos:
+1. Crear una invitacion privada desde `https://onboarding.sumi.business/#/admin`.
+2. El owner completa el formulario en `#/i/<token>` y Sumi aprueba la entrega.
+3. Exportar el JSON aprobado como `business-intake.json`. Para una carga manual
+   o una contingencia, usar `docs/business-intake.template.json` y
+   `docs/client-onboarding-form.md`.
+4. Validar que no falten datos operativos:
 
    ```powershell
    npm run check:onboarding -- --intake business-intake.json
@@ -71,6 +74,17 @@ Objetivo: adaptar la plantilla sin mezclar datos demo con datos reales.
    Realtime, que el frontend escuche cambios de Supabase y que conserve el
    polling fallback para proyectos donde Realtime demore o no este habilitado.
 
+   Para una prueba real de dos actores, ejecutar en un entorno seguro con el
+   secreto disponible solo en terminal/CI:
+
+   ```powershell
+   $env:SUPABASE_SERVICE_ROLE_KEY="<service-role-solo-ci>"
+   npm run check:live-sync:e2e
+   ```
+
+   El comando crea un manager y un canje temporales, aprueba por RPC, espera el
+   evento Realtime y elimina el fixture. Nunca exponer esa clave en Vite.
+
 El comando crea `businesses/<business-id>/config.js` y
 `supabase/seed.client.generated.sql`. Revisar ambos antes de publicar.
 
@@ -103,10 +117,10 @@ Pasos:
 3. Ejecutar migraciones.
 4. Ejecutar `supabase/seed.client.generated.sql` o mover su contenido revisado a `supabase/seed.client.sql`.
 5. Crear usuario owner.
-6. Crear usuarios employee iniciales, si el negocio los necesita.
-7. Agregar owner y employees a `business_admins` usando el bloque generado en
+6. Crear usuarios manager y employee iniciales, si el negocio los necesita.
+7. Agregar owner, managers y employees a `business_admins` usando el bloque generado en
    `supabase/seed.client.generated.sql`.
-8. Verificar RLS con una cuenta cliente, una cuenta employee y una cuenta owner.
+8. Verificar RLS con una cuenta cliente, employee, manager y owner.
 
 ## 4. Variables
 
@@ -131,6 +145,9 @@ validos en entornos de prueba.
 - Empleado carga consumo manual.
 - Employee no puede entrar al admin completo, pero si puede operar consumos y
   canjes.
+- Manager entra al panel operativo: Inicio, Clientes, Consumos, Menu y
+  Fidelizacion/canjes. No ve Contenido, Biblioteca, QRs, Ajustes ni reglas
+  sensibles reservadas al owner.
 - Employee no puede cargar consumos por encima de los limites definidos en
   `operations.staffSecurity`.
 - El detalle de un consumo muestra rol, revision staff y acumulados diarios.
@@ -210,7 +227,7 @@ Antes de entregar:
 
 - Confirmar dominio publico y que `VITE_PUBLIC_APP_URL` coincide con los QRs.
 - Probar registro, consumo, canje y edicion de premios con datos reales chicos.
-- Crear al menos una cuenta owner y, si aplica, una cuenta employee.
+- Crear al menos una cuenta owner y, si aplica, cuentas manager y employee.
 - Confirmar que el owner no ve datos demo.
 - Descargar un QR PNG y PDF de prueba.
 - Documentar limites incluidos: generaciones IA, soporte, almacenamiento y

@@ -23,6 +23,7 @@
     "businessType": "restaurante",
     "serviceModes": ["local", "take-away"],
     "adminOwnerEmail": "",
+    "managerEmails": [],
     "employeeEmails": [],
     "staffSecurity": {
       "maxEmployeePurchaseTotal": 250000,

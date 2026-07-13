@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Onboarding | Sumi</title>
+    <link rel="stylesheet" href="./onboarding.css" />
+  </head>
+  <body>
+    <header class="ob-topbar">
+      <a class="ob-brand" href="#/admin" aria-label="Sumi onboarding">
+        <span>SU</span>
+        <strong>Sumi</strong>
+        <small>Onboarding de negocios</small>
+      </a>
+      <div class="ob-save-state" id="saveState" role="status" aria-live="polite">Preparando formulario...</div>
+    </header>
+
+    <main class="ob-main">
+      <section class="ob-state" id="loadingState">
+        <span class="ob-spinner" aria-hidden="true"></span>
+        <h1>Estamos preparando tu espacio</h1>
+        <p>Validamos el enlace privado y recuperamos tu avance.</p>
+      </section>
+
+      <section class="ob-state is-error" id="errorState" hidden>
+        <span class="ob-state-icon" aria-hidden="true">!</span>
+        <h1>No pudimos abrir este onboarding</h1>
+        <p id="errorMessage">Solicita un enlace nuevo a Sumi.</p>
+      </section>
+
+      <div class="ob-owner-layout" id="ownerApp" hidden>
+        <aside class="ob-progress-panel" aria-label="Progreso del onboarding">
+          <p class="ob-eyebrow">Tu implementación</p>
+          <h1 id="ownerBusinessName">Nuevo negocio</h1>
+          <p id="ownerInviteEmail"></p>
+          <div class="ob-progress-track" aria-hidden="true"><span id="progressBar"></span></div>
+          <strong class="ob-progress-label" id="progressLabel">0% completo</strong>
+          <nav class="ob-step-nav" id="stepNav">
+            <button type="button" data-step-target="0"><span>1</span><b>Negocio</b><small>Datos y operación</small></button>
+            <button type="button" data-step-target="1"><span>2</span><b>Menú</b><small>Archivos y productos</small></button>
+            <button type="button" data-step-target="2"><span>3</span><b>Fidelización</b><small>Puntos y premios</small></button>
+            <button type="button" data-step-target="3"><span>4</span><b>Identidad</b><small>Diseño y comunicación</small></button>
+            <button type="button" data-step-target="4"><span>5</span><b>Revisión</b><small>Confirmar y enviar</small></button>
+          </nav>
+          <p class="ob-private-note">Este enlace es privado. No lo compartas fuera de tu equipo.</p>
+        </aside>
+
+        <section class="ob-workspace">
+          <header class="ob-page-header">
+            <div>
+              <p class="ob-eyebrow" id="stepEyebrow">Paso 1 de 5</p>
+              <h2 id="stepTitle">Contanos sobre el negocio</h2>
+              <p id="stepDescription">Estos datos nos permiten configurar la primera versión de Sumi.</p>
+            </div>
+            <button class="ob-button is-secondary" id="saveDraftButton" type="button">Guardar borrador</button>
+          </header>
+
+          <form id="onboardingForm" novalidate>
+            <section class="ob-step" data-step="0">
+              <div class="ob-section-heading">
+                <h3>Información principal</h3>
+                <p>Usaremos estos datos en el menú, los QR y el panel administrativo.</p>
+              </div>
+              <div class="ob-field-grid">
+                <label class="ob-field is-wide"><span>Nombre del negocio *</span><input data-path="business.name" autocomplete="organization" required /></label>
+                <label class="ob-field"><span>Rubro</span><select data-path="business.businessType"><option value="restaurante">Restaurante</option><option value="cafeteria">Cafetería</option><option value="bar">Bar</option><option value="heladeria">Heladería</option><option value="otro">Otro</option></select></label>
+                <label class="ob-field"><span>Dominio actual o deseado *</span><input data-path="business.domain" type="url" placeholder="https://tunegocio.com/" required /></label>
+                <label class="ob-field is-wide"><span>Dirección</span><input data-path="business.address" autocomplete="street-address" /></label>
+                <label class="ob-field"><span>Horarios</span><input data-path="business.hours" placeholder="Lun a dom, 8:00 a 22:00" /></label>
+                <label class="ob-field"><span>Email del owner *</span><input data-path="operations.ownerEmail" type="email" autocomplete="email" required /></label>
+                <label class="ob-field"><span>WhatsApp</span><input data-path="business.whatsapp" autocomplete="tel" /></label>
+                <label class="ob-field"><span>Instagram</span><input data-path="business.instagram" placeholder="@tunegocio" /></label>
+                <label class="ob-field is-wide"><span>Lema o frase</span><input data-path="business.tagline" /></label>
+              </div>
+              <fieldset class="ob-choice-group">
+                <legend>Modalidades de atención</legend>
+                <label><input type="checkbox" data-array-path="business.serviceModes" value="local" /> En el local</label>
+                <label><input type="checkbox" data-array-path="business.serviceModes" value="take-away" /> Take away</label>
+                <label><input type="checkbox" data-array-path="business.serviceModes" value="delivery" /> Delivery</label>
+              </fieldset>
+              <div class="ob-field-grid">
+                <label class="ob-field"><span>Clientes aproximados por mes</span><input data-path="operations.estimatedCustomersPerMonth" type="number" min="0" /></label>
+                <label class="ob-field"><span>Consumos aproximados por día</span><input data-path="operations.estimatedConsumptionsPerDay" type="number" min="0" /></label>
+                <label class="ob-field is-wide"><span>Emails de empleados iniciales</span><textarea data-list-path="operations.employeeEmails" rows="3" placeholder="Uno por línea"></textarea></label>
+                <label class="ob-field is-wide"><span>Emails de managers iniciales</span><textarea data-list-path="operations.managerEmails" rows="3" placeholder="Responsables operativos, uno por línea"></textarea></label>
+              </div>
+            </section>
+
+            <section class="ob-step" data-step="1" hidden>
+              <div class="ob-section-heading">
+                <h3>Menú y material disponible</h3>
+                <p>Podés subir PDF, planillas, fotos del menú y fotos de productos. Nosotros organizamos la información.</p>
+              </div>
+              <div class="ob-upload-band">
+                <label class="ob-upload"><strong>Logo del negocio</strong><small>PNG, JPG o WebP · máximo 15 MB</small><input type="file" accept="image/png,image/jpeg,image/webp" data-file-category="logo" /></label>
+                <label class="ob-upload"><strong>Archivos del menú *</strong><small>PDF, imágenes, CSV o XLSX · máximo 15 MB</small><input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-file-category="menu" /></label>
+                <label class="ob-upload"><strong>Fotos de productos</strong><small>Podés seleccionar varias imágenes</small><input type="file" multiple accept="image/png,image/jpeg,image/webp" data-file-category="product" /></label>
+                <label class="ob-upload"><strong>Referencias visuales</strong><small>Fotos del local o marcas que te gusten</small><input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf" data-file-category="reference" /></label>
+              </div>
+              <div class="ob-file-list" id="ownerFileList"></div>
+              <div class="ob-field-grid">
+                <label class="ob-field"><span>Catálogos deseados</span><textarea data-list-path="menu.catalogNames" rows="4" placeholder="Comida principal&#10;Café y desayunos"></textarea></label>
+                <label class="ob-field"><span>Categorías</span><textarea data-list-path="menu.categoryNames" rows="4" placeholder="Entradas&#10;Platos principales&#10;Bebidas"></textarea></label>
+                <label class="ob-field"><span>Productos principales</span><textarea data-list-path="menu.mainProducts" rows="5" placeholder="Nombre, descripción y precio aproximado"></textarea></label>
+                <label class="ob-field"><span>Productos a destacar</span><textarea data-list-path="menu.featuredProducts" rows="5"></textarea></label>
+              </div>
+            </section>
+
+            <section class="ob-step" data-step="2" hidden>
+              <div class="ob-section-heading">
+                <h3>Puntos, niveles y premios</h3>
+                <p>Podrás cambiar estas reglas después desde Fidelización.</p>
+              </div>
+              <div class="ob-field-grid">
+                <label class="ob-field"><span>Porcentaje del consumo en puntos</span><input data-path="loyalty.earnRatePercent" type="number" min="1" max="100" value="10" /></label>
+                <label class="ob-field"><span>Puntos de bienvenida</span><input data-path="loyalty.signupBonusPoints" type="number" min="0" value="40" /></label>
+                <label class="ob-field"><span>Puntos para quien refiere</span><input data-path="loyalty.referralReferrerPoints" type="number" min="0" /></label>
+                <label class="ob-field"><span>Puntos para el referido</span><input data-path="loyalty.referralReferredPoints" type="number" min="0" /></label>
+                <label class="ob-field"><span>Umbral Plata</span><input data-path="loyalty.tierThresholds.silver" type="number" min="1" value="500" /></label>
+                <label class="ob-field"><span>Umbral Oro</span><input data-path="loyalty.tierThresholds.gold" type="number" min="1" value="1000" /></label>
+                <label class="ob-field"><span>Umbral Platino</span><input data-path="loyalty.tierThresholds.platinum" type="number" min="1" value="2000" /></label>
+                <label class="ob-field"><span>Semanas para bonus de racha</span><input data-path="loyalty.streak.bonusWeeks" type="number" min="1" value="3" /></label>
+                <label class="ob-field"><span>Puntos de bonus por racha</span><input data-path="loyalty.streak.bonusPoints" type="number" min="0" /></label>
+              </div>
+              <div class="ob-section-heading is-inline">
+                <div><h3>Premios iniciales</h3><p>Agregá al menos un premio atractivo para el lanzamiento.</p></div>
+                <button class="ob-button is-secondary" id="addRewardButton" type="button">Agregar premio</button>
+              </div>
+              <div class="ob-repeat-list" id="rewardList"></div>
+            </section>
+
+            <section class="ob-step" data-step="3" hidden>
+              <div class="ob-section-heading">
+                <h3>Identidad y comunicación</h3>
+                <p>No hace falta definir una paleta perfecta: estas respuestas preparan la llamada visual.</p>
+              </div>
+              <div class="ob-field-grid">
+                <label class="ob-field"><span>Estilo visual</span><select data-path="brandCall.visualStyle"><option value="">Elegir</option><option value="elegante">Elegante</option><option value="cercano">Cercano</option><option value="juvenil">Juvenil</option><option value="premium">Premium</option><option value="familiar">Familiar</option><option value="divertido">Divertido</option></select></label>
+                <label class="ob-field"><span>Nivel de formalidad</span><select data-path="brandCall.formalityLevel"><option value="">Elegir</option><option value="informal">Informal</option><option value="equilibrado">Equilibrado</option><option value="formal">Formal</option></select></label>
+                <label class="ob-field"><span>Colores que identifican al negocio</span><textarea data-path="brandCall.paletteNotes" rows="4"></textarea></label>
+                <label class="ob-field"><span>Qué no les gusta visualmente</span><textarea data-list-path="brandCall.dislikes" rows="4"></textarea></label>
+                <label class="ob-field"><span>Referencias de otros negocios</span><textarea data-list-path="brandCall.referenceBusinesses" rows="4" placeholder="Links o nombres, uno por línea"></textarea></label>
+                <label class="ob-field"><span>Frases que usan normalmente</span><textarea data-list-path="content.commonPhrases" rows="4"></textarea></label>
+                <label class="ob-field"><span>Promociones frecuentes</span><textarea data-list-path="content.frequentPromotions" rows="4"></textarea></label>
+                <label class="ob-field"><span>Productos estrella</span><textarea data-list-path="content.starProducts" rows="4"></textarea></label>
+              </div>
+              <fieldset class="ob-choice-group">
+                <legend>Idiomas del menú</legend>
+                <label><input type="checkbox" data-array-path="languages.selected" value="es" checked disabled /> Español</label>
+                <label><input type="checkbox" data-array-path="languages.selected" value="en" /> Inglés</label>
+                <label><input type="checkbox" data-array-path="languages.selected" value="ar" /> Árabe</label>
+                <label><input type="checkbox" data-array-path="languages.selected" value="pt" /> Portugués</label>
+              </fieldset>
+              <div class="ob-field-grid">
+                <label class="ob-field"><span>Objetivo principal del QR</span><select data-path="qr.primaryGoal"><option value="menu">Ver menú</option><option value="register">Registro y puntos</option><option value="rewards">Premios</option><option value="promotion">Promoción</option></select></label>
+                <label class="ob-field"><span>Tono del QR</span><select data-path="qr.tone"><option value="directo">Directo</option><option value="elegante">Elegante</option><option value="divertido">Divertido</option><option value="premium">Premium</option></select></label>
+                <label class="ob-field is-wide"><span>Texto principal sugerido</span><input data-path="qr.mainText" value="Pedí, sumá y canjeá." /></label>
+              </div>
+            </section>
+
+            <section class="ob-step" data-step="4" hidden>
+              <div class="ob-section-heading">
+                <h3>Revisá antes de enviar</h3>
+                <p>Podrás volver a cualquier paso. Una vez enviado, Sumi revisará la información y podrá pedir ajustes.</p>
+              </div>
+              <div class="ob-review" id="reviewSummary"></div>
+              <label class="ob-confirm"><input id="submissionConfirm" type="checkbox" /> Confirmo que la información y los archivos están listos para que Sumi prepare la implementación.</label>
+              <div class="ob-submit-error" id="submitError" role="alert"></div>
+            </section>
+          </form>
+
+          <footer class="ob-form-footer">
+            <button class="ob-button is-secondary" id="previousStepButton" type="button">Volver</button>
+            <span id="stepCounter">Paso 1 de 5</span>
+            <button class="ob-button is-primary" id="nextStepButton" type="button">Continuar</button>
+          </footer>
+        </section>
+      </div>
+
+      <section class="ob-operator" id="operatorApp" hidden>
+        <section class="ob-login" id="operatorLogin">
+          <p class="ob-eyebrow">Consola interna</p>
+          <h1>Gestioná los onboardings de Sumi</h1>
+          <p>Ingresá con una cuenta autorizada como operador de plataforma.</p>
+          <form id="operatorLoginForm">
+            <label class="ob-field"><span>Email</span><input id="operatorEmail" type="email" autocomplete="email" required /></label>
+            <label class="ob-field"><span>Contraseña</span><input id="operatorPassword" type="password" autocomplete="current-password" required /></label>
+            <p class="ob-submit-error" id="operatorLoginError" role="alert"></p>
+            <button class="ob-button is-primary" type="submit">Ingresar</button>
+          </form>
+        </section>
+
+        <div id="operatorConsole" hidden>
+          <header class="ob-console-header">
+            <div><p class="ob-eyebrow">Sumi · Operaciones</p><h1>Onboardings de negocios</h1><p>Invitaciones, borradores y entregas listas para preparar.</p></div>
+            <div class="ob-console-actions"><button class="ob-button is-secondary" id="operatorLogoutButton" type="button">Cerrar sesión</button><button class="ob-button is-primary" id="newInviteButton" type="button">Nueva invitación</button></div>
+          </header>
+          <section class="ob-console-kpis" id="operatorKpis"></section>
+          <section class="ob-console-filters">
+            <label class="ob-field"><span>Buscar</span><input id="operatorSearch" type="search" placeholder="Negocio o email" /></label>
+            <label class="ob-field"><span>Estado</span><select id="operatorStatusFilter"><option value="all">Todos</option><option value="draft">Borrador</option><option value="submitted">Enviado</option><option value="needs_changes">Necesita cambios</option><option value="approved">Aprobado</option><option value="active">Sin iniciar</option></select></label>
+          </section>
+          <div class="ob-console-layout">
+            <section class="ob-invite-list" id="inviteList"></section>
+            <aside class="ob-submission-detail" id="submissionDetail" hidden></aside>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="ob-dialog" id="inviteDialog">
+      <form id="inviteForm" method="dialog">
+        <header><div><p class="ob-eyebrow">Nueva invitación</p><h2>Crear onboarding privado</h2></div><button class="ob-icon-button" value="cancel" aria-label="Cerrar" type="submit">×</button></header>
+        <label class="ob-field"><span>Nombre del negocio</span><input id="inviteBusinessName" required /></label>
+        <label class="ob-field"><span>Email del dueño</span><input id="inviteOwnerEmail" type="email" required /></label>
+        <label class="ob-field"><span>Validez del enlace</span><select id="inviteExpiryDays"><option value="14">14 días</option><option value="30" selected>30 días</option><option value="60">60 días</option></select></label>
+        <p class="ob-submit-error" id="inviteError" role="alert"></p>
+        <footer><button class="ob-button is-secondary" value="cancel" type="submit">Cancelar</button><button class="ob-button is-primary" id="createInviteButton" value="default" type="button">Crear enlace</button></footer>
+      </form>
+    </dialog>
+
+    <dialog class="ob-dialog" id="inviteLinkDialog">
+      <section>
+        <header><div><p class="ob-eyebrow">Enlace creado</p><h2>Compartilo con el dueño</h2></div><button class="ob-icon-button" aria-label="Cerrar" id="closeInviteLinkButton" type="button">×</button></header>
+        <p>El token no se vuelve a mostrar. Copiá el enlace ahora.</p>
+        <div class="ob-copy-row"><input id="createdInviteLink" readonly /><button class="ob-button is-primary" id="copyInviteLinkButton" type="button">Copiar</button></div>
+      </section>
+    </dialog>
+
+    <div class="ob-toast" id="onboardingToast" role="status" aria-live="polite"></div>
+    <script type="module" src="./onboarding.js"></script>
+  </body>
+</html>

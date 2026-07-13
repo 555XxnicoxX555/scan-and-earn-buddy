@@ -211,11 +211,17 @@
           <span id="signupPasswordLabel">Contraseña</span>
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
           <input id="signupPassword" name="password" type="password" autocomplete="new-password" minlength="6" required />
+          <button class="password-toggle" type="button" data-password-target="signupPassword" aria-label="Mostrar contrasena">
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-eye"></use></svg>
+          </button>
         </label>
         <label class="signup-field" data-signup-register-only>
           <span id="signupConfirmLabel">Repetir contraseña</span>
           <svg class="ui-icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
           <input id="signupConfirm" name="confirm" type="password" autocomplete="new-password" minlength="6" required />
+          <button class="password-toggle" type="button" data-password-target="signupConfirm" aria-label="Mostrar contrasena">
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-eye"></use></svg>
+          </button>
         </label>
         <p class="signup-error" id="signupError" role="alert"></p>
           <button class="signup-submit" id="signupSubmit" type="submit">Crear cuenta</button>
@@ -432,6 +438,7 @@
       </div>
 
       <nav class="nav">
+        <span class="nav-group-label">Operacion</span>
         <a href="#" class="nav-item active" data-admin-nav="home">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-home"></use></svg>
           Inicio
@@ -444,10 +451,12 @@
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
           Consumos
         </a>
+        <span class="nav-group-label">Catalogo</span>
         <a href="#" class="nav-item" data-admin-nav="menu">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
           Mi menu
         </a>
+        <span class="nav-group-label">Marketing</span>
         <a href="#" class="nav-item" data-admin-nav="content">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
           Crear contenido
@@ -464,6 +473,7 @@
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-qr"></use></svg>
           QRs
         </a>
+        <span class="nav-group-label">Sistema</span>
         <a href="#" class="nav-item" data-admin-nav="settings">
           <svg class="ui-icon nav-icon" aria-hidden="true"><use href="#icon-settings"></use></svg>
           Ajustes
@@ -920,7 +930,16 @@
               </label>
               <label>
                 <span>Imagen</span>
-                <input id="adminRewardImageInput" type="url" placeholder="https://..." />
+                <input id="adminRewardImageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+                <button class="reward-image-picker" id="adminRewardImagePicker" type="button" aria-describedby="adminRewardImageHint">
+                  <span class="reward-image-preview is-empty" id="adminRewardImagePreview" aria-hidden="true"></span>
+                  <span class="reward-image-picker-copy">
+                    <strong>Subir o pegar imagen</strong>
+                    <small id="adminRewardImageHint">PNG, JPG o WebP. Tambien puedes pegar desde el portapapeles.</small>
+                  </span>
+                  <svg class="ui-icon" aria-hidden="true"><use href="#icon-image"></use></svg>
+                </button>
+                <button class="reward-image-remove" id="adminRewardImageRemove" type="button" hidden>Quitar imagen</button>
               </label>
               <label>
                 <span>Puntos necesarios</span>
@@ -964,7 +983,30 @@
               </div>
               <span class="admin-count-pill" id="adminRedemptionsCount">0</span>
             </div>
-            <div class="admin-compact-list" id="adminRedemptionRows"></div>
+            <details class="admin-redemptions-disclosure">
+              <summary>
+                <span>Ver solicitudes</span>
+                <small id="adminRedemptionsVisibleCount">0 resultados</small>
+              </summary>
+              <div class="admin-redemptions-toolbar">
+                <label class="admin-redemption-search">
+                  <span class="sr-only">Buscar canjes</span>
+                  <svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+                  <input id="adminRedemptionSearchInput" type="search" placeholder="Buscar cliente o premio" autocomplete="off">
+                </label>
+                <label class="admin-redemption-filter">
+                  <span class="sr-only">Filtrar canjes por estado</span>
+                  <select id="adminRedemptionStatusFilter">
+                    <option value="all">Todos los estados</option>
+                    <option value="requested">Pendientes</option>
+                    <option value="approved">Aprobados</option>
+                    <option value="redeemed">Entregados</option>
+                    <option value="cancelled">Cancelados</option>
+                  </select>
+                </label>
+              </div>
+              <div class="admin-compact-list admin-redemption-list-shell" id="adminRedemptionRows"></div>
+            </details>
           </section>
         </div>
       </section>
@@ -1076,10 +1118,13 @@
           <button class="profile-toggle" id="profileToggle" type="button" aria-label="Abrir perfil" hidden>
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
           </button>
-          <button id="languageToggle" type="button" aria-label="Cambiar idioma">
-            <span class="header-flag flag mx" id="currentLanguageFlag" aria-hidden="true"></span>
-            <svg class="ui-icon" aria-hidden="true"><use href="#icon-language"></use></svg>
-          </button>
+          <div class="language-control">
+            <button id="languageToggle" type="button" aria-label="Cambiar idioma" aria-haspopup="menu" aria-expanded="false">
+              <span class="header-flag flag mx" id="currentLanguageFlag" aria-hidden="true"></span>
+              <svg class="ui-icon" aria-hidden="true"><use href="#icon-language"></use></svg>
+            </button>
+            <div class="language-popover" id="languageMenu" role="menu" aria-label="Idiomas" hidden></div>
+          </div>
           <button id="searchToggle" type="button" aria-label="Buscar"><svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg></button>
         </div>
       </header>

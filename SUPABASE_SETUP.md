@@ -61,6 +61,10 @@ Despues de aplicar la migracion, estas tablas deben existir:
 - `business_menu_settings`
 - `business_menu_catalog`
 - `business_menu_events`
+- `platform_operators`
+- `onboarding_invites`
+- `onboarding_submissions`
+- `onboarding_files`
 
 `business_rewards.min_tier` acepta `bronze`, `silver`, `gold`, `platinum` o
 `null`. La RPC `request_reward_redemption` crea solicitudes de canje desde el
@@ -90,6 +94,24 @@ El registro de cliente debe crear automaticamente:
 - Un `customer_profiles` vinculado a `auth.users`.
 - Un `loyalty_accounts` con `public_qr_id`.
 - Un primer `point_events` de alta.
+
+## 3.1 Roles operativos
+
+`business_admins.role` acepta:
+
+- `owner`: acceso completo, configuracion, contenido, QRs y acciones sensibles.
+- `manager`: Inicio, Clientes, Consumos, Menu y gestion de canjes.
+- `employee`: caja, carga de consumo y canjes, sin panel administrativo completo.
+
+`is_business_admin` sigue significando owner. `is_business_manager` incluye
+owner y manager. `is_business_staff` incluye los tres roles. No reemplazar una
+funcion por otra sin revisar la sensibilidad de la operacion.
+
+El onboarding B2B usa tablas y bucket propios. Todas las tablas tienen RLS y
+solo `platform_operators` activos pueden leer o gestionar invitaciones desde el
+Data API. El owner invitado entra por Edge Function con un token cuyo hash se
+guarda en la base; los archivos permanecen en el bucket privado
+`business-onboarding-private`.
 
 ## 4. Reglas esperadas
 
@@ -123,14 +145,14 @@ Estas tablas son leibles por `anon` para que el menu publico pueda mostrar
 contadores y badges, pero las escrituras estan protegidas por RLS:
 
 - Clientes autenticados pueden dar/quitar su propio like en `dish_likes`.
-- Owners del negocio pueden editar `dish_like_overrides` y
-  `business_menu_settings`.
+- Owners del negocio pueden editar `dish_like_overrides`. Owners y managers
+  pueden operar `business_menu_settings`.
 
 El catalogo editable del panel admin se guarda en `business_menu_catalog`.
 Cuando existe una fila para el `business_id`, esa lista de productos reemplaza
 al fallback versionado de `businesses/<negocio>/config.js` para clientes,
 empleados, owners, pestanas nuevas e incognito. La lectura es publica; la
-escritura queda limitada por RLS a owners del negocio.
+escritura queda limitada por RLS a owners y managers del negocio.
 
 ## 6. Eventos del menu y estadisticas
 
@@ -149,7 +171,7 @@ si existe, `auth_user_id` si existe y `created_at`.
 Permisos esperados:
 
 - `anon` y `authenticated` pueden insertar eventos.
-- Solo owners del negocio pueden leerlos desde el admin.
+- Owners y managers del negocio pueden leerlos desde el admin.
 
 El panel de tareas tambien lee:
 
@@ -352,6 +374,20 @@ La funcion maneja estos eventos:
 - `recovery`: recuperacion de contrasena.
 - `invite`: invitacion.
 - `email_change`: confirmacion de nuevo email.
+
+### Seguridad de Auth y RPC
+
+- Ejecutar el Security Advisor despues de cada migracion de funciones, policies o
+  Storage.
+- Las RPC `SECURITY DEFINER` expuestas a `authenticated` son intencionales solo
+  cuando validan `auth.uid()` y el rol del negocio dentro de la funcion. El rol
+  `anon` debe conservar `EXECUTE = false` para todas ellas.
+- En proyectos Pro o superiores, activar `Authentication > Attack Protection >
+  Leaked password protection`. Supabase muestra este aviso en planes Free aunque
+  la opcion no este disponible en ese plan.
+- El bucket `business-onboarding-private` debe permanecer privado. Los objetos de
+  `generated-content` se sirven por URL publica sin una policy global de `SELECT`
+  sobre `storage.objects`, evitando que clientes anonimos enumeren el bucket.
 
 ## 9. Traduccion IA del menu
 
