@@ -252,6 +252,7 @@ let selectedContentType = "instagram-square";
 let selectedContentTone = "";
 let selectedContentReferenceImage = "";
 let selectedContentBackgroundImage = "";
+let selectedContentBackgroundMode = "static";
 let generatedContentLibrary = loadContentLibrary();
 let adminLibraryFilter = "all";
 let contentDraftOverride = { key: "", caption: "", hashtags: "" };
@@ -408,6 +409,7 @@ const consumptionPointsPreview = document.querySelector("#consumptionPointsPrevi
 const consumptionCatalog = document.querySelector("#consumptionCatalog");
 const consumptionItemsList = document.querySelector("#consumptionItemsList");
 const consumptionSave = document.querySelector("#consumptionSave");
+const adminContentBackgroundMode = document.querySelector("#adminContentBackgroundMode");
 const profileModal = document.querySelector("#profileModal");
 const profileClose = document.querySelector("#profileClose");
 const profileName = document.querySelector("#profileName");
@@ -1550,7 +1552,7 @@ function contentDraftKey(dish, format) {
     format?.id || "",
     selectedContentTone,
     selectedContentReferenceImage ? "manual-product" : "menu-product",
-    selectedContentBackgroundImage ? "manual-background" : "generated-background",
+    selectedContentBackgroundImage ? `manual-background-${selectedContentBackgroundMode}` : `product-background-${selectedContentBackgroundMode}`,
     adminContentInstructions?.value.trim() || ""
   ].join("|");
 }
@@ -1573,7 +1575,7 @@ function contentGenerationRequestKey(dish, format, draft = null) {
     normalizedRequestText(instructions),
     selectedContentTone || "neutral",
     selectedContentReferenceImage ? "manual-product" : "menu-product",
-    selectedContentBackgroundImage ? "manual-background" : "generated-background",
+    selectedContentBackgroundImage ? `manual-background-${selectedContentBackgroundMode}` : `product-background-${selectedContentBackgroundMode}`,
     normalizedRequestText(draft?.overlay || promotionalBadgeText(dish, format, instructions))
   ].join("|");
 }
@@ -1775,16 +1777,18 @@ function buildContentImagePrompt(dish, format, draft) {
   const tone = contentToneProfile();
   const secondaryText = secondaryBadgeText(dish);
   const tertiaryText = highlights.tertiary || "";
-  const backgroundGuidance = selectedContentBackgroundImage
-    ? "Usar la imagen de fondo subida por el usuario como referencia de ambiente, luz, superficie y contexto; mantener el producto del menu como protagonista y no reemplazarlo por elementos del fondo."
-    : "Crear un fondo gastronomico coherente con el producto, limpio y con aire visual para textos laterales.";
+  const isStaticBackground = selectedContentBackgroundMode === "static";
+  const backgroundGuidance = isStaticBackground
+    ? "MODO FONDO ESTATICO: conservar exactamente el fondo, los objetos, sus posiciones, encuadre, superficie y luz de la imagen de referencia. No mover, agregar, quitar, reemplazar ni reinterpretar ningun objeto. La unica intervencion permitida es superponer los badges promocionales solicitados en los laterales o esquinas."
+    : selectedContentBackgroundImage
+      ? "MODO FONDO DINAMICO: puedes reinterpretar solamente el ambiente de la imagen de fondo subida (superficie, luz y decoracion secundaria), pero el producto de referencia debe mantenerse exactamente igual, completo y en su misma presentacion."
+      : "MODO FONDO DINAMICO: puedes crear o cambiar solamente el ambiente gastronomico; conserva el producto de referencia exactamente igual, completo y reconocible.";
   return [
     `Crear una imagen publicitaria para ${format.title}.`,
     `Producto principal: ${dish.name}. Categoria: ${dish.category}. Descripcion: ${dish.description}.`,
-    `Usar la imagen del producto como referencia visual principal y tratar el producto como identidad bloqueada.`,
-    `No cambiar el producto: no modificar ingredientes, forma, cantidad, textura, toppings, color real, plato, pan, salsas ni presentacion del alimento.`,
-    `Solo se permiten ajustes fotograficos sobre el producto: enfoque, nitidez, iluminacion, sombras suaves, color grading natural, recorte y perspectiva leve.`,
-    `Si hace falta integrar el producto en otro entorno, mantener el alimento igual y adaptar unicamente fondo, superficie, luz ambiental y elementos secundarios.`,
+    `Usar la imagen del producto como referencia visual principal y tratar producto, plato, ingredientes y presentacion como pixeles bloqueados.`,
+    `No cambiar el producto: no modificar ingredientes, forma, cantidad, textura, toppings, color, plato, pan, salsas, presentacion, posicion ni recorte. No agregar ni quitar objetos de la referencia.`,
+    `No regenerar la fotografia: la salida debe mantener el producto y, en modo estatico, todo el fondo sin cambios. Solo agregar los badges promocionales solicitados como overlays.`,
     backgroundGuidance,
     `Composicion limpia para restaurante, luz calida, fotografia de producto de alta calidad, lista para publicarse.`,
     `Estructura obligatoria: titulo del producto arriba del producto, producto protagonista en centro o tercio inferior, badges solo en laterales o esquinas.`,
@@ -1896,7 +1900,8 @@ async function startContentImageGeneration(dish, format, draft) {
       referenceImage,
       referenceSource: selectedContentReferenceImage ? "manual-upload" : "menu-photo",
       backgroundImage,
-      backgroundSource: selectedContentBackgroundImage ? "manual-background-upload" : ""
+      backgroundSource: selectedContentBackgroundImage ? "manual-background-upload" : "",
+      backgroundMode: selectedContentBackgroundMode
     },
     format: {
       id: format.id,
@@ -3734,7 +3739,11 @@ function updateConsumptionItem(key, delta) {
 
 function renderConsumptionCatalog() {
   if (!consumptionCatalog) return;
-  const items = menuItems.filter(isDishVisible).slice(0, 80);
+  const selectedCategory = String(consumptionCategory?.value || "").trim();
+  const items = menuItems
+    .filter(isDishVisible)
+    .filter((dish) => !selectedCategory || dish.category === selectedCategory)
+    .slice(0, 80);
   consumptionCatalog.innerHTML = items.length
     ? items.map((dish) => {
       const presentationsList = presentationListForDish(dish);
@@ -3757,7 +3766,7 @@ function renderConsumptionCatalog() {
         </div>
       `;
     }).join("")
-    : `<div class="admin-empty">No hay productos visibles.</div>`;
+    : `<div class="admin-empty">No hay productos visibles${selectedCategory ? ` en ${escapeHtml(selectedCategory)}` : ""}.</div>`;
 }
 
 function renderConsumptionItems() {
@@ -6416,6 +6425,7 @@ function renderAdminContent() {
   adminContentTypeSelect.innerHTML = contentTypes
     .map((type) => `<option value="${escapeAttribute(type.id)}" ${type.id === format.id ? "selected" : ""}>${escapeHtml(type.title)}</option>`)
     .join("");
+  if (adminContentBackgroundMode) adminContentBackgroundMode.value = selectedContentBackgroundMode;
 
   adminContentDishThumb.style.backgroundImage = `url('${dish.photo}')`;
   adminContentDishTitle.textContent = dish.name;
@@ -6427,9 +6437,11 @@ function renderAdminContent() {
     const referenceText = selectedContentReferenceImage
       ? "Producto: imagen subida manualmente."
       : "Producto: foto del menu.";
-    const backgroundText = selectedContentBackgroundImage
-      ? " Fondo: referencia subida."
-      : " Fondo: generado por IA.";
+    const backgroundText = selectedContentBackgroundMode === "static"
+      ? " Fondo estatico: se conserva sin cambios."
+      : selectedContentBackgroundImage
+        ? " Fondo dinamico: la IA puede ambientarlo."
+        : " Fondo dinamico: la IA crea solo el ambiente.";
     adminContentReferenceMeta.textContent = `${referenceText}${backgroundText}`;
     adminContentReferenceClear.hidden = !selectedContentReferenceImage;
     if (adminContentBackgroundClear) adminContentBackgroundClear.hidden = !selectedContentBackgroundImage;
@@ -8325,7 +8337,6 @@ function openDetail(idOrDish, options = {}) {
       `
     )
     .join("");
-
   detailView.classList.add("open");
 }
 
@@ -8432,6 +8443,10 @@ consumptionShowRewards?.addEventListener("click", () => {
 });
 
 consumptionAmount?.addEventListener("input", updateConsumptionPointsPreview);
+  consumptionCategory?.addEventListener("change", () => {
+    activePresentationDishId = "";
+    renderConsumptionCatalog();
+  });
 
 consumptionCatalog?.addEventListener("click", (event) => {
   const presentationButton = event.target.closest("[data-consumption-presentation-dish]");
@@ -8786,6 +8801,12 @@ adminContentBackgroundInput?.addEventListener("change", async () => {
 
 adminContentBackgroundClear?.addEventListener("click", () => {
   selectedContentBackgroundImage = "";
+  resetContentGenerationState();
+  renderAdminContent();
+});
+
+adminContentBackgroundMode?.addEventListener("change", () => {
+  selectedContentBackgroundMode = adminContentBackgroundMode.value === "dynamic" ? "dynamic" : "static";
   resetContentGenerationState();
   renderAdminContent();
 });

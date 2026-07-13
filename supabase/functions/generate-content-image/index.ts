@@ -37,6 +37,7 @@ type ImageInput = {
     referenceSource?: string;
     backgroundImage?: string;
     backgroundSource?: string;
+    backgroundMode?: "static" | "dynamic";
   };
   format?: {
     id?: string;
@@ -194,7 +195,13 @@ function firstUrlFrom(value: unknown): string {
 }
 
 async function createKieImageTask(input: ImageInput) {
-  const prompt = safeString(input.brief?.prompt);
+  const backgroundMode = input.dish?.backgroundMode === "dynamic" ? "dynamic" : "static";
+  const prompt = [
+    safeString(input.brief?.prompt),
+    backgroundMode === "static"
+      ? "NON-NEGOTIABLE STATIC BACKGROUND: preserve the exact input image composition, background, object positions, product, plate, ingredients and crop. Do not add, remove, move, replace or redraw anything. Add only the requested promotional badges as overlays."
+      : "NON-NEGOTIABLE PRODUCT LOCK: preserve the exact product, plate, ingredients, quantity, crop and position from the product reference. You may change only the surrounding background ambience; do not add or remove product elements."
+  ].filter(Boolean).join(" ");
   const referenceImage = await normalizedReferenceImage(input.dish?.referenceImage || input.dish?.photo);
   const backgroundImage = await normalizedReferenceImage(input.dish?.backgroundImage);
   const model = referenceImage ? "gpt-image-2-image-to-image" : "gpt-image-2-text-to-image";

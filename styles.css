@@ -5974,6 +5974,64 @@ body.admin-manager .admin-loyalty-layout {
   padding: 0 14px;
 }
 
+.admin-background-mode {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-background-mode select {
+  min-height: 38px;
+  padding: 0 28px 0 10px;
+  border: 1px solid rgba(190, 148, 92, 0.4);
+  border-radius: 10px;
+  background: #fffdf6;
+  color: var(--ink);
+  font: inherit;
+}
+
+.admin-tooltip {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(116, 72, 34, 0.45);
+  border-radius: 50%;
+  background: #fffdf6;
+  color: #744822;
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.admin-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 9px);
+  z-index: 12;
+  width: min(270px, 70vw);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #321607;
+  color: #fffaf2;
+  font: 700 12px/1.35 system-ui, sans-serif;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.admin-tooltip:hover::after,
+.admin-tooltip:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .admin-content-section .admin-ia-step-card {
   grid-template-columns: 68px minmax(0, 1fr) minmax(220px, 30%);
   gap: 14px;

@@ -779,6 +779,14 @@
                 <h2>Imagen base para la publicacion</h2>
                 <small id="adminContentReferenceMeta">Usando la foto del producto seleccionado.</small>
               </div>
+              <div class="admin-background-mode">
+                <span>Fondo</span>
+                <select id="adminContentBackgroundMode" aria-label="Modo de fondo para la imagen generada">
+                  <option value="static">Estático</option>
+                  <option value="dynamic">Dinámico</option>
+                </select>
+                <button class="admin-tooltip" type="button" aria-label="Ayuda sobre los modos de fondo" data-tooltip="Estático conserva exactamente producto, fondo y objetos; la IA solo añade badges promocionales. Dinámico permite cambiar únicamente el ambiente; el producto se mantiene igual.">?</button>
+              </div>
               <label class="outline admin-reference-upload admin-background-upload">
                 <svg class="ui-icon" aria-hidden="true"><use href="#icon-image"></use></svg>
                 Subir fondo
