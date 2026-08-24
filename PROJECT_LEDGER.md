@@ -32,10 +32,10 @@
 ## Checkpoint de despliegue — 2026-08-24
 
 - **Runbook:** creado `docs/DEPLOYMENT_RUNBOOK.md`; describe la secuencia recuperable oficial y queda sin ejecutar.
-- **Vercel:** `vercel.json` fija Vite, `npm run build` y salida `dist`; el objetivo operativo es importar el repositorio aprobado con root `.`. El proyecto observado `sumi-onboarding` sigue sin repositorio Git conectado; no se ha importado ni desplegado el sitio Sumi.
+- **Vercel:** `vercel.json` fija Vite, `npm run build` y salida `dist`; el objetivo operativo es importar el repositorio aprobado con root `.`. La cuenta observada sólo muestra `sumi-onboarding`: su deployment de producción está `Ready`, fue creado mediante `vercel deploy`, sirve `onboarding.sumi.business` y no tiene repositorio Git conectado. No se ha importado ni desplegado el sitio principal Sumi.
 - **Variables:** `.env` local se preservó, fue retirado del tracking y permanece excluido por `.gitignore`; `.env.example` existe con placeholders para `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` y `VITE_PUBLIC_APP_URL`. No se permite `service-role` en Vercel.
 - **Puerta y rollback:** primero commit aprobado, importación/build/preview y logs; después agregar `sumi.business` usando sólo los registros exactos mostrados por Vercel, reducir TTL y cambiar Hostinger. Se deben validar HTTPS/QR/Auth, registrar deployment ID y conservar rollback; Lovable permanece intacto hasta confirmación destructiva final.
-- **Estado externo:** no se modificaron DNS ni se retiró Lovable. La validación reportada en este checkpoint fue local y aislada, sin llamadas externas; la identidad/preflight de Supabase todavía no se ejecutaron por falta de aprobación.
+- **Estado externo:** no se modificaron DNS ni se retiró Lovable. La identidad visual de Supabase sí quedó reconciliada con el proyecto Sumi, pero el preflight SQL todavía no se ejecutó por falta de aprobación. Lovable conserva el proyecto `Sumi-Test`, sincronizado desde GitHub y con cambios sin publicar; usa `proyecto-gastronomia.lovable.app` y no tiene `sumi.business` conectado como dominio personalizado.
 
 ## Baseline público read-only — 2026-08-24
 
@@ -107,12 +107,12 @@
 | El bundle público observado es `assets/index-DqzCP29E.js` (`359320` bytes) y no contiene `manage_reward_redemption_status_v2` ni `employee-workspace`; producción sigue sirviendo la versión anterior, no el flujo local auditado. | Inspección pública read-only del bundle servido el 2026-08-24; no se registran hashes ni se infiere proveedor adicional. | 2026-08-24 |
 | Hostinger muestra como dominio registrado exacto `sumi.business`. | Verificación visual de la cuenta Hostinger durante la sesión actual. | 2026-08-24 |
 | `https://sumi.business` carga actualmente `Sumi Menu Admin` y presenta selector de idioma. | Verificación de navegación en navegador durante la sesión actual. | 2026-08-24 |
-| Vercel muestra el proyecto `sumi-onboarding` y el dominio `onboarding.sumi.business`, sin repositorio Git conectado. | Verificación visual del dashboard de Vercel durante la sesión actual. | 2026-08-24 |
+| Vercel muestra únicamente el proyecto `sumi-onboarding`; su deployment de producción figura `Ready`, tiene como origen `vercel deploy`, sirve `onboarding.sumi.business` y no posee repositorio Git conectado. | Verificación read-only del overview y la sección Production Deployment de Vercel durante la sesión actual. | 2026-08-24 |
 | `https://onboarding.sumi.business` carga `Onboarding \| Sumi` y exige un enlace privado para continuar. | Verificación de navegación en navegador durante la sesión actual. | 2026-08-24 |
 | El dashboard visible de Supabase figura como `Sumi`. | Verificación visual del dashboard de Supabase durante la sesión actual. | 2026-08-24 |
 | El repositorio público de GitHub es `555XxnicoxX555/scan-and-earn-buddy` y su rama por defecto es `main`. | Salida verificada de `gh repo view`; no implica que la rama de trabajo actual haya sido fusionada. | 2026-08-24 |
 | `docs/FREELANCE_COMMAND_CENTER.md` fue creado y contiene una arquitectura versionada para el centro de mando freelance, onboarding y credenciales protegidas. | Archivo local leído tras la creación. | 2026-08-24 |
-| En la sesión anterior se identificó visualmente el proyecto de Lovable como `Sumi-Test`; no se retiró. | Observación de navegador reportada en la conversación; el estado destructivo sigue pendiente de confirmación y no debe inferirse. | 2026-08-24 |
+| Lovable contiene el proyecto `Sumi-Test`, muestra actividad sincronizada desde GitHub y cambios sin publicar; su URL propia es `proyecto-gastronomia.lovable.app` y no tiene `sumi.business` conectado como dominio personalizado. No se retiró ni modificó. | Verificación read-only del proyecto y de Settings → Domains en Lovable durante la sesión actual. | 2026-08-24 |
 
 ## Supuestos y preguntas
 
@@ -124,7 +124,7 @@
 | **Contrato local pendiente de verificación remota:** ¿qué roles pueden aprobar, entregar o cancelar cada transición? | Debe coincidir entre matriz de negocio, UI, RPC y RLS; evita falsos positivos y abusos. | La migración/UI local definen employee para aprobar/entregar y owner/manager para cancelar; falta confirmar después de apply y pruebas. |
 | **Decisión local:** ¿un empleado puede marcar `redeemed` o sólo aprobar? | Cambia la máquina de estados y el riesgo de entrega/doble toque. | Implementación local permite aprobar y entregar con confirmación; employee no puede cancelar. Requiere validación remota. |
 | **Pregunta:** ¿la corrección de un monto mal cargado debe requerir motivo, vista previa y/o segunda aprobación? | Afecta reversibilidad y auditoría de puntos. | La UI actual exige motivo para ajuste manual del owner; el flujo final de canjes debe documentar la regla. |
-| **Supuesto:** la sustitución Vercel debe quedar verificada antes de borrar/despublicar Lovable. | Evita pérdida de servicio y facilita recuperación. | Decisión operativa vigente; `sumi-onboarding` sigue sin repo Git conectado y Lovable no debe tocarse aún. |
+| **Supuesto:** la sustitución Vercel debe quedar verificada antes de borrar/despublicar Lovable. | Evita pérdida de servicio y facilita recuperación. | Decisión operativa vigente; `sumi-onboarding` sigue sin repo Git conectado y Lovable permanece disponible en su URL propia, sin controlar `sumi.business`. |
 | **Pregunta de despliegue:** ¿cuál es el proyecto Vercel final que recibirá el repositorio Sumi? | Evita publicar sobre `sumi-onboarding` u otro tenant por error. | Pendiente de confirmación del root/usuario; el runbook exige importar con root `.` y registrar el proyecto exacto. |
 | **Supuesto operativo:** los valores de Preview/Production deben usar sólo el Supabase Sumi reconciliado y la publishable key; nunca `service-role`. | Una variable equivocada puede apuntar al proyecto histórico o exponer privilegios. | Regla adoptada en `docs/DEPLOYMENT_RUNBOOK.md`; valores aún no cargados ni verificados en Vercel. |
 | **Pregunta de DNS:** ¿qué registros exactos muestra Vercel para `sumi.business` en el proyecto final? | Evita adivinar A/CNAME/ALIAS o mutar otro dominio. | Pendiente: copiar y registrar sólo la salida de Vercel después de verificar el preview; Hostinger aún no fue modificado. |
@@ -195,7 +195,7 @@
 | Runbook de despliegue recuperable | `documenter` + root | Creado y registrado; no ejecutado ni usado para autorizar mutaciones | `docs/DEPLOYMENT_RUNBOOK.md` | Commit aprobado, proyecto Vercel final, preview/logs y aprobación DNS |
 | Graphify | Graphify/Documenter | Grafo local generado y diagnosticado; posible actualización posterior si cambia el código | `graphify-out/**` | Decidir si actualizar después del merge; requiere registrar costo |
 | GitHub commit/push | Root | Revisión precommit local sin P0/P1; commit y push siguen pendientes de integrar el gate remoto | Archivos relevantes del worktree | Identidad/preflight y migración Supabase; después commit/push aprobado |
-| Vercel | Root | Proyecto `sumi-onboarding` y dominio `onboarding.sumi.business` verificados; no hay repo Git conectado; runbook creado; importación/build/preview de Sumi pendientes | Configuración externa | Commit aprobado, proyecto final confirmado, variables seguras, preview/logs y deployment ID |
+| Vercel | Root | La cuenta sólo muestra `sumi-onboarding`; su producción está `Ready`, proviene de `vercel deploy`, sirve `onboarding.sumi.business` y no tiene Git conectado. El sitio principal Sumi aún no existe en Vercel; runbook creado | Configuración externa | Commit aprobado, crear/importar proyecto final desde Git, variables seguras, preview/logs y deployment ID |
 | Hostinger/DNS | Root | Dominio exacto `sumi.business` verificado; registros DNS aún no modificados; runbook exige registros exactos Vercel y TTL registrado | Configuración externa | Preview Vercel verificado y confirmación antes de mutar DNS |
 | Lovable | Root | Proyecto histórico observado como `Sumi-Test`; no retirar | Configuración externa | Sustitución recuperable + aprobación inmediata |
 
