@@ -7,8 +7,13 @@ const devOwnerStorageKey = "sumi:dev-owner";
 const menuSettingsStorageKey = "sumi:menu:habibi-bites:settings";
 const localAppData = process.env.LOCALAPPDATA || "";
 const explicitExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+const programFiles = process.env.ProgramFiles || "C:\\Program Files";
+const programFilesX86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
 const knownChromiumShells = [
   explicitExecutable,
+  join(programFiles, "Google", "Chrome", "Application", "chrome.exe"),
+  join(programFilesX86, "Google", "Chrome", "Application", "chrome.exe"),
+  localAppData && join(localAppData, "Google", "Chrome", "Application", "chrome.exe"),
   localAppData && join(localAppData, "ms-playwright", "chromium_headless_shell-1228", "chrome-headless-shell-win64", "chrome-headless-shell.exe"),
   localAppData && join(localAppData, "ms-playwright", "chromium_headless_shell-1200", "chrome-headless-shell-win64", "chrome-headless-shell.exe")
 ].filter(Boolean);
@@ -21,11 +26,20 @@ try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const consoleErrors = [];
   page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+    if (message.type() === "error") {
+      const sourceUrl = message.location().url;
+      consoleErrors.push(sourceUrl ? `${message.text()} :: ${sourceUrl}` : message.text());
+    }
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
   await page.goto(`${baseUrl}/#/menu`, { waitUntil: "networkidle" });
+  await page.waitForFunction(() => typeof window.SumiDebug?.admin === "function");
+  const smokeEnvironment = await page.evaluate(() => window.SumiDebug.admin());
+  if (!smokeEnvironment.remoteDisabled || smokeEnvironment.hasSupabase) {
+    throw new Error("Smoke UI refused to run: start the app with VITE_DISABLE_REMOTE=true.");
+  }
+
   await page.waitForSelector(".customer-dish-card");
   const cardCount = await page.locator(".customer-dish-card").count();
   if (cardCount < 1) throw new Error("Public menu did not render product cards.");
@@ -74,6 +88,37 @@ try {
     throw new Error("Admin route without owner did not redirect safely to the public menu.");
   }
 
+  await page.goto(`${baseUrl}/?employee-preview=1#/menu`, { waitUntil: "networkidle" });
+  await page.waitForSelector("body.employee-workspace #staffConsumptionCard:not([hidden])");
+  const employeeWorkspace = await page.evaluate(() => ({
+    pageWidth: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth),
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
+    menuTop: document.querySelector(".brand-switch")?.getBoundingClientRect().top ?? -1,
+    menuAvailable: getComputedStyle(document.querySelector(".public-list")).display !== "none",
+    scanVisible: Boolean(document.querySelector("#staffScanButton")?.offsetParent),
+    manualVisible: Boolean(document.querySelector("#staffManualButton")?.offsetParent),
+    lastConsumptionVisible: Boolean(document.querySelector("#staffLastConsumption")?.offsetParent),
+    menuToolsHidden: getComputedStyle(document.querySelector(".menu-tools")).display === "none"
+  }));
+  if (employeeWorkspace.pageWidth > employeeWorkspace.viewportWidth) {
+    throw new Error(`Employee workspace has horizontal overflow: ${employeeWorkspace.pageWidth}px > ${employeeWorkspace.viewportWidth}px.`);
+  }
+  if (!employeeWorkspace.menuAvailable || employeeWorkspace.menuTop < employeeWorkspace.viewportHeight) {
+    throw new Error("Employee workspace did not place the public menu below the first viewport.");
+  }
+  if (!employeeWorkspace.scanVisible || !employeeWorkspace.manualVisible || !employeeWorkspace.lastConsumptionVisible || !employeeWorkspace.menuToolsHidden) {
+    throw new Error("Employee workspace is missing an essential operational control or exposes non-essential header tools.");
+  }
+  await page.locator("#staffManualButton").click();
+  await page.waitForSelector("#consumptionModal:not([hidden])");
+  if (await page.locator("#consumptionCustomerPicker").getAttribute("hidden") !== null) {
+    throw new Error("Employee manual customer lookup did not open in manual mode.");
+  }
+  await page.locator("#consumptionClose").click();
+  await page.waitForFunction(() => document.querySelector("#consumptionModal")?.hidden);
+  await page.goto(`${baseUrl}/#/menu`, { waitUntil: "networkidle" });
+
   await page.evaluate(
     ({ ownerKey, settingsKey }) => {
       window.localStorage.setItem(ownerKey, "true");
@@ -81,8 +126,93 @@ try {
     },
     { ownerKey: devOwnerStorageKey, settingsKey: menuSettingsStorageKey }
   );
-  await page.goto(`${baseUrl}/#/admin/menu`, { waitUntil: "networkidle" });
+  // Force a full document navigation after leaving employee preview so body
+  // classes and auth-derived surfaces are recalculated from the owner fixture.
+  await page.goto(`${baseUrl}/?owner-preview=1#/admin/menu`, { waitUntil: "networkidle" });
+  await page.waitForFunction(() => typeof window.SumiDebug?.admin === "function");
+  const ownerFixture = await page.evaluate(() => ({
+    url: window.location.href,
+    debug: window.SumiDebug.admin(),
+    bodyClass: document.body.className,
+    adminHidden: document.querySelector("#adminPanel")?.hidden,
+  }));
+  if (!ownerFixture.debug.localDevOwner || !ownerFixture.debug.adminAccess) {
+    throw new Error(`Local owner fixture was not authorized: ${JSON.stringify(ownerFixture)}`);
+  }
   await page.waitForSelector("#adminPanel:not([hidden])");
+
+  const mobileAdminRoutes = [
+    ["home", "#adminHome"],
+    ["customers", "#adminCustomersSection"],
+    ["consumptions", "#adminConsumptionsSection"],
+    ["menu", "#adminMenuSection"],
+    ["content", "#adminContentSection"],
+    ["library", "#adminLibrarySection"],
+    ["rewards", "#adminRewardsSection"],
+    ["qrs", "#adminQrsSection"],
+    ["settings", "#adminSettingsSection"]
+  ];
+  for (const [route, sectionSelector] of mobileAdminRoutes) {
+    await page.goto(`${baseUrl}/#/admin/${route}`, { waitUntil: "networkidle" });
+    await page.waitForSelector(`${sectionSelector}:not([hidden])`);
+    const layout = await page.evaluate((selector) => {
+      const section = document.querySelector(selector);
+      const panel = document.querySelector("#adminPanel");
+      const sidebar = document.querySelector(".sidebar");
+      const rect = section?.getBoundingClientRect();
+      const panelRect = panel?.getBoundingClientRect();
+      const sidebarRect = sidebar?.getBoundingClientRect();
+      return {
+        pageWidth: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth),
+        viewportWidth: window.innerWidth,
+        sectionLeft: rect?.left ?? -1,
+        sectionRight: rect?.right ?? -1,
+        panelLeft: panelRect?.left ?? -1,
+        panelRight: panelRect?.right ?? -1,
+        sidebarLeft: sidebarRect?.left ?? -1,
+        sidebarRight: sidebarRect?.right ?? -1
+      };
+    }, sectionSelector);
+    if (layout.pageWidth > layout.viewportWidth) {
+      throw new Error(`Mobile admin ${route} has page overflow: ${layout.pageWidth}px > ${layout.viewportWidth}px.`);
+    }
+    if (layout.sectionLeft < 0 || layout.sectionRight > layout.viewportWidth + 1 || layout.panelLeft < 0 || layout.panelRight > layout.viewportWidth + 1) {
+      throw new Error(`Mobile admin ${route} content is outside the viewport.`);
+    }
+    if (layout.sidebarLeft < 0 || layout.sidebarRight > layout.viewportWidth + 1) {
+      throw new Error(`Mobile admin ${route} navigation is outside the viewport.`);
+    }
+  }
+
+  await page.goto(`${baseUrl}/#/admin/home`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#adminHome:not([hidden])");
+  const visibleRecentRows = await page.locator("#homeRecentPanel .home-activity-row").count();
+  if (visibleRecentRows > 3) {
+    throw new Error(`Recent activity renders ${visibleRecentRows} rows initially; expected at most 3.`);
+  }
+
+  await page.goto(`${baseUrl}/#/admin/library`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#adminLibrarySection:not([hidden])");
+  const activeLibraryFilterContrast = await page.locator("#adminLibraryFilters .admin-library-filter.is-active").first().evaluate((element) => {
+    const parseRgb = (value) => (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+    const luminance = (value) => {
+      const channels = parseRgb(value).map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    };
+    const style = getComputedStyle(element);
+    const foreground = luminance(style.color);
+    const background = luminance(style.backgroundColor);
+    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+  });
+  if (activeLibraryFilterContrast < 4.5) {
+    throw new Error(`Active library filter contrast is ${activeLibraryFilterContrast.toFixed(2)}; expected at least 4.5.`);
+  }
+
+  await page.goto(`${baseUrl}/#/admin/menu`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#adminMenuSection:not([hidden])");
   await page.locator("#adminNewDishButton").click();
   await page.waitForURL("**/#/admin/menu/new/edit");
   await page.waitForSelector("#editorPanel.open");
@@ -163,16 +293,30 @@ try {
 
   await page.goto(`${baseUrl}/#/admin/content`, { waitUntil: "networkidle" });
   await page.waitForSelector("#adminContentSection:not([hidden])");
+  await page.waitForFunction(() => !document.querySelector("#editorPanel")?.classList.contains("open"));
+  const backgroundTooltip = page.locator("#adminContentBackgroundTooltip");
+  const staticTooltipText = await backgroundTooltip.getAttribute("data-tooltip");
+  if (!staticTooltipText?.includes("Conserva el producto, el fondo y los objetos") || staticTooltipText.includes("Dinámico")) {
+    throw new Error("Static background mode did not expose its contextual tooltip.");
+  }
+  await page.locator("#adminContentBackgroundMode").selectOption("dynamic");
+  const dynamicTooltipText = await backgroundTooltip.getAttribute("data-tooltip");
+  if (!dynamicTooltipText?.includes("cambie el ambiente del fondo") || dynamicTooltipText.includes("Estático")) {
+    throw new Error("Dynamic background mode did not expose its contextual tooltip.");
+  }
   await page.locator("#adminViewLibraryButton").click();
   await page.waitForURL(/#\/admin\/library/);
   await page.waitForSelector("#adminLibrarySection:not([hidden])");
   await page.goto(`${baseUrl}/#/admin/content`, { waitUntil: "networkidle" });
   await page.waitForSelector("#adminContentSection:not([hidden])");
-  await page.locator("#adminCreateContentButton").click();
-  await page.waitForFunction(() => {
-    const preview = document.querySelector("#adminContentPreview");
-    return preview?.textContent.includes("No se pudo generar") || preview?.textContent.includes("Sin creditos");
-  });
+  await page.waitForFunction(() => !document.querySelector("#editorPanel")?.classList.contains("open"));
+  const createContentButton = page.locator("#adminCreateContentButton");
+  if (await createContentButton.count() !== 1 || !await createContentButton.isEnabled()) {
+    throw new Error("Content generation control is missing or disabled.");
+  }
+  // Deliberately do not click: a smoke test must never consume AI credits or
+  // create remote tasks. The paid/write path is covered only by an explicitly
+  // approved integration test with a dedicated fixture account.
   await page.goto(`${baseUrl}/#/admin/library`, { waitUntil: "networkidle" });
   await page.waitForSelector("#adminLibrarySection:not([hidden])");
 
@@ -211,7 +355,7 @@ try {
     throw new Error(`Browser console errors:\n${consoleErrors.join("\n")}`);
   }
 
-  console.log(`Smoke UI passed: ${cardCount} public cards, search, language, signup modal, detail route, mobile overflow, admin guard, redemption disclosure/search/filter, create dish, recommend/popular, save, visibility, preview, content library, and delete checked.`);
+  console.log(`Smoke UI passed: ${cardCount} public cards, search, language, signup modal, detail route, mobile overflow, admin guard, isolated employee workspace/manual lookup, all 9 mobile admin routes, recent activity limit, active filter contrast, contextual background tooltip, redemption disclosure/search/filter, create dish, recommend/popular, save, visibility, preview, content library, and delete checked.`);
 } finally {
   await browser.close();
 }

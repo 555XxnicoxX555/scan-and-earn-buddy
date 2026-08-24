@@ -2,5 +2,8 @@ dist/
 dist-onboarding/
 node_modules/
 supabase/.temp/
+.env
+.env.local
+.env.*.local
 __pycache__/
 *.pyc

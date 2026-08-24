@@ -117,8 +117,8 @@ if (!/adminNewDishButton\.addEventListener\("click"[\s\S]*?navigate\("admin-edit
   failures.push("Create dish button must navigate to the new product editor route.");
 }
 
-if (!/function isLocalDevOwner\(\)[\s\S]*?hostname === "localhost"[\s\S]*?hostname === "127\.0\.0\.1"[\s\S]*?import\.meta\.env\.DEV && localHost && window\.localStorage\.getItem\(localDevOwnerStorageKey\) === "true"/.test(app)) {
-  failures.push("Local owner test mode must be guarded by DEV, localhost, and an explicit localStorage flag.");
+if (!/function isLocalDevOwner\(\)[\s\S]*?hostname === "localhost"[\s\S]*?hostname === "127\.0\.0\.1"[\s\S]*?URLSearchParams\(window\.location\.search\)[\s\S]*?owner-preview[\s\S]*?import\.meta\.env\.DEV && localHost && \(urlPreview \|\| window\.localStorage\.getItem\(localDevOwnerStorageKey\) === "true"\)/.test(app)) {
+  failures.push("Local owner test mode must be guarded by DEV, localhost, and an explicit preview flag.");
 }
 
 if (!/function newDishDraft\(\)[\s\S]*?name: ""[\s\S]*?description: ""[\s\S]*?presentations: \[\{ name: "", price: "", note: "" \}\]/.test(app)) {

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sumi · Vista responsiva</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+
+      html,
+      body { min-height: 100%; }
+
+      body {
+        margin: 0;
+        background: #0c0907;
+        color: #fff4df;
+      }
+
+      .preview-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        min-height: 64px;
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid rgba(255, 223, 165, 0.18);
+        background: rgba(18, 11, 7, 0.96);
+        backdrop-filter: blur(14px);
+      }
+
+      .preview-title {
+        min-width: 0;
+        display: grid;
+        gap: 2px;
+      }
+
+      .preview-title strong { font-size: 14px; }
+      .preview-title span { color: #cdbb9c; font-size: 11px; }
+
+      .preview-modes {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+
+      .preview-modes button {
+        min-height: 40px;
+        padding: 0 13px;
+        border: 1px solid rgba(255, 223, 165, 0.2);
+        border-radius: 999px;
+        background: transparent;
+        color: #f4e7cf;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .preview-modes button[aria-pressed="true"] {
+        border-color: #ff9d2e;
+        background: #ff890a;
+        color: #351202;
+      }
+
+      .preview-stage {
+        min-height: calc(100vh - 64px);
+        padding: 24px;
+        display: grid;
+        place-items: start center;
+        overflow: auto;
+      }
+
+      .preview-device {
+        width: var(--preview-width);
+        height: var(--preview-height);
+        flex: 0 0 auto;
+        overflow: hidden;
+        border: 1px solid rgba(255, 223, 165, 0.26);
+        border-radius: 20px;
+        background: #000;
+        box-shadow: 0 22px 70px rgba(0, 0, 0, 0.52);
+        transition: width 180ms ease, height 180ms ease;
+      }
+
+      .preview-device iframe {
+        width: 100%;
+        height: 100%;
+        display: block;
+        border: 0;
+        background: #070400;
+      }
+
+      @media (max-width: 700px) {
+        .preview-toolbar { align-items: stretch; flex-direction: column; }
+        .preview-modes { justify-content: flex-start; overflow-x: auto; }
+        .preview-stage { min-height: calc(100vh - 114px); padding: 14px; place-items: start; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="preview-toolbar">
+      <div class="preview-title">
+        <strong>Vista responsiva · Sumi</strong>
+        <span id="previewSize">390 × 844</span>
+      </div>
+      <nav class="preview-modes" aria-label="Tamaño de viewport">
+        <button type="button" data-preview-mode="phone" aria-pressed="true">Teléfono</button>
+        <button type="button" data-preview-mode="tablet" aria-pressed="false">Tablet</button>
+        <button type="button" data-preview-mode="desktop" aria-pressed="false">Escritorio</button>
+      </nav>
+    </header>
+
+    <main class="preview-stage">
+      <div class="preview-device" id="previewDevice" style="--preview-width: 390px; --preview-height: 844px;">
+        <iframe id="previewFrame" title="Vista previa responsiva de Sumi"></iframe>
+      </div>
+    </main>
+
+    <script type="module">
+      const modes = {
+        phone: { width: 390, height: 844, label: "Teléfono" },
+        tablet: { width: 768, height: 1024, label: "Tablet" },
+        desktop: { width: 1280, height: 720, label: "Escritorio" },
+      };
+      const storageKey = "sumi:dev-viewport-mode";
+      const frame = document.querySelector("#previewFrame");
+      const device = document.querySelector("#previewDevice");
+      const size = document.querySelector("#previewSize");
+      const buttons = [...document.querySelectorAll("[data-preview-mode]")];
+      const requestedTarget = new URLSearchParams(window.location.search).get("target");
+      frame.src = requestedTarget || "/?employee-preview=1#/menu";
+
+      function setMode(modeName) {
+        const mode = modes[modeName] || modes.phone;
+        device.style.setProperty("--preview-width", `${mode.width}px`);
+        device.style.setProperty("--preview-height", `${mode.height}px`);
+        size.textContent = `${mode.label} · ${mode.width} × ${mode.height}`;
+        buttons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.previewMode === modeName)));
+        window.localStorage.setItem(storageKey, modeName);
+      }
+
+      buttons.forEach((button) => button.addEventListener("click", () => setMode(button.dataset.previewMode)));
+      setMode(window.localStorage.getItem(storageKey) || "phone");
+    </script>
+  </body>
+</html>

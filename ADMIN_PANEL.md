@@ -251,6 +251,33 @@ Regla:
 - `point_events` se crea desde flujos owner/backend, no desde cliente.
 - `public_qr_id` identifica al cliente, pero no acredita puntos por si solo.
 
+### Flujo auditado de canjes
+
+Los canjes siguen una máquina de estados estricta: `requested -> approved -> redeemed`.
+Desde `requested` o `approved` sólo `owner`/`manager` pueden pasar a `cancelled`;
+un `employee` puede aprobar una solicitud y marcar como entregado un canje aprobado,
+pero nunca cancelar ni editar libremente el registro. La RPC de transición exige el
+estado esperado (`expected_status`) y devuelve una operación idempotente si el mismo
+estado ya fue aplicado; así se evita entregar un canje solicitado directamente o
+pisar una acción concurrente.
+
+La cola de empleados se obtiene mediante `get_staff_redemption_queue`, una RPC separada
+que expone únicamente cliente, premio, puntos, estado y fechas necesarias para operar.
+La interfaz exige confirmación explícita con cliente, premio, puntos y acción, y bloquea
+el doble clic mientras la transición está en curso.
+El contexto enviado al solicitar un canje queda limitado por trigger a 8 KB para evitar
+que `request_context` se convierta en un canal de carga arbitraria.
+
+Cada alta y transición escribe una fila inmutable en `reward_redemption_events` con
+estado anterior/nuevo, actor, rol, etiqueta y fecha exacta. La actividad del owner
+muestra esa línea de tiempo; registros históricos sin actor se presentan como
+`No disponible` y no se inventa una identidad retroactiva. La tabla no permite
+`UPDATE` ni `DELETE` mediante su trigger de protección.
+La retención operativa recomendada es conservar el historial durante siete años;
+cualquier archivado debe ser fuera de la tabla mediante un proceso controlado y
+documentado. El flujo no borra canjes: los cierra con `cancelled` y conserva el
+registro de transición.
+
 ## Estado Actual del MVP
 
 Implementado:

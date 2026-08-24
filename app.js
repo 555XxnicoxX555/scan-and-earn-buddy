@@ -34,6 +34,7 @@ const publicAppUrl = String(
     || ""
 ).trim();
 const supabase = supabaseUrl && supabaseAnonKey
+  && import.meta.env.VITE_DISABLE_REMOTE !== "true"
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
@@ -41,6 +42,12 @@ const supabase = supabaseUrl && supabaseAnonKey
       }
     })
   : null;
+const traceLocalInit = import.meta.env.DEV
+  && new URLSearchParams(window.location.search).get("trace-init") === "1";
+
+function traceInit(stage) {
+  if (traceLocalInit) console.debug(`[Sumi init] ${stage}`);
+}
 const brandSwitcher = businessConfig.brandSwitcher || Object.keys(categoryOrder).map((name) => ({ name, labels: {} }));
 const fallbackLanguages = [
   { code: "es", label: "Espanol", helper: "Continuar en espanol", flag: "mx", dir: "ltr" },
@@ -61,6 +68,7 @@ const pendingContentTasksStorageKey = `sumi:content:${businessId}:pending-tasks`
 const menuEventSessionStorageKey = `sumi:menu:${businessId}:event-session`;
 const referralStorageKey = `sumi:referral:${businessId}`;
 const localDevOwnerStorageKey = "sumi:dev-owner";
+const localDevEmployeeStorageKey = "sumi:dev-employee";
 const editorImageMaxSize = 1400;
 const editorImageQuality = 0.78;
 const aiCreditConfig = businessConfig.aiCredits || businessConfig.content?.aiCredits || {};
@@ -280,6 +288,7 @@ let consumptionCustomerResults = [];
 let consumptionCustomerSearchToken = 0;
 let consumptionItems = [];
 let consumptionRequestId = "";
+let lastStaffConsumption = null;
 let activePresentationDishId = "";
 let currentEditorDishId = null;
 let editorDraft = null;
@@ -292,6 +301,8 @@ let editorAiOriginalPhoto = "";
 let editorAiCompressedPhoto = "";
 let homeRecentActivityItems = [];
 let activeActivityId = "";
+const homeRecentActivityPageSize = 3;
+let visibleHomeRecentActivity = homeRecentActivityPageSize;
 const urgentRedemptionsPageSize = 5;
 let visibleUrgentRedemptions = urgentRedemptionsPageSize;
 const adminRedemptionsPageSize = 8;
@@ -312,12 +323,15 @@ let currentAdminData = {
   accounts: [],
   events: [],
   redemptions: [],
+  redemptionEvents: [],
   menuEvents: [],
   consumptionCorrections: [],
   loaded: false,
   remoteLoaded: false,
   error: null
 };
+let staffRedemptionQueue = [];
+let redemptionActionInFlight = new Set();
 const trackedMenuEvents = new Set();
 const favoriteItems = new Set();
 const dishLikeCounts = new Map();
@@ -363,7 +377,13 @@ const rewardsButton = document.querySelector("#rewardsButton");
 const earnDetailPoints = document.querySelector("#earnDetailPoints");
 const staffConsumptionCard = document.querySelector("#staffConsumptionCard");
 const staffScanButton = document.querySelector("#staffScanButton");
+const staffManualButton = document.querySelector("#staffManualButton");
 const staffConsumptionSubtitle = document.querySelector("#staffConsumptionSubtitle");
+const staffLastConsumption = document.querySelector("#staffLastConsumption");
+const staffRedemptionQueueEl = document.querySelector("#staffRedemptionQueue");
+const staffRedemptionQueueCount = document.querySelector("#staffRedemptionQueueCount");
+const staffIdentity = document.querySelector("#staffIdentity");
+const staffLogoutButton = document.querySelector("#staffLogoutButton");
 const toast = document.querySelector("#toast");
 const languageOptions = document.querySelector(".language-options");
 const signupModal = document.querySelector("#signupModal");
@@ -410,6 +430,7 @@ const consumptionCatalog = document.querySelector("#consumptionCatalog");
 const consumptionItemsList = document.querySelector("#consumptionItemsList");
 const consumptionSave = document.querySelector("#consumptionSave");
 const adminContentBackgroundMode = document.querySelector("#adminContentBackgroundMode");
+const adminContentBackgroundTooltip = document.querySelector("#adminContentBackgroundTooltip");
 const profileModal = document.querySelector("#profileModal");
 const profileClose = document.querySelector("#profileClose");
 const profileName = document.querySelector("#profileName");
@@ -918,7 +939,15 @@ function isAuthenticated() {
 function isLocalDevOwner() {
   const hostname = window.location.hostname;
   const localHost = hostname === "localhost" || hostname === "127.0.0.1";
-  return Boolean(import.meta.env.DEV && localHost && window.localStorage.getItem(localDevOwnerStorageKey) === "true");
+  const urlPreview = new URLSearchParams(window.location.search).get("owner-preview") === "1";
+  return Boolean(import.meta.env.DEV && localHost && (urlPreview || window.localStorage.getItem(localDevOwnerStorageKey) === "true"));
+}
+
+function isLocalDevEmployee() {
+  const hostname = window.location.hostname;
+  const localHost = hostname === "localhost" || hostname === "127.0.0.1";
+  const urlPreview = new URLSearchParams(window.location.search).get("employee-preview") === "1";
+  return Boolean(import.meta.env.DEV && localHost && (urlPreview || window.localStorage.getItem(localDevEmployeeStorageKey) === "true"));
 }
 
 function isOwner() {
@@ -943,7 +972,7 @@ function isRemoteOwner() {
 }
 
 function isStaff() {
-  return canAccessAdmin() || currentCustomer?.adminMembership?.role === "employee";
+  return isLocalDevEmployee() || canAccessAdmin() || currentCustomer?.adminMembership?.role === "employee";
 }
 
 function displayError(error) {
@@ -964,6 +993,7 @@ function exposeDebugState() {
     admin: () => ({
       businessId,
       hasSupabase: Boolean(supabase),
+      remoteDisabled: import.meta.env.VITE_DISABLE_REMOTE === "true",
       sessionEmail: currentSession?.user?.email || "",
       authenticated: isAuthenticated(),
       localDevOwner: isLocalDevOwner(),
@@ -2373,9 +2403,31 @@ function normalizeAdminDashboardPayload(payload = {}) {
     accounts: Array.isArray(payload.accounts) ? payload.accounts : [],
     events: Array.isArray(payload.events) ? payload.events : [],
     redemptions: Array.isArray(payload.redemptions) ? payload.redemptions : [],
+    redemptionEvents: Array.isArray(payload.redemptionEvents) ? payload.redemptionEvents : [],
     menuEvents: Array.isArray(payload.menuEvents) ? payload.menuEvents : [],
     consumptionCorrections: Array.isArray(payload.consumptionCorrections) ? payload.consumptionCorrections : []
   };
+}
+
+function normalizeStaffRedemptionQueue(payload) {
+  if (typeof payload === "string") {
+    try { payload = JSON.parse(payload); } catch { payload = []; }
+  }
+  return Array.isArray(payload) ? payload : [];
+}
+
+async function loadStaffRedemptionQueue() {
+  if (!supabase || !currentSession?.user || !isStaff()) {
+    staffRedemptionQueue = [];
+    return staffRedemptionQueue;
+  }
+  const { data, error } = await supabase.rpc("get_staff_redemption_queue", {
+    target_business_id: businessId,
+    queue_status: "open"
+  });
+  if (error) throw error;
+  staffRedemptionQueue = normalizeStaffRedemptionQueue(data);
+  return staffRedemptionQueue;
 }
 
 function normalizeLoyaltySettings(row = {}) {
@@ -2403,21 +2455,30 @@ async function loadAdminDashboardRpc() {
 
 async function loadAdminData() {
   if (!supabase || !canAccessAdmin()) {
-    currentAdminData = { customers: [], accounts: [], events: [], redemptions: [], menuEvents: [], consumptionCorrections: [], loaded: false, remoteLoaded: false, error: null };
+    currentAdminData = { customers: [], accounts: [], events: [], redemptions: [], redemptionEvents: [], menuEvents: [], consumptionCorrections: [], loaded: true, remoteLoaded: false, error: null };
     exposeDebugState();
     return currentAdminData;
   }
 
   if (isLocalDevOwner() && !currentSession?.user) {
-    currentAdminData = { customers: [], accounts: [], events: [], redemptions: [], menuEvents: [], consumptionCorrections: [], loaded: false, remoteLoaded: false, error: null };
+    currentAdminData = { customers: [], accounts: [], events: [], redemptions: [], redemptionEvents: [], menuEvents: [], consumptionCorrections: [], loaded: false, remoteLoaded: false, error: null };
     exposeDebugState();
     return currentAdminData;
   }
 
   try {
     const dashboard = await loadAdminDashboardRpc();
+    let redemptionEvents = [];
+    try {
+      const { data: history, error: historyError } = await supabase.rpc("get_reward_redemption_history", { target_business_id: businessId });
+      if (historyError) throw historyError;
+      redemptionEvents = Array.isArray(history) ? history : [];
+    } catch (historyError) {
+      if (import.meta.env.DEV) console.warn("[Sumi admin] redemption history unavailable", displayError(historyError));
+    }
     currentAdminData = {
       ...dashboard,
+      redemptionEvents,
       loaded: true,
       remoteLoaded: true,
       error: null
@@ -2508,6 +2569,7 @@ async function loadAdminData() {
     accounts: accountsResult.data || [],
     events: eventsResult.data || [],
     redemptions: redemptionsResult.data || [],
+    redemptionEvents: [],
     menuEvents: menuEventsResult.data || [],
     consumptionCorrections: correctionsMissing ? [] : correctionsResult.data || [],
     loaded: true,
@@ -2596,10 +2658,35 @@ async function loadCustomerData(session = currentSession, options = {}) {
   }
 
   if (profileError) throw profileError;
+  const { data: resolvedAdminMembership, error: resolvedAdminError } = await supabase
+    .from("business_admins")
+    .select("business_id, role")
+    .eq("auth_user_id", session.user.id)
+    .eq("business_id", businessId)
+    .in("role", ["owner", "manager", "employee"])
+    .limit(1)
+    .maybeSingle();
+  if (resolvedAdminError) throw resolvedAdminError;
   if (!profile) {
-    currentCustomer = null;
+    if (!resolvedAdminMembership) {
+      currentCustomer = null;
+      pointsBalance = 0;
+      return null;
+    }
+    currentCustomer = {
+      profile: null,
+      account: null,
+      events: [],
+      redemptions: [],
+      adminMembership: resolvedAdminMembership
+    };
     pointsBalance = 0;
-    return null;
+    try { await loadStaffRedemptionQueue(); } catch (queueError) {
+      staffRedemptionQueue = [];
+      if (import.meta.env.DEV) console.warn("[Sumi staff] redemption queue unavailable", displayError(queueError));
+    }
+    await loadBusinessRewards({ owner: ["owner", "manager"].includes(resolvedAdminMembership.role) });
+    return currentCustomer;
   }
 
   const [
@@ -2659,11 +2746,12 @@ async function loadCustomerData(session = currentSession, options = {}) {
     adminMembership
   };
   if (["owner", "manager"].includes(adminMembership?.role)) {
-    currentAdminData = {
+  currentAdminData = {
       customers: [],
       accounts: [],
       events: [],
       redemptions: [],
+      redemptionEvents: [],
       menuEvents: [],
       consumptionCorrections: [],
       loaded: false,
@@ -2676,24 +2764,78 @@ async function loadCustomerData(session = currentSession, options = {}) {
   if (!loyaltySettingsError) {
     loyaltySettings = normalizeLoyaltySettings(businessLoyaltySettings || {});
   }
+  if (adminMembership?.role === "employee") {
+    try { await loadStaffRedemptionQueue(); } catch (queueError) {
+      staffRedemptionQueue = [];
+      if (import.meta.env.DEV) console.warn("[Sumi staff] redemption queue unavailable", displayError(queueError));
+    }
+  } else {
+    staffRedemptionQueue = [];
+  }
   await loadBusinessRewards({ owner: ["owner", "manager"].includes(adminMembership?.role) });
   return currentCustomer;
 }
 
 function renderAuthState() {
   const authenticated = isAuthenticated();
-  const staff = authenticated && isStaff();
+  const localEmployeePreview = isLocalDevEmployee();
+  const staff = (authenticated || currentCustomer?.adminMembership?.role || localEmployeePreview) && isStaff();
+  // A local employee preview must stay in employee mode even when an owner is
+  // already authenticated in the same browser. Real employees reach the same
+  // workspace through their membership role.
+  const employeeWorkspace = localEmployeePreview || (staff && !canAccessAdmin());
+  document.body.classList.toggle("employee-preview", localEmployeePreview);
+  document.body.classList.toggle("employee-workspace", employeeWorkspace);
   if (loyaltyCard) loyaltyCard.hidden = !authenticated || staff;
-  if (staffConsumptionCard) staffConsumptionCard.hidden = !staff;
+  if (staffConsumptionCard) staffConsumptionCard.hidden = !employeeWorkspace;
   if (staffConsumptionSubtitle) {
-    staffConsumptionSubtitle.textContent = `Escanea el QR, carga el monto y acredita ${Math.round((loyaltySettings.earnRate || 0) * 100)}% en puntos.`;
+    staffConsumptionSubtitle.textContent = `Escanea el QR o busca al cliente y acredita ${Math.round((loyaltySettings.earnRate || 0) * 100)}% en puntos.`;
   }
-  if (signupCta) signupCta.hidden = authenticated;
+  if (signupCta) signupCta.hidden = authenticated || localEmployeePreview;
   if (profileToggle) {
-    profileToggle.hidden = !authenticated;
+    profileToggle.hidden = !authenticated || employeeWorkspace;
     profileToggle.setAttribute("aria-label", labels[currentLang].profileButtonLabel || "Abrir perfil");
   }
+  renderStaffWorkspace();
   exposeDebugState();
+}
+
+function renderStaffWorkspace() {
+  if (staffIdentity) {
+    const identity = currentSession?.user?.user_metadata?.name
+      || currentSession?.user?.email
+      || (isLocalDevEmployee() ? "Vista previa de empleado" : "Cuenta de empleado");
+    staffIdentity.textContent = identity;
+  }
+  if (!staffLastConsumption) return;
+  if (!lastStaffConsumption) {
+    staffLastConsumption.innerHTML = `
+      <span>Último registro</span>
+      <strong>Sin consumos en esta sesión</strong>
+      <small>El último consumo aparecerá aquí para comprobarlo rápidamente.</small>
+    `;
+  } else {
+    staffLastConsumption.innerHTML = `
+    <span>Último registro</span>
+    <strong>${escapeHtml(lastStaffConsumption.customerName)} · ${escapeHtml(formatCurrency(lastStaffConsumption.amount))}</strong>
+    <small>${escapeHtml(`${lastStaffConsumption.points} pts acreditados · ${formatFullDateTime(lastStaffConsumption.createdAt)}`)}</small>
+    `;
+  }
+  if (staffRedemptionQueueCount) staffRedemptionQueueCount.textContent = String(staffRedemptionQueue.length);
+  if (staffRedemptionQueueEl) {
+    staffRedemptionQueueEl.innerHTML = staffRedemptionQueue.length
+      ? staffRedemptionQueue.map((item) => `
+        <article class="staff-queue-row">
+          <span><strong>${escapeHtml(item.customer_name || "Cliente")}</strong><small>${escapeHtml(item.reward_name || "Premio")} · ${escapeHtml(formatFullDateTime(item.created_at))}</small></span>
+          <b>${escapeHtml(item.points_cost || 0)} pts</b>
+          <span class="redemption-actions">
+            ${item.status === "requested" ? `<button class="mini-action" type="button" data-staff-redemption-action="approved" data-redemption-id="${escapeAttribute(item.id)}">Aprobar</button>` : ""}
+            ${item.status === "approved" ? `<button class="mini-action" type="button" data-staff-redemption-action="redeemed" data-redemption-id="${escapeAttribute(item.id)}">Entregar</button>` : ""}
+          </span>
+        </article>
+      `).join("")
+      : `<p class="staff-queue-empty">No hay canjes para resolver.</p>`;
+  }
 }
 
 function applyBusinessShell() {
@@ -2789,13 +2931,12 @@ function languageChoiceMarkup(language, { compact = false } = {}) {
   return `
     <button class="language-option ${compact ? "is-compact" : ""} ${selected ? "selected" : ""}"
       data-enter-lang="${escapeAttribute(language.code)}" type="button"
-      ${compact ? `role="menuitemradio" aria-checked="${selected}"` : ""}>
+      ${compact ? `role="menuitemradio" aria-checked="${selected}"` : `aria-pressed="${selected}"`}>
       <span class="flag ${escapeAttribute(language.flag)}" ${flagStyle(language.flag)} aria-hidden="true"></span>
       <span dir="${escapeAttribute(language.dir || "ltr")}">
         <strong>${escapeHtml(language.label)}</strong>
         ${compact ? "" : `<small>${escapeHtml(language.helper)}</small>`}
       </span>
-      <i aria-hidden="true">${selected ? "&#10003;" : "&rarr;"}</i>
     </button>
   `;
 }
@@ -3831,6 +3972,14 @@ async function saveConsumption() {
   const streakBonusPoints = Number(result.streakBonusPoints || 0);
   const streakText = streakBonusPoints ? ` + ${streakBonusPoints} bonus de racha` : "";
   showToast(`${result.customerName || "Cliente"} sumo ${earnedPoints} pts${streakText}.`);
+  lastStaffConsumption = {
+    eventId: result.eventId || "",
+    customerName: result.customerName || activeConsumptionCustomer.customer_name || "Cliente",
+    amount,
+    points: earnedPoints + streakBonusPoints,
+    createdAt: new Date().toISOString()
+  };
+  renderStaffWorkspace();
   if (currentAdminData.loaded) {
     currentAdminData.loaded = false;
     await ensureAdminData();
@@ -4405,7 +4554,6 @@ function renderRecommendation() {
     <strong>${escapeHtml(localName(dish))}</strong>
     <small>${escapeHtml(localDescription(dish))}</small>
     <span class="hero-prices">${prices}</span>
-    <span class="hero-like-tray">${likeIndicatorMarkup(dish.id)}</span>
   `;
 }
 
@@ -4442,7 +4590,6 @@ function renderList() {
                 <strong>${escapeHtml(localName(dish))}</strong>
                 <small>${escapeHtml(localDescription(dish))}</small>
                 <span class="customer-presentations">${soldOut ? `<b><span>Agotado</span></b>` : presentationBadges(dish)}</span>
-                ${likeIndicatorMarkup(dish.id, { className: "customer-like-count" })}
               </span>
             </button>
           `;
@@ -4689,25 +4836,33 @@ function customerRowMarkup(customer) {
   const streakProgress = streakProgressModel(customer.streak, customer.lastVisit);
   return `
     <article class="admin-customer-row ${activeClass}" data-customer-id="${escapeAttribute(customer.profile.id)}">
-      <span>
-        <strong>${escapeHtml(customer.profile.name || "Cliente")}</strong>
-        <small>${escapeHtml(customerVisibleIdentifier(customer.profile))}</small>
+      <span class="admin-row-field admin-row-identity" data-label="Cliente">
+        <span class="admin-row-field-value">
+          <strong>${escapeHtml(customer.profile.name || "Cliente")}</strong>
+          <small>${escapeHtml(customerVisibleIdentifier(customer.profile))}</small>
+        </span>
       </span>
-      <b>${escapeHtml(formatNumber(points))} pts</b>
-      <span class="pill">${escapeHtml(tier)}</span>
-      <span>
-        <strong>${customer.lastVisit ? escapeHtml(formatEventDate(customer.lastVisit)) : "Sin consumo"}</strong>
-        <small>${escapeHtml(customer.status.label)}</small>
+      <span class="admin-row-field" data-label="Puntos"><b class="admin-row-field-value">${escapeHtml(formatNumber(points))} pts</b></span>
+      <span class="admin-row-field" data-label="Nivel"><span class="pill admin-row-field-value">${escapeHtml(tier)}</span></span>
+      <span class="admin-row-field" data-label="Ultima visita">
+        <span class="admin-row-field-value">
+          <strong>${customer.lastVisit ? escapeHtml(formatEventDate(customer.lastVisit)) : "Sin consumo"}</strong>
+          <small>${escapeHtml(customer.status.label)}</small>
+        </span>
       </span>
-      <span>
-        <strong>${escapeHtml(streakProgress.title)}</strong>
-        <small>${escapeHtml(streakProgress.status)}</small>
+      <span class="admin-row-field" data-label="Racha">
+        <span class="admin-row-field-value">
+          <strong>${escapeHtml(streakProgress.title)}</strong>
+          <small>${escapeHtml(streakProgress.status)}</small>
+        </span>
       </span>
-      <span>
-        <strong>${escapeHtml(customer.visits)}</strong>
-        <small>${pending ? `${escapeHtml(pending)} canjes pendientes` : "Sin canjes pendientes"}</small>
+      <span class="admin-row-field" data-label="Consumos">
+        <span class="admin-row-field-value">
+          <strong>${escapeHtml(customer.visits)}</strong>
+          <small>${pending ? `${escapeHtml(pending)} canjes pendientes` : "Sin canjes pendientes"}</small>
+        </span>
       </span>
-      <b>${escapeHtml(formatCurrency(customer.totalSpent))}</b>
+      <span class="admin-row-field" data-label="Total"><b class="admin-row-field-value">${escapeHtml(formatCurrency(customer.totalSpent))}</b></span>
       <span class="row-actions customer-row-actions">
         <button class="mini-action" type="button" data-customer-action="detail" data-customer-id="${escapeAttribute(customer.profile.id)}">Ver</button>
         <button class="mini-action" type="button" data-customer-action="consume" data-customer-id="${escapeAttribute(customer.profile.id)}">Cargar</button>
@@ -4749,6 +4904,7 @@ function renderAdminCustomerDetail() {
   }
   const points = Number(model.account?.points_balance || 0);
   const streakProgress = streakProgressModel(model.streak, model.lastVisit);
+  const canCancelRedemptions = isOwner() || isManager();
   adminCustomerDetailPanel.hidden = false;
   adminCustomerDetailContent.innerHTML = `
     <div class="customer-detail-hero">
@@ -4810,7 +4966,7 @@ function renderAdminCustomerDetail() {
               <span class="redemption-actions">
                 ${redemptionIsActionableRequest(redemption) ? `<button class="mini-action" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}">Aprobar</button>` : ""}
                 ${redemption.status === "approved" ? `<button class="mini-action" type="button" data-redemption-action="redeemed" data-redemption-id="${escapeAttribute(redemption.id)}">Entregado</button>` : ""}
-                ${redemption.status !== "cancelled" && redemption.status !== "redeemed" ? `<button class="mini-action danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}">Rechazar</button>` : ""}
+                ${canCancelRedemptions && redemption.status !== "cancelled" && redemption.status !== "redeemed" ? `<button class="mini-action danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}">Rechazar</button>` : ""}
               </span>
             </article>
           `).join("")}
@@ -5263,18 +5419,22 @@ function consumptionRowMarkup(event) {
   const status = consumptionStatus(event);
   return `
     <article class="admin-consumption-row ${activeClass}" data-consumption-id="${escapeAttribute(event.id)}">
-      <span>
-        <strong>${escapeHtml(profile?.name || "Cliente")}</strong>
-        <small>${escapeHtml(profile?.email || "Sin email")}</small>
+      <span class="admin-row-field admin-row-identity" data-label="Cliente">
+        <span class="admin-row-field-value">
+          <strong>${escapeHtml(profile?.name || "Cliente")}</strong>
+          <small>${escapeHtml(profile?.email || "Sin email")}</small>
+        </span>
       </span>
-      <b>${escapeHtml(formatCurrency(event.purchase_total))}</b>
-      <span class="cell-muted">${escapeHtml(purchaseItemsLabel(event))}</span>
-      <b>+${escapeHtml(event.points_delta || 0)} pts</b>
-      <span class="cell-muted">${escapeHtml(employeeLabel(event.recorded_by_auth_user_id))}</span>
-      <span class="pill">${escapeHtml(consumptionMethodLabel(consumptionMethod(event)))}</span>
-      <span>
-        <strong>${escapeHtml(formatEventDate(event.created_at))}</strong>
-        <small class="${status === "cancelled" ? "text-danger" : ""}">${escapeHtml(consumptionStatusLabel(status))}</small>
+      <span class="admin-row-field" data-label="Total"><b class="admin-row-field-value">${escapeHtml(formatCurrency(event.purchase_total))}</b></span>
+      <span class="admin-row-field" data-label="Productos"><span class="cell-muted admin-row-field-value">${escapeHtml(purchaseItemsLabel(event))}</span></span>
+      <span class="admin-row-field" data-label="Puntos"><b class="admin-row-field-value">+${escapeHtml(event.points_delta || 0)} pts</b></span>
+      <span class="admin-row-field" data-label="Empleado"><span class="cell-muted admin-row-field-value">${escapeHtml(employeeLabel(event.recorded_by_auth_user_id))}</span></span>
+      <span class="admin-row-field" data-label="Metodo"><span class="pill admin-row-field-value">${escapeHtml(consumptionMethodLabel(consumptionMethod(event)))}</span></span>
+      <span class="admin-row-field" data-label="Fecha">
+        <span class="admin-row-field-value">
+          <strong>${escapeHtml(formatEventDate(event.created_at))}</strong>
+          <small class="${status === "cancelled" ? "text-danger" : ""}">${escapeHtml(consumptionStatusLabel(status))}</small>
+        </span>
       </span>
       <span class="row-actions">
         <button class="mini-action" type="button" data-consumption-action="detail" data-consumption-id="${escapeAttribute(event.id)}">Ver</button>
@@ -5989,7 +6149,7 @@ function recentHomeActivity(model) {
     sourceId: redemption.id,
     type: redemptionIsActionableRequest(redemption) ? "Canje pendiente" : "Canje",
     title: `${customerName(redemption.customer_id)} - ${redemption.reward_name}`,
-    meta: `${timeLabel(redemption.created_at)} - ${redemption.status}`,
+    meta: `${timeLabel(redemption.created_at)} - ${redemption.status} - ${((currentAdminData.redemptionEvents || []).find((event) => event.redemption_id === redemption.id)?.actor_label || "No disponible")}`,
     date: redemption.created_at
   }));
   const signups = currentAdminData.customers.slice(0, 5).map((profile) => ({
@@ -6133,6 +6293,10 @@ function redemptionActivityDetail(redemption) {
   const requested = redemptionIsActionableRequest(redemption);
   const approved = redemption.status === "approved";
   const expiresAt = redemption.requested_expires_at ? formatFullDateTime(redemption.requested_expires_at) : "";
+  const history = (currentAdminData.redemptionEvents || [])
+    .filter((event) => event.redemption_id === redemption.id)
+    .sort((a, b) => new Date(a.occurred_at || 0) - new Date(b.occurred_at || 0));
+  const latestEvent = history[history.length - 1];
   return {
     kicker: "Canje",
     title: `${customerName(redemption.customer_id)} · ${redemption.reward_name}`,
@@ -6153,16 +6317,22 @@ function redemptionActivityDetail(redemption) {
         ])}
       </section>
       ${activityCustomerSummary(redemption.customer_id)}
+      <section class="activity-detail-section">
+        <h2>Historial de transiciones</h2>
+        ${history.length ? `<div class="redemption-history-list">${history.map((event) => `
+          <div class="redemption-history-row"><strong>${escapeHtml(event.from_status ? `${redemptionStatusLabel(event.from_status)} → ` : "")}${escapeHtml(redemptionStatusLabel(event.to_status))}</strong><small>${escapeHtml(event.actor_label || "No disponible")} · ${escapeHtml(event.actor_role || "unknown")} · ${escapeHtml(formatFullDateTime(event.occurred_at) || "No disponible")}</small></div>
+        `).join("")}</div>` : `<p class="cell-muted">No disponible para este registro histórico.</p>`}
+      </section>
       ${activityTrace({
         id: redemption.id,
         createdAt: redemption.created_at,
-        actor: "Panel del negocio",
-        origin: "Solicitud de premio"
+        actor: latestEvent ? `${latestEvent.actor_label || "No disponible"} (${latestEvent.actor_role || "unknown"})` : "No disponible",
+        origin: latestEvent ? "Transición auditada" : "Solicitud de premio"
       })}
       <div class="activity-detail-actions">
         ${requested ? `<button class="primary" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}">Aprobar</button>` : ""}
         ${approved ? `<button class="primary" type="button" data-redemption-action="redeemed" data-redemption-id="${escapeAttribute(redemption.id)}">Marcar entregado</button>` : ""}
-        ${redemption.status !== "cancelled" && redemption.status !== "redeemed" ? `<button class="outline danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}">Rechazar</button>` : ""}
+        ${(isOwner() || isManager()) && redemption.status !== "cancelled" && redemption.status !== "redeemed" ? `<button class="outline danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}">Rechazar</button>` : ""}
         <button class="outline" type="button" data-activity-action="view-customer" data-customer-id="${escapeAttribute(redemption.customer_id)}">Ver cliente</button>
       </div>
     `
@@ -6254,6 +6424,13 @@ function renderAdminAnalytics() {
   const hiddenPendingRedemptions = Math.max(0, pendingRedemptions.length - visiblePendingRedemptions.length);
   const recentActivity = recentHomeActivity(model);
   homeRecentActivityItems = recentActivity;
+  if (!recentActivity.length) {
+    visibleHomeRecentActivity = homeRecentActivityPageSize;
+  } else if (visibleHomeRecentActivity > recentActivity.length) {
+    visibleHomeRecentActivity = Math.max(homeRecentActivityPageSize, recentActivity.length);
+  }
+  const visibleRecentActivity = recentActivity.slice(0, visibleHomeRecentActivity);
+  const hiddenRecentActivity = Math.max(0, recentActivity.length - visibleRecentActivity.length);
 
   analyticsKpiGrid.innerHTML = [
     ["Canjes pendientes", pendingRedemptions.length, pendingRedemptions.length ? "requieren aprobacion" : "sin solicitudes abiertas"],
@@ -6338,13 +6515,18 @@ function renderAdminAnalytics() {
     </div>
     ${recentActivity.length ? `
       <div class="home-activity-list">
-        ${recentActivity.map((item) => `
+        ${visibleRecentActivity.map((item) => `
           <button class="home-activity-row" type="button" data-activity-id="${escapeAttribute(item.id)}" aria-label="Abrir detalle de ${escapeAttribute(item.title)}">
             <span>${escapeHtml(item.type)}</span>
             <strong>${escapeHtml(item.title)}</strong>
             <small>${escapeHtml(item.meta)}</small>
           </button>
         `).join("")}
+        ${hiddenRecentActivity ? `
+          <button class="home-load-more" type="button" data-home-action="more-activity">
+            Ver mas (${hiddenRecentActivity} registros)
+          </button>
+        ` : ""}
       </div>
     ` : analyticsEmpty("Todavia no hay actividad", "Cuando entren registros, consumos o canjes, aparecen en este resumen.", analyticsActionButton("Cargar consumo", "consumption"))}
   `;
@@ -6426,6 +6608,16 @@ function renderAdminContent() {
     .map((type) => `<option value="${escapeAttribute(type.id)}" ${type.id === format.id ? "selected" : ""}>${escapeHtml(type.title)}</option>`)
     .join("");
   if (adminContentBackgroundMode) adminContentBackgroundMode.value = selectedContentBackgroundMode;
+  if (adminContentBackgroundTooltip) {
+    const isDynamicBackground = selectedContentBackgroundMode === "dynamic";
+    adminContentBackgroundTooltip.dataset.tooltip = isDynamicBackground
+      ? "Conserva el producto, pero permite que la IA cambie el ambiente del fondo."
+      : "Conserva el producto, el fondo y los objetos. La IA solo añade badges promocionales.";
+    adminContentBackgroundTooltip.setAttribute(
+      "aria-label",
+      `Ayuda sobre el modo de fondo ${isDynamicBackground ? "dinámico" : "estático"}`
+    );
+  }
 
   adminContentDishThumb.style.backgroundImage = `url('${dish.photo}')`;
   adminContentDishTitle.textContent = dish.name;
@@ -6625,6 +6817,7 @@ function renderAdminRedemptions() {
     return haystack.includes(search);
   });
   const visible = filtered.slice(0, visibleAdminRedemptions);
+  const canCancelRedemptions = isOwner() || isManager();
   const hidden = Math.max(0, filtered.length - visible.length);
 
   if (adminRedemptionsVisibleCount) {
@@ -6651,7 +6844,7 @@ function renderAdminRedemptions() {
         <span class="redemption-actions">
           <button class="mini-action" type="button" data-redemption-action="approved" data-redemption-id="${escapeAttribute(redemption.id)}" ${requested ? "" : "disabled"}>Aprobar</button>
           <button class="mini-action" type="button" data-redemption-action="redeemed" data-redemption-id="${escapeAttribute(redemption.id)}" ${approved ? "" : "disabled"}>Entregado</button>
-          <button class="mini-action danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}" ${redemption.status === "cancelled" || redemption.status === "redeemed" ? "disabled" : ""}>Cancelar</button>
+          ${canCancelRedemptions ? `<button class="mini-action danger" type="button" data-redemption-action="cancelled" data-redemption-id="${escapeAttribute(redemption.id)}" ${redemption.status === "cancelled" || redemption.status === "redeemed" ? "disabled" : ""}>Cancelar</button>` : ""}
         </span>
       </article>
     `;
@@ -6964,45 +7157,86 @@ async function saveLoyaltyRules(event) {
 }
 
 async function updateRedemptionStatus(redemptionId, status) {
-  const redemption = currentAdminData.redemptions.find((item) => item.id === redemptionId);
+  const redemption = currentAdminData.redemptions.find((item) => item.id === redemptionId)
+    || staffRedemptionQueue.find((item) => item.id === redemptionId);
   if (!redemption) return;
-
-  let updatedRedemption = { ...redemption, status };
-  let updatedAccount = null;
-  if (supabase) {
-    const { data, error } = await supabase.rpc("manage_reward_redemption_status", {
+  if (redemptionActionInFlight.has(redemptionId)) return;
+  const expectedStatus = redemption.status;
+  const actionLabel = status === "approved" ? "aprobar" : status === "redeemed" ? "marcar como entregado" : "cancelar";
+  if (status === "cancelled" && !isOwner() && !isManager()) {
+    showToast("Los empleados no pueden cancelar canjes.");
+    return;
+  }
+  if (![
+    ["requested", "approved"],
+    ["approved", "redeemed"],
+    ["requested", "cancelled"],
+    ["approved", "cancelled"]
+  ].some(([from, to]) => from === expectedStatus && to === status)) {
+    showToast("La transición de este canje ya no está disponible.");
+    return;
+  }
+  const customerLabel = currentAdminData.customers.find((profile) => profile.id === redemption.customer_id)?.name
+    || redemption.customer_name
+    || "Cliente";
+  const confirmed = window.confirm(
+    `Confirmar acción\n\nCliente: ${customerLabel}\nPremio: ${redemption.reward_name || "Premio"}\nPuntos: ${redemption.points_cost || 0}\nAcción: ${actionLabel}`
+  );
+  if (!confirmed) return;
+  redemptionActionInFlight.add(redemptionId);
+  try {
+    let updatedRedemption = { ...redemption, status };
+    let updatedAccount = null;
+    if (supabase) {
+    const { data, error } = await supabase.rpc("manage_reward_redemption_status_v2", {
       target_business_id: businessId,
       target_redemption_id: redemptionId,
+      expected_status: expectedStatus,
       next_status: status
     });
-    if (error) {
-      showToast(displayError(error));
-      return;
+      if (error) {
+        showToast(displayError(error));
+        return;
+      }
+      updatedRedemption = data?.redemption || updatedRedemption;
+      updatedAccount = data?.account || null;
+      if (data?.expired) {
+        Object.assign(redemption, updatedRedemption);
+        try { await loadStaffRedemptionQueue(); } catch { /* queue refresh is best effort */ }
+        renderStaffWorkspace();
+        showToast("La solicitud había vencido y fue cancelada por el sistema.");
+        return;
+      }
     }
-    updatedRedemption = data?.redemption || updatedRedemption;
-    updatedAccount = data?.account || null;
-  }
 
-  Object.assign(redemption, updatedRedemption);
-  if (updatedAccount?.id) {
+    Object.assign(redemption, updatedRedemption);
+    if (updatedAccount?.id) {
     const account = currentAdminData.accounts.find((item) => item.id === updatedAccount.id);
     if (account) Object.assign(account, updatedAccount);
     if (currentCustomer?.account?.id === updatedAccount.id) {
       currentCustomer.account = { ...currentCustomer.account, ...updatedAccount };
       pointsBalance = updatedAccount.points_balance || 0;
     }
-  }
-  const customerRedemption = currentCustomer?.redemptions?.find((item) => item.id === redemptionId);
-  if (customerRedemption) Object.assign(customerRedemption, updatedRedemption);
+    }
+    const customerRedemption = currentCustomer?.redemptions?.find((item) => item.id === redemptionId);
+    if (customerRedemption) Object.assign(customerRedemption, updatedRedemption);
 
-  if (supabase) {
-    currentAdminData.loaded = false;
-    await ensureAdminData();
+    const queueItem = staffRedemptionQueue.find((item) => item.id === redemptionId);
+    if (queueItem) Object.assign(queueItem, updatedRedemption);
+
+    if (supabase) {
+      currentAdminData.loaded = false;
+      await ensureAdminData();
+    }
+    renderAdminPanel();
+    renderAdminRewards();
+    renderLoyalty();
+    try { await loadStaffRedemptionQueue(); } catch { /* queue refresh is best effort */ }
+    renderStaffWorkspace();
+    showToast(status === "approved" ? "Canje aprobado." : status === "redeemed" ? "Canje marcado como entregado." : "Canje cancelado.");
+  } finally {
+    redemptionActionInFlight.delete(redemptionId);
   }
-  renderAdminPanel();
-  renderAdminRewards();
-  renderLoyalty();
-  showToast(status === "approved" ? "Canje aprobado." : status === "redeemed" ? "Canje marcado como entregado." : "Canje cancelado.");
 }
 
 async function saveLoyaltyEarnRate(ratePercent) {
@@ -7327,19 +7561,31 @@ async function showAdminSection(view = "home") {
     return false;
   }
   hideAllSurfaces();
+  traceInit(`admin:${view}:surfaces-hidden`);
   closeProfileModal();
   document.body.classList.add("admin-active");
   adminPanel.hidden = false;
   setAdminView(view);
-  renderAdminPanel();
+  traceInit(`admin:${view}:view-set`);
+  const renderLoadingState = Boolean(supabase && currentSession?.user && !isLocalDevOwner());
+  if (renderLoadingState) {
+    renderAdminPanel();
+    traceInit(`admin:${view}:loading-render`);
+  }
   await ensureAdminData();
+  traceInit(`admin:${view}:data-ready`);
   await loadBusinessRewards({ owner: canAccessAdmin() });
+  traceInit(`admin:${view}:rewards-ready`);
   if (view === "home" || view === "content" || view === "library") {
     await ensureAdminContentData();
   }
+  traceInit(`admin:${view}:content-ready`);
   renderAdminPanel();
+  traceInit(`admin:${view}:second-render`);
   startAdminAutoRefresh();
+  traceInit(`admin:${view}:refresh-ready`);
   window.requestAnimationFrame(() => adminPanel.focus?.());
+  traceInit(`admin:${view}:complete`);
   return true;
 }
 
@@ -8261,6 +8507,30 @@ async function handleSession(session) {
 }
 
 async function initializeAuth() {
+  const previewParams = new URLSearchParams(window.location.search);
+  const previewHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const explicitLocalPreview = Boolean(
+    import.meta.env.DEV
+    && previewHost
+    && (previewParams.get("owner-preview") === "1" || previewParams.get("employee-preview") === "1")
+  );
+
+  // Explicit preview URLs are deterministic fixtures. They must not wait for
+  // a real Supabase session or inherit the role already signed in on localhost.
+  if (explicitLocalPreview) {
+    currentSession = null;
+    currentCustomer = null;
+    pointsBalance = 0;
+    stopCustomerAutoRefresh();
+    stopAdminAutoRefresh();
+    loadLocalDishLikes();
+    loadLocalMenuSettings();
+    renderAuthState();
+    await renderRoute();
+    traceInit("preview:route-complete");
+    return;
+  }
+
   if (!supabase) {
     loadLocalDishLikes();
     loadLocalMenuSettings();
@@ -8400,6 +8670,33 @@ qrModal.addEventListener("click", (event) => {
 });
 
 staffScanButton?.addEventListener("click", () => openConsumptionModal(staffScanButton));
+staffManualButton?.addEventListener("click", () => openManualConsumptionModal(staffManualButton));
+staffRedemptionQueueEl?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-staff-redemption-action]");
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  updateRedemptionStatus(button.dataset.redemptionId, button.dataset.staffRedemptionAction)
+    .finally(() => { button.disabled = false; });
+});
+staffLogoutButton?.addEventListener("click", async () => {
+  if (isLocalDevEmployee()) {
+    window.localStorage.removeItem(localDevEmployeeStorageKey);
+    window.location.assign(`${window.location.origin}${window.location.pathname}#/menu`);
+    return;
+  }
+  if (!supabase) return;
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    showToast(displayError(error));
+    return;
+  }
+  currentSession = null;
+  currentCustomer = null;
+  lastStaffConsumption = null;
+  renderAuthState();
+  renderList();
+  showToast(labels[currentLang].profileLoggedOut || "Sesion cerrada");
+});
 consumptionClose?.addEventListener("click", closeConsumptionModal);
 consumptionModal?.addEventListener("click", (event) => {
   if (event.target.closest("[data-consumption-close]")) closeConsumptionModal();
@@ -8521,6 +8818,11 @@ adminHome?.addEventListener("click", (event) => {
   const homeActionButton = event.target.closest("[data-home-action]");
   if (homeActionButton?.dataset.homeAction === "more-redemptions") {
     visibleUrgentRedemptions += urgentRedemptionsPageSize;
+    renderAdminAnalytics();
+    return;
+  }
+  if (homeActionButton?.dataset.homeAction === "more-activity") {
+    visibleHomeRecentActivity += homeRecentActivityPageSize;
     renderAdminAnalytics();
     return;
   }
@@ -9408,13 +9710,50 @@ function bindBrandButtons() {
   });
 }
 
+let categoryDragState = null;
+let suppressCategoryClick = false;
+
 categoryStrip.addEventListener("click", (event) => {
+  if (suppressCategoryClick) {
+    suppressCategoryClick = false;
+    return;
+  }
   const button = event.target.closest("[data-category]");
   if (!button) return;
   currentCategory = button.dataset.category;
   searchInput.value = "";
   renderList();
 });
+
+categoryStrip.addEventListener("pointerdown", (event) => {
+  if (event.pointerType !== "mouse" || event.button !== 0) return;
+  categoryDragState = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startScrollLeft: categoryStrip.scrollLeft,
+    moved: false,
+  };
+  categoryStrip.setPointerCapture(event.pointerId);
+  categoryStrip.classList.add("is-dragging");
+});
+
+categoryStrip.addEventListener("pointermove", (event) => {
+  if (!categoryDragState || event.pointerId !== categoryDragState.pointerId) return;
+  const distance = event.clientX - categoryDragState.startX;
+  if (Math.abs(distance) > 4) categoryDragState.moved = true;
+  categoryStrip.scrollLeft = categoryDragState.startScrollLeft - distance;
+});
+
+function endCategoryDrag(event) {
+  if (!categoryDragState || event.pointerId !== categoryDragState.pointerId) return;
+  suppressCategoryClick = categoryDragState.moved;
+  categoryDragState = null;
+  categoryStrip.classList.remove("is-dragging");
+  if (categoryStrip.hasPointerCapture(event.pointerId)) categoryStrip.releasePointerCapture(event.pointerId);
+}
+
+categoryStrip.addEventListener("pointerup", endCategoryDrag);
+categoryStrip.addEventListener("pointercancel", endCategoryDrag);
 
 dishList.addEventListener("click", (event) => {
   const card = event.target.closest(".customer-dish-card");
@@ -9717,3 +10056,4 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 await initializeAuth();
+traceInit("module:complete");
