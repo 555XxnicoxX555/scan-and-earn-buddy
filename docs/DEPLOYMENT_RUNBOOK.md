@@ -57,7 +57,7 @@ esperadas. Nunca se copia `.env` a Vercel ni se imprime su contenido.
 
 1. Registrar commit, rama, remoto y aprobación en el ledger.
 2. Importar en Vercel el repositorio GitHub aprobado
-   (`555XxnicoxX555/scan-and-earn-buddy`) y seleccionar la rama/commit aprobado.
+   (`N1ckas1o/scan-and-earn-buddy`) y seleccionar la rama/commit aprobado.
 3. Configurar el proyecto con:
 
    | Ajuste | Valor obligatorio |

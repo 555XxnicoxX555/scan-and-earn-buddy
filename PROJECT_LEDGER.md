@@ -8,7 +8,7 @@
 ## Identidad
 
 - **Nombre coherente del proyecto:** Sumi.
-- **Repositorio y alcance:** repositorio local en `C:\Users\Nicolás\Documents\Sumi`; remoto GitHub conocido como `555XxnicoxX555/scan-and-earn-buddy`, rama activa `codex/sumi-operational-hardening`. El producto contiene menú público, fidelización, panel de negocio, onboarding y funciones Supabase.
+- **Repositorio y alcance:** repositorio local en `C:\Users\Nicolás\Documents\Sumi`; remoto GitHub `N1ckas1o/scan-and-earn-buddy`, rama activa `codex/sumi-operational-hardening`. El producto contiene menú público, fidelización, panel de negocio, onboarding y funciones Supabase.
 - **Supabase localmente enlazado:** el archivo `supabase/.temp/linked-project.json` todavía declara el nombre histórico `scan-and-earn-buddy` y el ref local `zkjzbmwwzcsqrryaspxo`; `supabase/config.toml` declara el mismo `project_id`. El dashboard visible ya figura como **Sumi**; queda pendiente reconciliar/actualizar la caché local antes de aplicar migraciones remotas.
 - **Entornos incluidos:** desarrollo local/Vite, Supabase (base, Auth, Storage, RPC y Edge Functions), GitHub, Vercel, dominio administrado en Hostinger y el proyecto histórico en Lovable.
 - **Responsable de la decisión:** el usuario; el agente raíz coordina integración, autorizaciones, mutaciones externas y entrega. El `documenter` mantiene este ledger, briefs, decisiones, hechos, supuestos, preguntas y evidencias.
@@ -75,7 +75,7 @@
 | Hecho | Evidencia | Fecha |
 |---|---|---|
 | El repositorio está en la rama `codex/sumi-operational-hardening` y el último commit local es `a1bf1de` (`fix: preserve content visuals and filter consumption categories`). | `git status --short --branch`, `git log` y `git remote -v`. | 2026-08-24 |
-| El remoto conocido es `https://github.com/555XxnicoxX555/scan-and-earn-buddy.git`. | Configuración Git local. | 2026-08-24 |
+| La cuenta propietaria de GitHub fue renombrada a `N1ckas1o`; el remoto local usa `https://github.com/N1ckas1o/scan-and-earn-buddy.git` y conserva permisos `ADMIN`. | Confirmación de GitHub, `gh api user`, `gh repo view` y configuración Git local. | 2026-08-25 |
 | El árbol de trabajo conserva cambios de producto y documentación, pero la revisión del staging de entrega excluye explícitamente `skills/`, `skills-lock.json` y `graphify-out/` no relacionados. | `git status --short` y revisión del staging de entrega. | 2026-08-24 |
 | El paquete declara comandos `build`, `audit:ui`, `smoke:ui`, `check:supabase`, comprobaciones de live sync/onboarding/cliente y preparación de cliente. | `package.json`. | 2026-08-24 |
 | La configuración Vercel del sitio principal usa framework Vite, `npm run build` y `dist` como salida. | `vercel.json`. | 2026-08-24 |
@@ -110,7 +110,7 @@
 | Vercel muestra únicamente el proyecto `sumi-onboarding`; su deployment de producción figura `Ready`, tiene como origen `vercel deploy`, sirve `onboarding.sumi.business` y no posee repositorio Git conectado. | Verificación read-only del overview y la sección Production Deployment de Vercel durante la sesión actual. | 2026-08-24 |
 | `https://onboarding.sumi.business` carga `Onboarding \| Sumi` y exige un enlace privado para continuar. | Verificación de navegación en navegador durante la sesión actual. | 2026-08-24 |
 | El dashboard visible de Supabase figura como `Sumi`. | Verificación visual del dashboard de Supabase durante la sesión actual. | 2026-08-24 |
-| El repositorio público de GitHub es `555XxnicoxX555/scan-and-earn-buddy` y su rama por defecto es `main`. | Salida verificada de `gh repo view`; no implica que la rama de trabajo actual haya sido fusionada. | 2026-08-24 |
+| El repositorio público de GitHub es `N1ckas1o/scan-and-earn-buddy`, su rama por defecto es `main` y `codex/sumi-operational-hardening` está publicada en el commit local actual. | Salidas verificadas de `gh repo view`, `git push` y `git ls-remote`; no implica que la rama de trabajo haya sido fusionada. | 2026-08-25 |
 | `docs/FREELANCE_COMMAND_CENTER.md` fue creado y contiene una arquitectura versionada para el centro de mando freelance, onboarding y credenciales protegidas. | Archivo local leído tras la creación. | 2026-08-24 |
 | Lovable contiene el proyecto `Sumi-Test`, muestra actividad sincronizada desde GitHub y cambios sin publicar; su URL propia es `proyecto-gastronomia.lovable.app` y no tiene `sumi.business` conectado como dominio personalizado. No se retiró ni modificó. | Verificación read-only del proyecto y de Settings → Domains en Lovable durante la sesión actual. | 2026-08-24 |
 
