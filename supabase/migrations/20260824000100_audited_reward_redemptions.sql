@@ -1,5 +1,7 @@
 -- Audited redemption workflow. Apply after the existing redemption hardening migrations.
 
+begin;
+
 alter table public.reward_redemptions
   add column if not exists requested_by_auth_user_id uuid,
   add column if not exists requested_expires_at timestamptz,
@@ -502,3 +504,5 @@ grant execute on function public.get_reward_redemption_history(text) to authenti
 -- Audit rows are retained append-only; operational removal is a soft status transition,
 -- never a DELETE. Retention/archival policy is documented in ADMIN_PANEL.md.
 notify pgrst, 'reload schema';
+
+commit;
