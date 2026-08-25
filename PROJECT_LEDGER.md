@@ -14,7 +14,47 @@
 - **Responsable de la decisión:** el usuario; el agente raíz coordina integración, autorizaciones, mutaciones externas y entrega. El `documenter` mantiene este ledger, briefs, decisiones, hechos, supuestos, preguntas y evidencias.
 - **Objetivo maestro vigente:** completar y entregar Sumi con un flujo seguro y auditable de canjes para empleados y dueños; validar y aplicar las migraciones en Supabase renombrado como Sumi; desplegar el proyecto en Vercel; conectar el dominio administrado en Hostinger; retirar Lovable sólo tras verificar una sustitución recuperable; realizar commit y push de cambios revisados; y dejar diseñado o implementado un centro de mando freelance reusable con onboarding de clientes, contexto compartido para subagentes y acceso seguro a credenciales sin secretos en texto plano.
 
-## Checkpoint actual — 2026-08-24 (validación local actualizada)
+## Checkpoint de entrega — 2026-08-25
+
+- **GitHub:** `main` avanzó por fast-forward hasta `b2bb52b`; la rama
+  `codex/sumi-operational-hardening` apunta al mismo commit. El remoto vigente es
+  `N1ckas1o/scan-and-earn-buddy` y Vercel quedó conectado a ese repositorio.
+- **Supabase:** la migración auditada fue aplicada transaccionalmente al proyecto
+  remoto **Sumi**. El postflight confirmó 2 canjes y 2 eventos, cobertura total
+  del historial, RLS/RPC/índices/triggers presentes y 0 grants directos
+  inseguros, duplicados, estados inválidos, cruces de tenant o claves
+  reservadas. Los dos registros históricos conservan rol `unknown` porque
+  preceden a la captura de actor.
+- **Vercel Production:** el despliegue manual
+  `dpl_HCq7uG5o5rSWbP991ZEMG3Wi2jVp` fue reemplazado por el deployment Git
+  `dpl_57RTD6wj3qvwt8uhYFF5LNcJNMAb`, creado automáticamente desde `main` y el
+  commit exacto `b2bb52b`. Los logs confirman root `.`,
+  Vite, `npm run build`, salida `dist` y `.vercelignore`; el alias estable
+  `https://sumi-pearl.vercel.app/` responde `200`, título `Sumi Menu Admin`,
+  bundle `assets/index-69ttKU3X.js`, HTTPS y HSTS.
+- **Git → Vercel:** un push a la rama operativa generó Preview y el fast-forward
+  de `main` generó Production automáticamente. Las cuatro variables públicas
+  requeridas existen en Preview y Production; no se configuró service-role.
+- **Dominio en Vercel:** `sumi.business` y `www.sumi.business` están añadidos y
+  con propiedad verificada. Antes del cutover siguen usando los nameservers de
+  Hostinger. Vercel recomienda para el apex dos registros `A`: `216.198.79.1` y
+  `64.29.17.1`; para `www`, `CNAME`
+  `9d64cae00ee33f78.vercel-dns-017.com.`. El rollback preservado es apex `A`
+  `147.93.37.70` (TTL observado 1800) y `www CNAME sumi.business` (TTL 300).
+- **Estado del cutover:** Hostinger todavía no fue modificado y Lovable sigue
+  intacto. La siguiente puerta es autenticar hPanel, sustituir únicamente los
+  registros web indicados, verificar propagación/HTTPS/redirect y conservar el
+  rollback antes de decidir la retirada destructiva de Lovable.
+- **Centro freelance:** la arquitectura reusable permanece diseñada en
+  `docs/FREELANCE_COMMAND_CENTER.md`. El commit `b2bb52b` eliminó del runbook y
+  del prompt operativo las instrucciones antiguas que pedían pasar tokens,
+  contraseñas o API keys a Codex; ahora exige sesiones oficiales, aliases,
+  broker allowlisted y carga directa de secretos en el proveedor.
+
+> Este checkpoint supersede cualquier afirmación posterior en el documento que
+> todavía describa Supabase, GitHub o Vercel como no aplicados o no conectados.
+
+## Checkpoint anterior — 2026-08-24 (validación local)
 
 - **Implementación local:** completada para el flujo de empleado/canjes. Incluye workspace separado, cola de solicitudes, confirmación contextual, transiciones mediante `manage_reward_redemption_status_v2` e historial/actor en la UI, junto con la migración local auditada.
 - **Validación local:** `npm run audit:redemptions` pasa sus 16 invariantes, `npm run audit:ui` pasa con 153 controles/botones y `npm run build` termina correctamente (queda el warning no bloqueante del script clásico de configuración).
