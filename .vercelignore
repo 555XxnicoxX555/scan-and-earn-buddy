@@ -1,0 +1,9 @@
+.agents/
+skills/
+graphify-out/
+supabase/
+docs/
+*.md
+*.mp3
+skills-lock.json
+business.config.example.json
