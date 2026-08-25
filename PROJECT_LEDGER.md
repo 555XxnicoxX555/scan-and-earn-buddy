@@ -16,7 +16,7 @@
 
 ## Checkpoint de entrega — 2026-08-25
 
-- **GitHub:** `main` avanzó por fast-forward hasta `b2bb52b`; la rama
+- **GitHub:** `main` avanzó por fast-forward hasta `a73d925`; la rama
   `codex/sumi-operational-hardening` apunta al mismo commit. El remoto vigente es
   `N1ckas1o/scan-and-earn-buddy` y Vercel quedó conectado a ese repositorio.
 - **Supabase:** la migración auditada fue aplicada transaccionalmente al proyecto
@@ -25,26 +25,28 @@
   inseguros, duplicados, estados inválidos, cruces de tenant o claves
   reservadas. Los dos registros históricos conservan rol `unknown` porque
   preceden a la captura de actor.
-- **Vercel Production:** el despliegue manual
-  `dpl_HCq7uG5o5rSWbP991ZEMG3Wi2jVp` fue reemplazado por el deployment Git
-  `dpl_57RTD6wj3qvwt8uhYFF5LNcJNMAb`, creado automáticamente desde `main` y el
-  commit exacto `b2bb52b`. Los logs confirman root `.`,
+- **Vercel Production:** el deployment Git vigente es
+  `dpl_3aUFQh6Sh5CdmNFuDE885ZavR4WZ`, creado automáticamente desde `main` y el
+  commit exacto `a73d925`. Los logs confirman root `.`,
   Vite, `npm run build`, salida `dist` y `.vercelignore`; el alias estable
   `https://sumi-pearl.vercel.app/` responde `200`, título `Sumi Menu Admin`,
   bundle `assets/index-69ttKU3X.js`, HTTPS y HSTS.
 - **Git → Vercel:** un push a la rama operativa generó Preview y el fast-forward
   de `main` generó Production automáticamente. Las cuatro variables públicas
   requeridas existen en Preview y Production; no se configuró service-role.
-- **Dominio en Vercel:** `sumi.business` y `www.sumi.business` están añadidos y
-  con propiedad verificada. Antes del cutover siguen usando los nameservers de
-  Hostinger. Vercel recomienda para el apex dos registros `A`: `216.198.79.1` y
-  `64.29.17.1`; para `www`, `CNAME`
-  `9d64cae00ee33f78.vercel-dns-017.com.`. El rollback preservado es apex `A`
-  `147.93.37.70` (TTL observado 1800) y `www CNAME sumi.business` (TTL 300).
-- **Estado del cutover:** Hostinger todavía no fue modificado y Lovable sigue
-  intacto. La siguiente puerta es autenticar hPanel, sustituir únicamente los
-  registros web indicados, verificar propagación/HTTPS/redirect y conservar el
-  rollback antes de decidir la retirada destructiva de Lovable.
+- **Dominio en Vercel:** `sumi.business` y `www.sumi.business` están añadidos,
+  verificados y asociados al proyecto `sumi`. Hostinger conserva sus
+  nameservers y ahora publica para el apex los dos registros `A` recomendados
+  (`216.198.79.1` y `64.29.17.1`, TTL 300), mientras `www` usa el `CNAME`
+  `9d64cae00ee33f78.vercel-dns-017.com` (TTL 300). El `AAAA` histórico fue
+  retirado; correo, onboarding y FTP quedaron intactos.
+- **Estado del cutover:** los servidores autoritativos, Cloudflare y Google ya
+  resuelven los destinos nuevos. Apex y `www` responden `200` desde Vercel por
+  HTTPS, con HSTS, título `Sumi Menu Admin` y bundle
+  `assets/index-69ttKU3X.js`. Vercel emitió certificados renovables por 90 días
+  para ambos nombres. El rollback preservado es apex `A 147.93.37.70` y
+  `www CNAME sumi.business`; Lovable sigue intacto hasta la confirmación
+  destructiva final.
 - **Centro freelance:** la arquitectura reusable permanece diseñada en
   `docs/FREELANCE_COMMAND_CENTER.md`. El commit `b2bb52b` eliminó del runbook y
   del prompt operativo las instrucciones antiguas que pedían pasar tokens,
@@ -233,11 +235,11 @@
 | Arquitectura del centro freelance | `freelance_stack_architect` + `documenter` | Arquitectura reusable creada y registrada; implementación del MVP aún pendiente | `docs/FREELANCE_COMMAND_CENTER.md` | Brief/ledger y decisión MVP |
 | UI/UX y responsive admin/empleado | Especialistas globales / root | Flujo de empleado validado localmente; visor `dev-preview.html` terminado para Teléfono/Tablet/Escritorio; aceptación de producción pendiente | `app.js`, `index.html`, `styles.css`, `dev-preview.html` | Validación remota y revisión final de despliegue |
 | Supabase/RLS/migraciones | Root + especialista de datos | Migración aplicada a Sumi mediante Management API dentro de `BEGIN/COMMIT`; postflight confirma cobertura completa, RLS/RPC y cero grants inseguros | `supabase/migrations/**`, `supabase/config.toml`, `supabase/verification/**` | Validación funcional desde el build desplegado |
-| Runbook de despliegue recuperable | `documenter` + root | Creado y registrado; no ejecutado ni usado para autorizar mutaciones | `docs/DEPLOYMENT_RUNBOOK.md` | Commit aprobado, proyecto Vercel final, preview/logs y aprobación DNS |
+| Runbook de despliegue recuperable | `documenter` + root | Ejecutado hasta el cutover verificable; rollback preservado | `docs/DEPLOYMENT_RUNBOOK.md`, este ledger y evidencia externa | Decisión final sobre Lovable |
 | Graphify | Graphify/Documenter | Grafo local generado y diagnosticado; posible actualización posterior si cambia el código | `graphify-out/**` | Decidir si actualizar después del merge; requiere registrar costo |
-| GitHub commit/push | Root | Rama operativa publicada; falta registrar y publicar la evidencia final de apply/postflight sin incluir cambios ajenos | Archivos relevantes del worktree | Revisión final de los dos SQL y ledger |
-| Vercel | Root | Proyecto principal `sumi` creado desde el commit aprobado; primer deployment `Ready` con alias `sumi-pearl.vercel.app`, build remoto y respuesta HTTP 200 verificados. Cuatro variables públicas configuradas en Preview/Production; sin service-role | Configuración externa + `.vercelignore` | Conectar Git, validar Auth/QR y luego dominio |
-| Hostinger/DNS | Root | Dominio exacto `sumi.business` verificado; registros DNS aún no modificados; runbook exige registros exactos Vercel y TTL registrado | Configuración externa | Preview Vercel verificado y confirmación antes de mutar DNS |
+| GitHub commit/push | Root | `main` y rama operativa publicadas hasta `a73d925`; cambios ajenos de skills/Graphify permanecen fuera | Archivos relevantes del worktree | Publicar sólo este cierre documental |
+| Vercel | Root | Proyecto `sumi` conectado a GitHub; Production `dpl_3aUFQh6Sh5CdmNFuDE885ZavR4WZ`, cuatro variables públicas, sin service-role, dominios verificados y certificados válidos | Configuración externa + `.vercelignore` | Decisión final sobre Lovable |
+| Hostinger/DNS | Root | Cutover completado: dos `A` de Vercel, `www` por CNAME, AAAA antiguo retirado; registros de correo/onboarding/FTP preservados | Configuración externa | Ninguna para la disponibilidad actual |
 | Lovable | Root | Proyecto histórico observado como `Sumi-Test`; no retirar | Configuración externa | Sustitución recuperable + aprobación inmediata |
 
 ## Manifiestos de pruebas y costos
@@ -252,14 +254,14 @@
 | `npm run check:supabase` y comprobaciones de onboarding/cliente/live-sync | Local; algunas pueden consultar o escribir según script, por confirmar antes de ejecutar | Leer el script y declarar servicios/volumen/limpieza; detener al primer fallo | **No concedida** | No ejecutadas |
 | Aplicar migración auditada en Supabase | Escritura de esquema, funciones y RLS; sin Storage | Proyecto Sumi verificado; una ejecución mediante Management API; transacción `BEGIN/COMMIT`; postflight sólo lectura | Concedida por el usuario para continuar sin reconfirmaciones rutinarias | PASS: 2 canjes y 2 eventos, cobertura completa; 0 grants inseguros, duplicados, estados inválidos, cruces de tenant o claves reservadas |
 | Actualizar Graphify | Escritura local de grafo/cache; costo de tokens | Declarar archivos incluidos, temporales, retención y costo estimado; no indexar secretos | Requiere manifiesto si vuelve a ejecutarse | Estado actual preservado; no relanzado |
-| Deploy Vercel / conectar DNS Hostinger | Mutaciones externas y publicación | Proyecto `sumi`, root `.`, Vite/build `dist`, cuatro variables públicas; no borrar Lovable | Usuario autorizó continuar; DNS y retirada permanecen separados | Vercel PASS: `Ready`, HTTP 200, HTTPS y headers; DNS/Hostinger no modificado |
+| Deploy Vercel / conectar DNS Hostinger | Mutaciones externas y publicación | Proyecto `sumi`, root `.`, Vite/build `dist`, cuatro variables públicas; no borrar Lovable | Usuario autorizó los cuatro cambios DNS exactos; retirada permanece separada | PASS: DNS propagado, HTTPS/certificados/HSTS y bundle actual verificados en apex y `www`; registros no web preservados |
 
 ## Evidencias y entrega
 
 - **Informes:** [brief de analítica](docs/ANALYTICS_BRIEF.md), [propuesta de portabilidad](docs/BUSINESS_PORTABILITY.md), [arquitectura del centro de mando freelance](docs/FREELANCE_COMMAND_CENTER.md), `ADMIN_PANEL.md`, `graphify-out/GRAPH_REPORT.md`.
-- **Despliegue:** proyecto Vercel `sumi` creado desde el commit aprobado. `sumi-pearl.vercel.app` está `Ready`, responde 200 con HTTPS/headers correctos y renderiza el menú sin errores de consola. `sumi.business` aún no apunta a Vercel.
+- **Despliegue:** proyecto Vercel `sumi` creado desde el commit aprobado. `sumi-pearl.vercel.app`, `https://sumi.business/` y `https://www.sumi.business/` responden 200 con HTTPS/HSTS y sirven el bundle actual. En producción se verificaron el menú, la sesión Auth existente y la generación visual del QR sin escrituras remotas.
 - **Grafo y salud:** `graphify-out/graph.json`, `graphify-out/GRAPH_HEALTH.json`, `graphify-out/manifest.json`, `graphify-out/cost.json`, `graphify-out/graph.html`.
 - **Supabase:** proyecto remoto Sumi confirmado por CLI. `20260824000100_audited_reward_redemptions.sql` se aplicó transaccionalmente mediante Management API. El postflight agregado confirmó cuatro columnas, constraints, índices, triggers, RLS y RPC; 2/2 canjes tienen evento de auditoría y no existen grants directos inseguros.
 - **Pruebas:** `audit:ui` (153) y `audit:redemptions` (16) pasan; build principal/onboarding pasa; smoke aislado completo pasa con Supabase desactivado. Identidad, preflight, apply transaccional y postflight remoto de Supabase están verificados.
-- **Riesgos residuales:** los dos eventos históricos tienen rol `unknown` porque preceden al nuevo registro de identidad; los eventos futuros capturan actor/rol. El proyecto Vercel final todavía no está confirmado/importado, no hay preview ni deployment ID de Sumi, las variables por entorno no están verificadas, DNS no cambió y Lovable no se retiró; persisten cambios ajenos de skills/`graphify-out/` que deben quedar fuera del commit.
-- **Recomendación de entrega:** publicar la evidencia final en GitHub y seguir el runbook: importación Vercel root `.`, build/preview/logs, variables sin `service-role`, dominio con registros exactos y TTL, validación HTTPS/QR/Auth, registro de deployment/rollback y sólo después la decisión destructiva sobre Lovable. El root debe actualizar el objetivo oficial; el `documenter` no lo crea ni lo modifica.
+- **Riesgos residuales:** los dos eventos históricos tienen rol `unknown` porque preceden al nuevo registro de identidad; los eventos futuros capturan actor/rol. Lovable todavía no se retiró y la caché DNS local de Windows puede conservar temporalmente la IP anterior aunque los servidores autoritativos y resolvers públicos ya estén actualizados. Persisten cambios ajenos de skills/`graphify-out/` que deben quedar fuera del commit.
+- **Recomendación de entrega:** publicar este cierre documental sin incluir cambios ajenos y, con la sustitución recuperable ya verificada, decidir la retirada destructiva del proyecto histórico de Lovable. El root debe actualizar el objetivo oficial; el `documenter` no lo crea ni lo modifica.
