@@ -16,6 +16,14 @@ Objetivo:
 - Dejar la app lista para build y deploy.
 
 Reglas:
+- Antes de trabajar, consultar el ledger y el context pack del cliente. Usar
+  solo identificadores, URLs publicas, claves publishable y alias de acceso.
+- No pedir, copiar ni mostrar contrasenas, tokens, cookies, service-role keys,
+  API keys privadas, Auth Hook secrets ni connection strings con password.
+- Para acciones privilegiadas, usar una sesion oficial ya autenticada o un
+  broker allowlisted de minimo privilegio. El usuario introduce cualquier
+  secreto directamente en el proveedor; el agente solo recibe el alias y el
+  estado de disponibilidad.
 - No hardcodear datos nuevos fuera de la configuracion del negocio salvo que sea inevitable.
 - Si algo cambia por cliente, documentarlo.
 - Los QR deben apuntar al dominio publico raiz configurado en publicAppUrl, por ejemplo https://sumi.business/ o https://tu-dominio.com/.

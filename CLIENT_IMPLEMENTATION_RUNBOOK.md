@@ -30,13 +30,17 @@ Datos tecnicos:
 - Project ID de Supabase.
 - Supabase API URL.
 - Supabase anon/publishable key.
-- Database password o connection string Postgres, solo si Codex debe aplicar migraciones.
-- Supabase access token, solo si Codex debe usar CLI contra el proyecto.
-- Resend API key.
+- Alias de acceso y estado de la sesion autenticada para Supabase, por ejemplo
+  `supabase.<cliente>.migrations`; nunca el token, la contrasena ni la connection
+  string.
+- Alias del secret remoto de Resend, por ejemplo `resend.<cliente>.transactional`;
+  nunca el valor de la API key.
 - Remitente deseado para emails.
-- Secret del Auth Hook generado en Supabase.
+- Alias del Auth Hook remoto, por ejemplo `supabase.<cliente>.auth-hook`; nunca
+  el secret generado.
 
-Nunca guardar en el repo:
+Nunca guardar ni pegar en Git, prompts, chats, Markdown, logs o portapapeles
+persistentes:
 
 - Supabase access token.
 - Database password.
@@ -53,8 +57,11 @@ Codex puede hacer:
 - Ajustar `index.html` para cargar la config del cliente.
 - Generar o ubicar assets en `assets/menu/` y `assets/flags/`.
 - Actualizar `.env` con valores publicos.
-- Aplicar migraciones si recibe credenciales temporales suficientes.
-- Setear Supabase secrets con CLI.
+- Aplicar migraciones mediante una sesion autenticada y de minimo privilegio,
+  sin recibir ni imprimir credenciales.
+- Preparar los nombres y valores no sensibles de Supabase Secrets; el usuario o
+  un broker autorizado introduce los valores secretos directamente en el
+  proveedor.
 - Desplegar Edge Functions.
 - Ejecutar `npm run build` y `npm run check:supabase`.
 - Probar registro, login, QR, perfil e historial.
@@ -80,8 +87,9 @@ En Supabase:
 5. Copiar:
    - Project URL.
    - anon/publishable key.
-6. Ir a `Project Settings > Database`.
-7. Copiar database password o connection string si Codex aplicara migraciones.
+6. Registrar el alias de acceso aprobado para migraciones. Si la CLI necesita
+   autenticacion, el usuario completa el flujo oficial del proveedor sin pegar
+   tokens o contrasenas en el chat.
 
 Valores que se ponen en `.env`:
 
@@ -103,13 +111,18 @@ La migracion principal es:
 supabase/migrations/20260622000100_loyalty_accounts.sql
 ```
 
-Opcion con CLI:
+Opcion con CLI usando una sesion ya autenticada:
 
 ```powershell
-$env:SUPABASE_ACCESS_TOKEN="<token-temporal>"
-npx supabase link --project-ref <project-ref> --password "<database-password>"
-npx supabase db push --linked --password "<database-password>" --yes
+npx supabase login
+npx supabase link --project-ref <project-ref>
+npx supabase db push --linked --dry-run
+npx supabase db push --linked
 ```
+
+El login lo completa el usuario en el flujo oficial. Si el comando solicita una
+contrasena, debe introducirla directamente en el prompt oculto o usar el SQL
+Editor; no se la entrega a Codex ni se la incluye en el historial del shell.
 
 Opcion manual:
 
@@ -169,16 +182,16 @@ En Resend:
    Nombre Negocio <hola@dominio.com>
    ```
 
-Secrets que Codex debe setear en Supabase:
+Secrets que deben existir en Supabase:
 
-```powershell
-$env:SUPABASE_ACCESS_TOKEN="<token-temporal>"
-npx supabase secrets set `
-  RESEND_API_KEY="<resend-api-key>" `
-  RESEND_FROM_EMAIL="Nombre Negocio <hola@dominio.com>" `
-  APP_PUBLIC_URL="https://url-publica-del-catalogo" `
-  --project-ref <project-ref>
-```
+- `RESEND_API_KEY`: el usuario lo carga directamente en el dashboard o mediante
+  un broker allowlisted; el agente solo verifica que el nombre exista.
+- `RESEND_FROM_EMAIL`: valor no secreto que puede configurar Codex.
+- `APP_PUBLIC_URL`: valor no secreto que puede configurar Codex.
+
+No se pasa la API key a Codex ni se escribe en un comando guardado en el
+historial. El centro de mando conserva solamente el alias y el estado de
+rotacion/revocacion.
 
 ## 7. Desplegar emails Auth
 
@@ -191,7 +204,6 @@ supabase/functions/auth-email-hook/index.ts
 Desplegar:
 
 ```powershell
-$env:SUPABASE_ACCESS_TOKEN="<token-temporal>"
 npx supabase functions deploy auth-email-hook `
   --project-ref <project-ref> `
   --no-verify-jwt
@@ -216,15 +228,13 @@ Este paso es manual en Supabase dashboard:
 5. Click en `Generate secret`.
 6. Copiar el secret completo.
 7. Crear el hook y dejarlo `Enabled`.
-8. Pasar ese secret a Codex para guardarlo como secret remoto:
+8. Guardar el secret directamente en Supabase como `AUTH_HOOK_SECRET`, desde el
+   dashboard o un broker allowlisted. Codex recibe unicamente el alias y la
+   confirmacion de que el secret existe; despues puede desplegar la funcion con
+   la sesion ya autenticada.
 
-   ```powershell
-   $env:SUPABASE_ACCESS_TOKEN="<token-temporal>"
-   npx supabase secrets set AUTH_HOOK_SECRET="<v1,whsec_...>" --project-ref <project-ref>
-   npx supabase functions deploy auth-email-hook --project-ref <project-ref> --no-verify-jwt
-   ```
-
-No guardar `AUTH_HOOK_SECRET` en archivos del repo.
+No mostrar `AUTH_HOOK_SECRET` a Codex ni guardarlo en archivos, prompts, logs o
+comandos persistentes.
 
 ## 9. Personalizar el negocio
 
@@ -288,15 +298,13 @@ No guardar `AUTH_HOOK_SECRET` en archivos del repo.
 
 ## 10. Traduccion IA del menu
 
-Si el negocio usara traduccion IA, configurar el secret remoto:
+Si el negocio usara traduccion IA, el usuario o un broker allowlisted carga
+`OPENAI_API_KEY` directamente en los secrets remotos de Supabase. Codex puede
+desplegar `translate-menu-item` usando la sesion autenticada y verificar la
+presencia del nombre del secret, pero no recibe ni imprime su valor.
 
-```powershell
-$env:SUPABASE_ACCESS_TOKEN="<token-temporal>"
-npx supabase secrets set OPENAI_API_KEY="<openai-api-key>" --project-ref <project-ref>
-npx supabase functions deploy translate-menu-item --project-ref <project-ref>
-```
-
-No guardar `OPENAI_API_KEY` en `.env`, `config.js` ni documentacion.
+No guardar ni mostrar `OPENAI_API_KEY` en `.env`, `config.js`, documentacion,
+prompts, logs o comandos persistentes.
 
 ## 11. Modelo operativo por cliente
 
