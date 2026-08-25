@@ -19,7 +19,7 @@ function requireMatch(label, source, expression) {
 requireMatch(
   "Las escrituras directas de canjes se revocan para public, anon y authenticated",
   migration,
-  /revoke\s+insert,\s*update,\s*delete\s+on\s+public\.reward_redemptions\s+from\s+public,\s*anon,\s*authenticated;/i,
+  /revoke\s+all\s+privileges\s+on\s+public\.reward_redemptions\s+from\s+public,\s*anon,\s*authenticated;/i,
 );
 requireMatch("Se eliminan las politicas heredadas de escritura", migration, /drop policy if exists "Customers can request own redemptions"[\s\S]*drop policy if exists "Business managers can update business redemptions"/i);
 requireMatch("Los actores de auth se preservan como nulos al borrar una cuenta", migration, /references\s+auth\.users\(id\)\s+on delete set null/i);

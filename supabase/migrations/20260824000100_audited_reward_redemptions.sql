@@ -30,7 +30,9 @@ $$;
 drop policy if exists "Customers can request own redemptions" on public.reward_redemptions;
 drop policy if exists "Business admins can update business redemptions" on public.reward_redemptions;
 drop policy if exists "Business managers can update business redemptions" on public.reward_redemptions;
-revoke insert, update, delete on public.reward_redemptions from public, anon, authenticated;
+-- Revoke every direct table capability, including TRUNCATE/REFERENCES/TRIGGER.
+-- RLS does not protect TRUNCATE, so narrowing only INSERT/UPDATE/DELETE is unsafe.
+revoke all privileges on public.reward_redemptions from public, anon, authenticated;
 grant select on public.reward_redemptions to authenticated;
 
 create or replace function public.enforce_reward_redemption_integrity()
