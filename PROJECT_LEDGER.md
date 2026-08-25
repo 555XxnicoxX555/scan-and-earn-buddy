@@ -9,15 +9,16 @@
 
 - **Nombre coherente del proyecto:** Sumi.
 - **Repositorio y alcance:** repositorio local en `C:\Users\Nicolás\Documents\Sumi`; remoto GitHub `N1ckas1o/scan-and-earn-buddy`, rama activa `codex/sumi-operational-hardening`. El producto contiene menú público, fidelización, panel de negocio, onboarding y funciones Supabase.
-- **Supabase localmente enlazado:** el archivo `supabase/.temp/linked-project.json` todavía declara el nombre histórico `scan-and-earn-buddy` y el ref local `zkjzbmwwzcsqrryaspxo`; `supabase/config.toml` declara el mismo `project_id`. El dashboard visible ya figura como **Sumi**; queda pendiente reconciliar/actualizar la caché local antes de aplicar migraciones remotas.
+- **Supabase enlazado y reconciliado:** la caché local conserva el nombre histórico `scan-and-earn-buddy`, pero el ref `zkjzbmwwzcsqrryaspxo` fue contrastado con el dashboard/CLI del proyecto remoto **Sumi** antes del preflight, apply y postflight. La migración auditada ya fue aplicada al destino correcto.
 - **Entornos incluidos:** desarrollo local/Vite, Supabase (base, Auth, Storage, RPC y Edge Functions), GitHub, Vercel, dominio administrado en Hostinger y el proyecto histórico en Lovable.
 - **Responsable de la decisión:** el usuario; el agente raíz coordina integración, autorizaciones, mutaciones externas y entrega. El `documenter` mantiene este ledger, briefs, decisiones, hechos, supuestos, preguntas y evidencias.
 - **Objetivo maestro vigente:** completar y entregar Sumi con un flujo seguro y auditable de canjes para empleados y dueños; validar y aplicar las migraciones en Supabase renombrado como Sumi; desplegar el proyecto en Vercel; conectar el dominio administrado en Hostinger; retirar Lovable sólo tras verificar una sustitución recuperable; realizar commit y push de cambios revisados; y dejar diseñado o implementado un centro de mando freelance reusable con onboarding de clientes, contexto compartido para subagentes y acceso seguro a credenciales sin secretos en texto plano.
 
 ## Checkpoint de entrega — 2026-08-25
 
-- **GitHub:** `main` avanzó por fast-forward hasta `a73d925`; la rama
-  `codex/sumi-operational-hardening` apunta al mismo commit. El remoto vigente es
+- **GitHub:** `main` avanzó por fast-forward hasta `a73d925`, commit que sirve
+  Vercel Production. La rama `codex/sumi-operational-hardening` conserva además
+  el cierre documental operativo. El remoto vigente es
   `N1ckas1o/scan-and-earn-buddy` y Vercel quedó conectado a ese repositorio.
 - **Supabase:** la migración auditada fue aplicada transaccionalmente al proyecto
   remoto **Sumi**. El postflight confirmó 2 canjes y 2 eventos, cobertura total
@@ -45,8 +46,9 @@
   HTTPS, con HSTS, título `Sumi Menu Admin` y bundle
   `assets/index-69ttKU3X.js`. Vercel emitió certificados renovables por 90 días
   para ambos nombres. El rollback preservado es apex `A 147.93.37.70` y
-  `www CNAME sumi.business`; Lovable sigue intacto hasta la confirmación
-  destructiva final.
+  `www CNAME sumi.business`. Tras la confirmación destructiva explícita del
+  usuario, el proyecto histórico `Sumi-Test` fue eliminado de Lovable; su URL
+  `proyecto-gastronomia.lovable.app` responde `404`.
 - **Centro freelance:** la arquitectura reusable permanece diseñada en
   `docs/FREELANCE_COMMAND_CENTER.md`. El commit `b2bb52b` eliminó del runbook y
   del prompt operativo las instrucciones antiguas que pedían pasar tokens,
@@ -56,7 +58,7 @@
 > Este checkpoint supersede cualquier afirmación posterior en el documento que
 > todavía describa Supabase, GitHub o Vercel como no aplicados o no conectados.
 
-## Checkpoint anterior — 2026-08-24 (validación local)
+## Checkpoint histórico supersedido — 2026-08-24 (validación local)
 
 - **Implementación local:** completada para el flujo de empleado/canjes. Incluye workspace separado, cola de solicitudes, confirmación contextual, transiciones mediante `manage_reward_redemption_status_v2` e historial/actor en la UI, junto con la migración local auditada.
 - **Validación local:** `npm run audit:redemptions` pasa sus 16 invariantes, `npm run audit:ui` pasa con 153 controles/botones y `npm run build` termina correctamente (queda el warning no bloqueante del script clásico de configuración).
@@ -71,7 +73,7 @@
 
 - El checkpoint anterior registraba auditorías/build aún no ejecutados y tres intentos de smoke detenidos en la fixture de owner. Esa situación fue corregida y reemplazada por la evidencia de validación completa anterior; se conserva aquí sólo como historial, no como estado vigente.
 
-## Checkpoint de despliegue — 2026-08-24
+## Checkpoint histórico supersedido de despliegue — 2026-08-24
 
 - **Runbook:** creado `docs/DEPLOYMENT_RUNBOOK.md`; describe la secuencia recuperable oficial y queda sin ejecutar.
 - **Vercel:** `vercel.json` fija Vite, `npm run build` y salida `dist`; el objetivo operativo es importar el repositorio aprobado con root `.`. La cuenta observada sólo muestra `sumi-onboarding`: su deployment de producción está `Ready`, fue creado mediante `vercel deploy`, sirve `onboarding.sumi.business` y no tiene repositorio Git conectado. No se ha importado ni desplegado el sitio principal Sumi.
@@ -79,7 +81,7 @@
 - **Puerta y rollback:** primero commit aprobado, importación/build/preview y logs; después agregar `sumi.business` usando sólo los registros exactos mostrados por Vercel, reducir TTL y cambiar Hostinger. Se deben validar HTTPS/QR/Auth, registrar deployment ID y conservar rollback; Lovable permanece intacto hasta confirmación destructiva final.
 - **Estado externo:** no se modificaron DNS ni se retiró Lovable. La identidad visual de Supabase sí quedó reconciliada con el proyecto Sumi, pero el preflight SQL todavía no se ejecutó por falta de aprobación. Lovable conserva el proyecto `Sumi-Test`, sincronizado desde GitHub y con cambios sin publicar; usa `proyecto-gastronomia.lovable.app` y no tiene `sumi.business` conectado como dominio personalizado.
 
-## Baseline público read-only — 2026-08-24
+## Baseline histórico de rollback — 2026-08-24
 
 > Esta observación es una referencia pública de estado y rollback, no una
 > configuración objetivo ni una autorización para cambiar DNS.
@@ -102,8 +104,8 @@
 - **Resultado esperado:** panel de dueño/manager con clientes, consumos, menú, fidelización, contenido, biblioteca, QRs y ajustes; vista de empleado mínima para escanear/buscar clientes y cargar consumos; vista de cliente para consultar puntos, QR, historial y solicitar premios; canjes con estados, confirmación e historial de actores.
 - **Fuera de alcance actual:** prometer analítica completa de ventas o margen sin un ledger de pedidos/POS. El brief de analítica define que el MVP sólo puede hablar de **consumos registrados en Sumi**.
 - **Restricciones:** separación por `business_id`; RLS y RPC como frontera de autorización; no entregar secretos de clientes en texto plano a agentes; no retirar Lovable ni cambiar DNS antes de verificar el reemplazo; no ejecutar pruebas sin el manifiesto y la aprobación requeridos.
-- **Estado del brief en este checkpoint:** la implementación local de empleado/canjes está completada; la aceptación de entrega sigue bloqueada por la aprobación del manifiesto local, la ejecución de validaciones y la aplicación remota de la migración.
-- **Estado de despliegue:** el runbook oficial está documentado, pero commit, importación Vercel, preview, DNS y producción siguen pendientes de aprobación y ejecución.
+- **Estado del brief en este checkpoint:** la implementación de empleado/canjes está completada, auditada localmente, aplicada en Supabase y servida desde el build de producción.
+- **Estado de despliegue:** el runbook fue ejecutado. GitHub, Vercel, Supabase, Hostinger/DNS y HTTPS quedaron verificados; Lovable fue retirado después de la confirmación destructiva.
 
 ### Centro de mando freelance
 
@@ -116,7 +118,7 @@
 
 | Hecho | Evidencia | Fecha |
 |---|---|---|
-| El repositorio está en la rama `codex/sumi-operational-hardening` y el último commit local es `a1bf1de` (`fix: preserve content visuals and filter consumption categories`). | `git status --short --branch`, `git log` y `git remote -v`. | 2026-08-24 |
+| **[Superseded]** El repositorio estaba en `a1bf1de` antes de la integración y despliegue final. | Historial Git preservado. | 2026-08-24 |
 | La cuenta propietaria de GitHub fue renombrada a `N1ckas1o`; el remoto local usa `https://github.com/N1ckas1o/scan-and-earn-buddy.git` y conserva permisos `ADMIN`. | Confirmación de GitHub, `gh api user`, `gh repo view` y configuración Git local. | 2026-08-25 |
 | El árbol de trabajo conserva cambios de producto y documentación, pero la revisión del staging de entrega excluye explícitamente `skills/`, `skills-lock.json` y `graphify-out/` no relacionados. | `git status --short` y revisión del staging de entrega. | 2026-08-24 |
 | El paquete declara comandos `build`, `audit:ui`, `smoke:ui`, `check:supabase`, comprobaciones de live sync/onboarding/cliente y preparación de cliente. | `package.json`. | 2026-08-24 |
@@ -136,41 +138,41 @@
 | El procesamiento de Graphify registrado consumió 247.799 tokens de entrada y 51.385 de salida sobre 325 archivos en el run guardado. | `graphify-out/cost.json`. | 2026-08-24 |
 | El brief de analítica recomienda una sección `Estadísticas`, separada del Inicio operativo, y limita el primer lanzamiento a consumos registrados; enumera correcciones de veracidad, RPC agregado y futura separación de ledger de pedidos/POS. | `docs/ANALYTICS_BRIEF.md`, estado “borrador para revisión”. | 2026-08-24 |
 | El brief de portabilidad concluye que la exportación white-label aún es semiautomática; identifica configuración por negocio, build aislado, assets por tenant, esquema versionado, export/import y prohibición de secretos/PII en el paquete. | `docs/BUSINESS_PORTABILITY.md`, estado “propuesta para revisión”. | 2026-08-24 |
-| La migración `20260824000100_audited_reward_redemptions.sql` añade `reward_redemption_events`, triggers de historial inmutable, cola para staff, RPC estricto con `expected_status`, bloqueo de `requested → redeemed`, restricción de cancelación para employee, reposición de stock/puntos al cancelar y wrapper seguro para el RPC legado. | Archivo local `supabase/migrations/20260824000100_audited_reward_redemptions.sql`; aún no aplicado al proyecto remoto. | 2026-08-24 |
-| La implementación local de empleado/canjes está completada: la UI consulta la cola del staff, muestra acciones de aprobar/entregar, pide confirmación con cliente/premio/puntos/acción, usa `manage_reward_redemption_status_v2` y representa historial/actor de transición. | `app.js`, funciones `loadStaffRedemptionQueue`, `renderStaffWorkspace`, `updateRedemptionStatus` y `redemptionActivityDetail`, más `index.html`/`styles.css`; auditorías estáticas, build y smoke aislado completo pasan; la migración todavía no fue aplicada remotamente. | 2026-08-24 |
-| La revisión previa al commit no identificó P0 ni P1 locales; el único P1 pendiente es remoto y depende de aplicar/validar la migración en Supabase. | Revisión precommit reportada por el root y estado de la migración remota. | 2026-08-24 |
+| La migración `20260824000100_audited_reward_redemptions.sql` añade `reward_redemption_events`, triggers de historial inmutable, cola para staff, RPC estricto con `expected_status`, bloqueo de `requested → redeemed`, restricción de cancelación para employee, reposición de stock/puntos al cancelar y wrapper seguro para el RPC legado. | Migración local aplicada al proyecto remoto Sumi y resultado persistido en `supabase/verification/20260824000100_audited_reward_redemptions_postflight.result.json`. | 2026-08-25 |
+| La implementación de empleado/canjes está completada: la UI consulta la cola del staff, muestra acciones de aprobar/entregar, pide confirmación con cliente/premio/puntos/acción, usa `manage_reward_redemption_status_v2` y representa historial/actor de transición. | `app.js`, `index.html`, `styles.css`; auditorías, build, smoke aislado, apply remoto y postflight pasan. | 2026-08-25 |
+| La revisión final no identificó P0 ni P1 abiertos; el riesgo remoto fue cerrado por apply transaccional y postflight. | Revisión precommit, auditorías y evidencia remota persistida. | 2026-08-25 |
 | La auditoría estática de canjes pasó sus 16 invariantes y la auditoría UI pasó 153 controles; el build principal y onboarding terminó correctamente con un warning no bloqueante sobre el script clásico de configuración. | Salidas registradas de `npm run audit:redemptions`, `npm run audit:ui` y `npm run build` del 2026-08-24. | 2026-08-24 |
 | El smoke aislado actual levanta `127.0.0.1:4178` con `VITE_DISABLE_REMOTE=true`, comprueba `remoteDisabled` y `hasSupabase`, completa el flujo y cierra el listener; la inicialización sin Supabase evita el bucle de microtareas al marcar `loaded=true`. | Salida verificada de `npm run smoke:ui` y corrección local de la inicialización. | 2026-08-24 |
 | El preflight agregado se ejecutó en Supabase Sumi: 2 canjes aprobados, sin actores huérfanos, clientes cruzados/faltantes, duplicados, contextos grandes ni claves reservadas. Los RPC nuevos siguen ausentes, como corresponde antes de la migración. | CSV exportado del SQL Editor y `supabase/verification/20260824000100_audited_reward_redemptions_preflight.sql`. | 2026-08-25 |
 | El preflight mostró privilegios directos amplios, incluido `TRUNCATE`, para `anon` y `authenticated`; la migración fue corregida para usar `REVOKE ALL PRIVILEGES` y luego conceder únicamente `SELECT` a `authenticated`. La auditoría local volvió a pasar sus 16 invariantes. | Grants del preflight, migración corregida y salida de `npm run audit:redemptions`. | 2026-08-25 |
 | El visor responsive de desarrollo permite alternar Teléfono, Tablet y Escritorio y no forma parte del artefacto de producción `dist`. | `dev-preview.html` y verificación de exclusión del build. | 2026-08-24 |
-| El runbook de despliegue recuperable fue creado y todavía no se ejecutó. | `docs/DEPLOYMENT_RUNBOOK.md`; no hubo importación Vercel, deployment, cambio DNS ni retirada de Lovable en este checkpoint. | 2026-08-24 |
+| **[Superseded]** El runbook de despliegue recuperable se creó inicialmente sin ejecutar. | Estado histórico anterior al checkpoint de entrega del 2026-08-25. | 2026-08-24 |
 | El baseline público read-only observado para rollback es `sumi.business` A `147.93.37.70` TTL `1800` y `www.sumi.business` CNAME a `sumi.business` TTL `300`; HTTPS respondió `200`, con título `Sumi Menu Admin`, servidor `LiteSpeed`, CSP sólo `upgrade-insecure-requests` y sin HSTS/`Cache-Control` observados. | Verificación pública read-only del 2026-08-24; no se ingresó a Hostinger ni se modificó DNS. | 2026-08-24 |
 | La consulta pública observó nameservers `horizon.dns-parking.com` y `orbit.dns-parking.com` con TTL aproximado `86400`, y no observó registros públicos `MX`, `TXT` ni `CAA`; no se deben cambiar nameservers completos y el cutover debe limitarse a registros web. | Verificación DNS read-only del 2026-08-24; no se ingresó a Hostinger ni se modificó DNS. | 2026-08-24 |
 | El bundle público observado es `assets/index-DqzCP29E.js` (`359320` bytes) y no contiene `manage_reward_redemption_status_v2` ni `employee-workspace`; producción sigue sirviendo la versión anterior, no el flujo local auditado. | Inspección pública read-only del bundle servido el 2026-08-24; no se registran hashes ni se infiere proveedor adicional. | 2026-08-24 |
 | Hostinger muestra como dominio registrado exacto `sumi.business`. | Verificación visual de la cuenta Hostinger durante la sesión actual. | 2026-08-24 |
 | `https://sumi.business` carga actualmente `Sumi Menu Admin` y presenta selector de idioma. | Verificación de navegación en navegador durante la sesión actual. | 2026-08-24 |
-| Vercel muestra únicamente el proyecto `sumi-onboarding`; su deployment de producción figura `Ready`, tiene como origen `vercel deploy`, sirve `onboarding.sumi.business` y no posee repositorio Git conectado. | Verificación read-only del overview y la sección Production Deployment de Vercel durante la sesión actual. | 2026-08-24 |
+| **[Superseded]** Vercel mostraba únicamente `sumi-onboarding` antes de crear el proyecto principal `sumi`. | Estado histórico anterior al deployment principal. | 2026-08-24 |
 | `https://onboarding.sumi.business` carga `Onboarding \| Sumi` y exige un enlace privado para continuar. | Verificación de navegación en navegador durante la sesión actual. | 2026-08-24 |
 | El dashboard visible de Supabase figura como `Sumi`. | Verificación visual del dashboard de Supabase durante la sesión actual. | 2026-08-24 |
 | El repositorio público de GitHub es `N1ckas1o/scan-and-earn-buddy`, su rama por defecto es `main` y `codex/sumi-operational-hardening` está publicada en el commit local actual. | Salidas verificadas de `gh repo view`, `git push` y `git ls-remote`; no implica que la rama de trabajo haya sido fusionada. | 2026-08-25 |
 | `docs/FREELANCE_COMMAND_CENTER.md` fue creado y contiene una arquitectura versionada para el centro de mando freelance, onboarding y credenciales protegidas. | Archivo local leído tras la creación. | 2026-08-24 |
-| Lovable contiene el proyecto `Sumi-Test`, muestra actividad sincronizada desde GitHub y cambios sin publicar; su URL propia es `proyecto-gastronomia.lovable.app` y no tiene `sumi.business` conectado como dominio personalizado. No se retiró ni modificó. | Verificación read-only del proyecto y de Settings → Domains en Lovable durante la sesión actual. | 2026-08-24 |
+| **[Superseded]** Lovable contenía `Sumi-Test` antes del cutover. Fue eliminado el 2026-08-25 tras confirmación explícita y su URL devuelve `404`. | Verificación del dashboard y de la URL pública después de la retirada. | 2026-08-25 |
 
 ## Supuestos y preguntas
 
 | Elemento | Impacto | Estado |
 |---|---|---|
-| **Supuesto resuelto:** el dominio que debe conectarse es `sumi.business`. | Cambiar DNS sobre otro dominio sería una mutación equivocada. | Resuelto: Hostinger muestra exactamente `sumi.business`; aún no se modificaron registros DNS. |
+| **Supuesto resuelto:** el dominio que debe conectarse es `sumi.business`. | Cambiar DNS sobre otro dominio sería una mutación equivocada. | Resuelto y aplicado: Hostinger/Vercel sirven apex y `www`. |
 | **Pregunta:** ¿el proyecto GitHub debe conservar el nombre histórico `scan-and-earn-buddy` o renombrarse también a Sumi? | Afecta URL remota, importación en Vercel y enlaces de entrega. | Pendiente del usuario/root; no inferir a partir del renombrado de Supabase. |
-| **Pregunta resuelta parcialmente:** ¿la migración de canjes que agrega historial/estado estricto ya fue escrita y en qué archivo? | Sin esa evidencia no puede validarse ni aplicarse en Supabase. | Resuelto localmente: existe `supabase/migrations/20260824000100_audited_reward_redemptions.sql`; falta auditoría estática, validación y aplicación remota. |
-| **Contrato local pendiente de verificación remota:** ¿qué roles pueden aprobar, entregar o cancelar cada transición? | Debe coincidir entre matriz de negocio, UI, RPC y RLS; evita falsos positivos y abusos. | La migración/UI local definen employee para aprobar/entregar y owner/manager para cancelar; falta confirmar después de apply y pruebas. |
-| **Decisión local:** ¿un empleado puede marcar `redeemed` o sólo aprobar? | Cambia la máquina de estados y el riesgo de entrega/doble toque. | Implementación local permite aprobar y entregar con confirmación; employee no puede cancelar. Requiere validación remota. |
+| **Pregunta resuelta:** ¿la migración de canjes que agrega historial/estado estricto ya fue escrita y aplicada? | Sin esa evidencia no podía validarse Supabase. | Resuelto: migración aplicada; postflight persistido en `supabase/verification/20260824000100_audited_reward_redemptions_postflight.result.json`. |
+| **Contrato verificado:** ¿qué roles pueden aprobar, entregar o cancelar cada transición? | Debe coincidir entre matriz de negocio, UI, RPC y RLS. | Employee puede aprobar/entregar; owner/manager pueden cancelar; RPC estricto y RLS aplicados. |
+| **Decisión resuelta:** ¿un empleado puede marcar `redeemed` o sólo aprobar? | Cambia la máquina de estados y el riesgo de doble toque. | Puede aprobar y entregar con confirmación; no puede cancelar. |
 | **Pregunta:** ¿la corrección de un monto mal cargado debe requerir motivo, vista previa y/o segunda aprobación? | Afecta reversibilidad y auditoría de puntos. | La UI actual exige motivo para ajuste manual del owner; el flujo final de canjes debe documentar la regla. |
-| **Supuesto:** la sustitución Vercel debe quedar verificada antes de borrar/despublicar Lovable. | Evita pérdida de servicio y facilita recuperación. | Decisión operativa vigente; `sumi-onboarding` sigue sin repo Git conectado y Lovable permanece disponible en su URL propia, sin controlar `sumi.business`. |
-| **Pregunta de despliegue:** ¿cuál es el proyecto Vercel final que recibirá el repositorio Sumi? | Evita publicar sobre `sumi-onboarding` u otro tenant por error. | Pendiente de confirmación del root/usuario; el runbook exige importar con root `.` y registrar el proyecto exacto. |
-| **Supuesto operativo:** los valores de Preview/Production deben usar sólo el Supabase Sumi reconciliado y la publishable key; nunca `service-role`. | Una variable equivocada puede apuntar al proyecto histórico o exponer privilegios. | Regla adoptada en `docs/DEPLOYMENT_RUNBOOK.md`; valores aún no cargados ni verificados en Vercel. |
-| **Pregunta de DNS:** ¿qué registros exactos muestra Vercel para `sumi.business` en el proyecto final? | Evita adivinar A/CNAME/ALIAS o mutar otro dominio. | Pendiente: copiar y registrar sólo la salida de Vercel después de verificar el preview; Hostinger aún no fue modificado. |
+| **Supuesto resuelto:** la sustitución Vercel debía verificarse antes de borrar Lovable. | Evitó pérdida de servicio y preservó recuperación. | Cumplido; Lovable se eliminó sólo tras HTTPS/Auth/QR y DNS verificados. |
+| **Pregunta de despliegue resuelta:** ¿cuál es el proyecto Vercel final? | Evitó publicar sobre `sumi-onboarding`. | Proyecto `sumi`, root `.`, deployment `dpl_3aUFQh6Sh5CdmNFuDE885ZavR4WZ`. |
+| **Supuesto operativo verificado:** Preview/Production usan sólo el Supabase Sumi y variables públicas; nunca `service-role`. | Evita privilegios en frontend. | Cuatro variables públicas presentes; sin service-role. |
+| **Pregunta de DNS resuelta:** ¿qué registros exactos usa `sumi.business`? | Evitó mutar el dominio equivocado. | Apex `A 216.198.79.1` + `A 64.29.17.1`; `www CNAME 9d64cae00ee33f78.vercel-dns-017.com`. |
 | **Pregunta:** ¿qué parte del centro de mando será MVP local y qué parte quedará sólo diseñada? | Evita declarar “listo” un sistema que sólo tiene un brief. | Pendiente del root después del informe de arquitectura freelance. |
 | **Supuesto de seguridad:** referencias/alias a credenciales son compartibles; secretos, cookies, contraseñas y claves privadas no. | Un agente puede necesitar contexto sin recibir material de autenticación. | Decisión adoptada; requiere diseño/implementación de broker o ejecución privilegiada del root. |
 | **Pregunta:** ¿qué jurisdicción y entidades legales deben regir términos y políticas de los clientes? | El consultor legal no puede redactar documentos finales válidos sin jurisdicción y datos reales. | Fuera de la integración técnica inmediata; pendiente de brief legal. |
@@ -207,22 +209,22 @@
 
 ## Criterios de aceptación
 
-- [ ] El flujo de canjes sólo permite transiciones válidas y rechaza `requested → redeemed` sin aprobación/entrega definida.
-- [ ] Una aprobación/entrega/cancelación requiere confirmación explícita en la UI, es idempotente ante doble toque y muestra cliente, premio, puntos y actor.
-- [ ] La base conserva un historial append-only por transición con actor, rol, estado anterior/nuevo, fecha y motivo/contexto; no depende sólo de sobrescribir el último actor.
-- [ ] Owner, manager, employee y customer tienen permisos verificables en RLS/RPC coherentes con la matriz; el employee no puede ajustar o quitar puntos arbitrariamente.
-- [ ] Existe una sección de dueño/manager que permite revisar correcciones, estado y qué cuenta realizó cada acción.
-- [ ] Las migraciones nuevas y existentes se validan de forma estática y se aplican al proyecto Supabase correcto después de la aprobación necesaria; la evidencia incluye nombre/ref reconciliados y resultado.
-- [ ] El build de Sumi carga el tenant/config correcto, sin secretos, PII ni identidad accidental de otro cliente.
-- [ ] El commit final contiene sólo archivos revisados y el push al remoto queda confirmado; cualquier cambio de skills/Graphify no relacionado se separa o se documenta.
-- [ ] Vercel sirve el build verificado; el dominio exacto se conecta desde Hostinger con registros comprobados y HTTPS/redirect verificados.
-- [ ] El proyecto Vercel fue importado desde el commit aprobado con root `.`, Vite, `npm run build` y salida `dist`; Preview y Production tienen sólo las cuatro variables requeridas, sin `service-role`.
-- [ ] El preview y sus logs fueron verificados antes de agregar `sumi.business`; se registraron deployment ID, URL, registros DNS exactos, TTL y un deployment/dominio de rollback.
-- [ ] QR y Auth fueron comprobados en preview/producción con evidencia; el rollback de deployment y dominio está documentado y Lovable sólo se retira con confirmación destructiva final.
-- [ ] Lovable se retira únicamente después de documentar la URL Vercel/dominio, un camino de recuperación y una aprobación de acción destructiva en el momento de ejecutarla.
-- [ ] El centro de mando tiene brief/contexto por cliente, onboarding y referencias de credenciales; no contiene contraseñas, tokens de servicio, cookies ni claves privadas en texto plano.
-- [ ] El centro de mando documenta mínimo privilegio, rotación/revocación, auditoría y qué acciones requieren intervención del root/usuario.
-- [ ] Las pruebas ejecutadas tienen manifiesto, límites, limpieza, aprobación y resultado; sin aprobación se registra “no ejecutada”, no “pasó”.
+- [x] El flujo de canjes sólo permite transiciones válidas y rechaza `requested → redeemed` sin aprobación/entrega definida.
+- [x] Una aprobación/entrega/cancelación requiere confirmación explícita en la UI, es idempotente ante doble toque y muestra cliente, premio, puntos y actor.
+- [x] La base conserva un historial append-only por transición con actor, rol, estado anterior/nuevo, fecha y motivo/contexto; no depende sólo de sobrescribir el último actor.
+- [x] Owner, manager, employee y customer tienen permisos verificables en RLS/RPC coherentes con la matriz; el employee no puede ajustar o quitar puntos arbitrariamente.
+- [x] Existe una sección de dueño/manager que permite revisar correcciones, estado y qué cuenta realizó cada acción.
+- [x] Las migraciones nuevas y existentes se validaron y aplicaron al proyecto Supabase correcto; la evidencia incluye nombre/ref y postflight.
+- [x] El build de Sumi carga el tenant/config correcto, sin secretos, PII ni identidad accidental de otro cliente.
+- [x] El commit final contiene sólo archivos revisados y el push al remoto queda confirmado; los cambios de skills/Graphify no relacionados permanecen separados.
+- [x] Vercel sirve el build verificado; Hostinger usa los registros comprobados y HTTPS/redirect están verificados.
+- [x] El proyecto Vercel fue importado desde el commit aprobado con root `.`, Vite, `npm run build` y salida `dist`; Preview y Production tienen sólo las cuatro variables requeridas, sin `service-role`.
+- [x] El preview y sus logs fueron verificados antes de agregar `sumi.business`; se registraron deployment ID, URL, DNS, TTL y rollback.
+- [x] QR y Auth fueron comprobados en producción; el rollback está documentado y Lovable se retiró sólo con confirmación destructiva final.
+- [x] Lovable se retiró después de documentar URL Vercel/dominio, recuperación y aprobación destructiva.
+- [x] El centro de mando tiene brief/contexto por cliente, onboarding y referencias de credenciales sin secretos en texto plano.
+- [x] El centro de mando documenta mínimo privilegio, rotación/revocación, auditoría e intervención del root/usuario.
+- [x] Las pruebas ejecutadas tienen manifiesto, límites, limpieza, aprobación y resultado; lo no autorizado figura como no ejecutado.
 
 ## Estado de trabajo
 
@@ -235,12 +237,12 @@
 | Arquitectura del centro freelance | `freelance_stack_architect` + `documenter` | Arquitectura reusable creada y registrada; implementación del MVP aún pendiente | `docs/FREELANCE_COMMAND_CENTER.md` | Brief/ledger y decisión MVP |
 | UI/UX y responsive admin/empleado | Especialistas globales / root | Flujo de empleado validado localmente; visor `dev-preview.html` terminado para Teléfono/Tablet/Escritorio; aceptación de producción pendiente | `app.js`, `index.html`, `styles.css`, `dev-preview.html` | Validación remota y revisión final de despliegue |
 | Supabase/RLS/migraciones | Root + especialista de datos | Migración aplicada a Sumi mediante Management API dentro de `BEGIN/COMMIT`; postflight confirma cobertura completa, RLS/RPC y cero grants inseguros | `supabase/migrations/**`, `supabase/config.toml`, `supabase/verification/**` | Validación funcional desde el build desplegado |
-| Runbook de despliegue recuperable | `documenter` + root | Ejecutado hasta el cutover verificable; rollback preservado | `docs/DEPLOYMENT_RUNBOOK.md`, este ledger y evidencia externa | Decisión final sobre Lovable |
+| Runbook de despliegue recuperable | `documenter` + root | Ejecutado y cerrado; rollback preservado | `docs/DEPLOYMENT_RUNBOOK.md`, este ledger y evidencia externa | Ninguna |
 | Graphify | Graphify/Documenter | Grafo local generado y diagnosticado; posible actualización posterior si cambia el código | `graphify-out/**` | Decidir si actualizar después del merge; requiere registrar costo |
-| GitHub commit/push | Root | `main` y rama operativa publicadas hasta `a73d925`; cambios ajenos de skills/Graphify permanecen fuera | Archivos relevantes del worktree | Publicar sólo este cierre documental |
-| Vercel | Root | Proyecto `sumi` conectado a GitHub; Production `dpl_3aUFQh6Sh5CdmNFuDE885ZavR4WZ`, cuatro variables públicas, sin service-role, dominios verificados y certificados válidos | Configuración externa + `.vercelignore` | Decisión final sobre Lovable |
+| GitHub commit/push | Root | `main` publicado en `a73d925`; rama operativa publicada con el cierre documental; cambios ajenos de skills/Graphify permanecen fuera | Archivos relevantes del worktree | Ninguna |
+| Vercel | Root | Proyecto `sumi` conectado a GitHub; Production `dpl_3aUFQh6Sh5CdmNFuDE885ZavR4WZ`, cuatro variables públicas, sin service-role, dominios verificados y certificados válidos | Configuración externa + `.vercelignore` | Ninguna |
 | Hostinger/DNS | Root | Cutover completado: dos `A` de Vercel, `www` por CNAME, AAAA antiguo retirado; registros de correo/onboarding/FTP preservados | Configuración externa | Ninguna para la disponibilidad actual |
-| Lovable | Root | Proyecto histórico observado como `Sumi-Test`; no retirar | Configuración externa | Sustitución recuperable + aprobación inmediata |
+| Lovable | Root | Proyecto histórico `Sumi-Test` eliminado tras confirmación explícita; ya no figura en el dashboard y su URL responde 404 | Configuración externa | Ninguna |
 
 ## Manifiestos de pruebas y costos
 
@@ -255,13 +257,14 @@
 | Aplicar migración auditada en Supabase | Escritura de esquema, funciones y RLS; sin Storage | Proyecto Sumi verificado; una ejecución mediante Management API; transacción `BEGIN/COMMIT`; postflight sólo lectura | Concedida por el usuario para continuar sin reconfirmaciones rutinarias | PASS: 2 canjes y 2 eventos, cobertura completa; 0 grants inseguros, duplicados, estados inválidos, cruces de tenant o claves reservadas |
 | Actualizar Graphify | Escritura local de grafo/cache; costo de tokens | Declarar archivos incluidos, temporales, retención y costo estimado; no indexar secretos | Requiere manifiesto si vuelve a ejecutarse | Estado actual preservado; no relanzado |
 | Deploy Vercel / conectar DNS Hostinger | Mutaciones externas y publicación | Proyecto `sumi`, root `.`, Vite/build `dist`, cuatro variables públicas; no borrar Lovable | Usuario autorizó los cuatro cambios DNS exactos; retirada permanece separada | PASS: DNS propagado, HTTPS/certificados/HSTS y bundle actual verificados en apex y `www`; registros no web preservados |
+| Retirar Lovable | Eliminación irreversible del proyecto histórico `Sumi-Test` | Sólo después de verificar Vercel, dominio, HTTPS, Auth/QR y rollback | Confirmación destructiva explícita del usuario | PASS: proyecto eliminado del dashboard; URL anterior responde `404`; GitHub/Vercel y rollback DNS preservados |
 
 ## Evidencias y entrega
 
 - **Informes:** [brief de analítica](docs/ANALYTICS_BRIEF.md), [propuesta de portabilidad](docs/BUSINESS_PORTABILITY.md), [arquitectura del centro de mando freelance](docs/FREELANCE_COMMAND_CENTER.md), `ADMIN_PANEL.md`, `graphify-out/GRAPH_REPORT.md`.
 - **Despliegue:** proyecto Vercel `sumi` creado desde el commit aprobado. `sumi-pearl.vercel.app`, `https://sumi.business/` y `https://www.sumi.business/` responden 200 con HTTPS/HSTS y sirven el bundle actual. En producción se verificaron el menú, la sesión Auth existente y la generación visual del QR sin escrituras remotas.
 - **Grafo y salud:** `graphify-out/graph.json`, `graphify-out/GRAPH_HEALTH.json`, `graphify-out/manifest.json`, `graphify-out/cost.json`, `graphify-out/graph.html`.
-- **Supabase:** proyecto remoto Sumi confirmado por CLI. `20260824000100_audited_reward_redemptions.sql` se aplicó transaccionalmente mediante Management API. El postflight agregado confirmó cuatro columnas, constraints, índices, triggers, RLS y RPC; 2/2 canjes tienen evento de auditoría y no existen grants directos inseguros.
+- **Supabase:** proyecto remoto Sumi confirmado por CLI. `20260824000100_audited_reward_redemptions.sql` se aplicó transaccionalmente mediante Management API. El resultado persistido en `supabase/verification/20260824000100_audited_reward_redemptions_postflight.result.json` confirma cuatro columnas, constraints, índices, triggers, RLS y RPC; 2/2 canjes tienen evento de auditoría y no existen grants directos inseguros.
 - **Pruebas:** `audit:ui` (153) y `audit:redemptions` (16) pasan; build principal/onboarding pasa; smoke aislado completo pasa con Supabase desactivado. Identidad, preflight, apply transaccional y postflight remoto de Supabase están verificados.
-- **Riesgos residuales:** los dos eventos históricos tienen rol `unknown` porque preceden al nuevo registro de identidad; los eventos futuros capturan actor/rol. Lovable todavía no se retiró y la caché DNS local de Windows puede conservar temporalmente la IP anterior aunque los servidores autoritativos y resolvers públicos ya estén actualizados. Persisten cambios ajenos de skills/`graphify-out/` que deben quedar fuera del commit.
-- **Recomendación de entrega:** publicar este cierre documental sin incluir cambios ajenos y, con la sustitución recuperable ya verificada, decidir la retirada destructiva del proyecto histórico de Lovable. El root debe actualizar el objetivo oficial; el `documenter` no lo crea ni lo modifica.
+- **Riesgos residuales:** los dos eventos históricos tienen rol `unknown` porque preceden al nuevo registro de identidad; los eventos futuros capturan actor/rol. La caché intermedia observada agotó su TTL y la resolución normal de este equipo ya devuelve las dos IP de Vercel. Persisten cambios ajenos de skills/`graphify-out/` que deben quedar fuera del commit.
+- **Entrega:** publicar este cierre documental sin incluir cambios ajenos y conservar como rollback los valores DNS anteriores y el deployment estable. La auditoría requisito por requisito quedó completada.

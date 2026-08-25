@@ -1,15 +1,16 @@
 # Runbook de despliegue recuperable — Sumi
 
-> Estado del documento: procedimiento aprobado para revisión; no ejecutado en
-> este checkpoint. El agente raíz coordina las mutaciones externas y obtiene
-> las aprobaciones necesarias. No contiene secretos ni valores de `.env`.
+> Estado del documento: ejecutado y verificado el 2026-08-25. Sumi está en
+> Vercel, `sumi.business` y `www.sumi.business` sirven el build aprobado por
+> HTTPS, y el proyecto histórico de Lovable fue retirado tras confirmación
+> destructiva explícita. No contiene secretos ni valores de `.env`.
 
 ## Objetivo y límites
 
 Publicar Sumi desde el repositorio aprobado en Vercel, verificar primero un
 preview recuperable y conectar `sumi.business` sólo con los registros exactos
-que Vercel muestre para ese proyecto. Lovable se conserva durante todo el
-cutover y sólo puede retirarse después de una confirmación destructiva final.
+que Vercel muestre para ese proyecto. Esa secuencia se completó; Lovable se
+conservó durante el cutover y se retiró sólo después de la confirmación final.
 
 Este runbook cubre el sitio Sumi en la raíz del repositorio. `scripts/build.mjs`
 genera `dist` para el sitio principal y `dist-onboarding` para el artefacto de
@@ -39,12 +40,12 @@ completos ni alterar registros no relacionados por inferencia.
 
 ## Puertas previas
 
-- [ ] El root/usuario aprobó el commit exacto y el push que se va a desplegar.
-- [ ] El diff fue revisado; no se despliega un árbol sucio ni archivos de otro cliente.
-- [ ] El destino Supabase, su URL y su project ref fueron reconciliados con Sumi.
-- [ ] Las variables de Vercel se cargarán por entorno y sin `service_role`, claves secretas, cookies ni credenciales en el bundle.
-- [ ] Existe un despliegue conocido como recuperación y se conservará su ID/URL.
-- [ ] El dominio de Hostinger y el proyecto `sumi.business` fueron confirmados; no se modifica DNS por inferencia.
+- [x] El root/usuario aprobó el commit exacto y el push desplegado.
+- [x] El diff fue revisado; los cambios ajenos de skills/Graphify quedaron fuera.
+- [x] El destino Supabase, su URL y su project ref fueron reconciliados con Sumi.
+- [x] Vercel recibió sólo las cuatro variables públicas previstas; no se configuró `service_role`.
+- [x] Existe un deployment recuperable y se registró su ID/URL.
+- [x] El dominio de Hostinger y el proyecto `sumi.business` fueron confirmados antes de modificar DNS.
 
 El `.env` local se preserva para el entorno local, pero fue retirado del
 tracking; `.gitignore` excluye `.env`, `.env.local` y `.env.*.local`. El archivo
@@ -158,41 +159,44 @@ Cuando Vercel indique el dominio listo:
 1. Si producción falla tras el cambio DNS, restaurar en Hostinger los registros
    web exactos y el TTL previamente documentados; el baseline read-only de esta
    sección sirve como referencia anterior, sujeto a confirmación autoritativa.
-2. Mantener el deployment anterior y Lovable disponibles mientras se propaga
-   el rollback; registrar timestamps y estado observado.
+2. Mantener el deployment anterior disponible mientras se propaga el rollback;
+   Lovable ya no está disponible después de su retirada confirmada.
 3. No borrar el dominio de Vercel ni el proyecto anterior hasta que el root y el
    usuario confirmen que la recuperación quedó estable.
 
 ## Retirada de Lovable
 
-Lovable se conserva durante preview, cutover, validación HTTPS/QR/Auth y el
-período de observación acordado. Sólo se puede retirar cuando:
+Lovable se conservó durante preview, cutover y validación HTTPS/QR/Auth. Se
+retiró el 2026-08-25 sólo después de comprobar que:
 
 - producción en Vercel y `sumi.business` están verificados;
 - deployment ID, DNS, rollback y URL recuperable están registrados;
 - el root presenta la acción concreta y obtiene confirmación destructiva final
   del usuario en ese momento.
 
-Sin esa confirmación, el estado correcto es “Lovable conservado”.
+La confirmación destructiva fue explícita. El proyecto `Sumi-Test` fue eliminado
+y `https://proyecto-gastronomia.lovable.app/` responde `404`. La eliminación no
+es reversible dentro de Lovable; la recuperación conservada es GitHub + Vercel
+y el rollback DNS documentado.
 
 ## Registro de entrega
 
-Completar después de una ejecución autorizada:
+Resultado de la ejecución autorizada:
 
 | Campo | Valor |
 |---|---|
-| Commit aprobado / rama | Pendiente |
-| Proyecto Vercel / root | Pendiente / `.` |
-| Preview URL / deployment ID | Pendiente |
-| Production URL / dominio | Pendiente / `https://sumi.business/` |
+| Commit aprobado / rama | `a73d925` / `main` (cierre documental posterior en `codex/sumi-operational-hardening`) |
+| Proyecto Vercel / root | `sumi` / `.` |
+| Production alias / deployment ID | `https://sumi-pearl.vercel.app/` / `dpl_3aUFQh6Sh5CdmNFuDE885ZavR4WZ` |
+| Production URL / dominio | `https://sumi.business/` y `https://www.sumi.business/` |
 | Baseline público read-only / rollback | Apex A `147.93.37.70` TTL `1800`; WWW CNAME `sumi.business` TTL `300`; nameservers observados `horizon.dns-parking.com`/`orbit.dns-parking.com` (~`86400`) |
 | Variables presentes | Cuatro nombres requeridos; valores no se registran |
-| Registros Vercel → Hostinger | Pendiente; copiar exactamente |
-| TTL anterior / nuevo | Pendiente |
-| HTTPS, QR y Auth | Pendiente de validación autorizada |
-| Deployment de rollback | Pendiente |
-| Estado de Lovable | Conservado hasta confirmación destructiva |
-| Operador, fecha y aprobación | Pendiente |
+| Registros Vercel → Hostinger | Apex `A 216.198.79.1` + `A 64.29.17.1`; `www CNAME 9d64cae00ee33f78.vercel-dns-017.com` |
+| TTL anterior / nuevo | Apex `1800 → 300`; `www 300 → 300` |
+| HTTPS, QR y Auth | HTTPS/HSTS, menú, sesión Auth existente y render del QR verificados sin escrituras remotas |
+| Deployment de rollback | Historial de Vercel preservado; rollback DNS: apex `A 147.93.37.70`, `www CNAME sumi.business` |
+| Estado de Lovable | `Sumi-Test` eliminado con confirmación explícita; URL anterior responde `404` |
+| Operador, fecha y aprobación | Root + usuario / 2026-08-25 / autorizaciones registradas en la tarea |
 
 ## Fuentes oficiales
 

@@ -1,0 +1,86 @@
+{
+  "captured_at": "2026-08-25T12:18:48.005Z",
+  "source": "Approved read-only Supabase CLI postflight",
+  "source_call_id": "call_xMWmwbhUAbQ3nNhUHTp0Ti5b",
+  "project": "Sumi",
+  "project_ref": "zkjzbmwwzcsqrryaspxo",
+  "query": "supabase/verification/20260824000100_audited_reward_redemptions_postflight.sql",
+  "actor_role_distribution": [
+    {
+      "actor_role": "unknown",
+      "event_count": 2
+    }
+  ],
+  "coverage": {
+    "audit_event_rows": 2,
+    "redemption_rows": 2,
+    "redemptions_without_audit_event": 0
+  },
+  "cross_tenant_or_missing_customers": 0,
+  "duplicate_transitions": [],
+  "invalid_statuses": [],
+  "open_rows_with_reserved_auto_cancel_key": 0,
+  "unsafe_table_grants": 0,
+  "columns": [
+    "requested_by_auth_user_id",
+    "requested_expires_at",
+    "status_updated_at",
+    "status_updated_by_auth_user_id"
+  ],
+  "constraints": [
+    "reward_redemption_events_actor_role_check",
+    "reward_redemption_events_business_id_fkey",
+    "reward_redemption_events_pkey",
+    "reward_redemption_events_redemption_id_fkey",
+    "reward_redemption_events_to_status_check",
+    "reward_redemptions_business_id_fkey",
+    "reward_redemptions_customer_id_fkey",
+    "reward_redemptions_pkey",
+    "reward_redemptions_points_cost_check",
+    "reward_redemptions_requested_by_auth_user_id_fkey",
+    "reward_redemptions_status_check",
+    "reward_redemptions_status_updated_by_auth_user_id_fkey"
+  ],
+  "indexes": [
+    "reward_redemption_events_business_idx",
+    "reward_redemption_events_pkey",
+    "reward_redemption_events_redemption_idx",
+    "reward_redemption_events_transition_uidx",
+    "reward_redemptions_expiration_idx",
+    "reward_redemptions_one_pending_reward_idx",
+    "reward_redemptions_pkey",
+    "reward_redemptions_staff_queue_idx"
+  ],
+  "table_grants": [
+    "authenticated: SELECT reward_redemption_events",
+    "authenticated: SELECT reward_redemptions"
+  ],
+  "routine_grants": [
+    "authenticated/postgres/service_role: EXECUTE get_reward_redemption_history",
+    "authenticated/postgres/service_role: EXECUTE get_staff_redemption_queue",
+    "authenticated/postgres/service_role: EXECUTE manage_reward_redemption_status",
+    "authenticated/postgres/service_role: EXECUTE manage_reward_redemption_status_v2"
+  ],
+  "security_definer_functions": [
+    "enforce_reward_redemption_integrity()",
+    "get_reward_redemption_history(target_business_id text)",
+    "get_staff_redemption_queue(target_business_id text, queue_status text)",
+    "manage_reward_redemption_status(target_business_id text, target_redemption_id uuid, next_status text)",
+    "manage_reward_redemption_status_v2(target_business_id text, target_redemption_id uuid, expected_status text, next_status text)",
+    "record_reward_redemption_event()",
+    "record_reward_redemption_transition()"
+  ],
+  "select_policies": [
+    "reward_redemption_events: Managers can read redemption history",
+    "reward_redemptions: Business managers can read business redemptions",
+    "reward_redemptions: Customers can read own redemptions"
+  ],
+  "integrity_triggers": [
+    "reward_redemption_events_no_update: BEFORE UPDATE/DELETE",
+    "enforce_active_customer_redemption: BEFORE INSERT",
+    "enforce_reward_redemption_integrity: BEFORE INSERT/UPDATE",
+    "reward_redemptions_record_initial_event: AFTER INSERT",
+    "reward_redemptions_record_transition: AFTER UPDATE"
+  ],
+  "interpretation": "The two historical audit events predate actor capture and therefore retain actor_role=unknown. Future transitions use the audited actor fields and append-only event history."
+}
