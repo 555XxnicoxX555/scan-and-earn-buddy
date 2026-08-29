@@ -10508,6 +10508,7 @@ categoryStrip.addEventListener("pointerdown", (event) => {
   categoryDragState = {
     pointerId: event.pointerId,
     startX: event.clientX,
+    startTime: performance.now(),
     lastX: event.clientX,
     lastTime: performance.now(),
     velocity: 0,
@@ -10539,8 +10540,12 @@ function endCategoryDrag(event) {
   if (!categoryDragState || event.pointerId !== categoryDragState.pointerId) return;
   const dragState = categoryDragState;
   if (dragState.moved) {
-    suppressCategoryClickUntil = performance.now() + 180;
-    const releaseVelocity = performance.now() - dragState.lastTime > 90 ? 0 : dragState.velocity;
+    const releaseTime = performance.now();
+    suppressCategoryClickUntil = releaseTime + 180;
+    const idleTime = releaseTime - dragState.lastTime;
+    const averageVelocity = -(event.clientX - dragState.startX) / Math.max(16, releaseTime - dragState.startTime);
+    const velocityBlend = dragState.velocity * 0.72 + averageVelocity * 0.28;
+    const releaseVelocity = velocityBlend * Math.max(0, 1 - idleTime / 260);
     if (event.type === "pointerup") startCategoryMomentum(releaseVelocity);
   }
   categoryDragState = null;
