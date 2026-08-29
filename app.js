@@ -1,6 +1,28 @@
 import { createClient } from "@supabase/supabase-js";
-import QRCode from "qrcode";
-import QrScanner from "qr-scanner";
+
+let qrCodeModuleRequest = null;
+let qrScannerModuleRequest = null;
+
+async function qrCodeToCanvas(canvas, value, options) {
+  qrCodeModuleRequest ||= import("qrcode")
+    .then((module) => module.default || module)
+    .catch((error) => {
+      qrCodeModuleRequest = null;
+      throw error;
+    });
+  const qrCode = await qrCodeModuleRequest;
+  return qrCode.toCanvas(canvas, value, options);
+}
+
+async function loadQrScanner() {
+  qrScannerModuleRequest ||= import("qr-scanner")
+    .then((module) => module.default || module)
+    .catch((error) => {
+      qrScannerModuleRequest = null;
+      throw error;
+    });
+  return qrScannerModuleRequest;
+}
 
 const businessConfig = window.SUMI_BUSINESS_CONFIG;
 
@@ -71,6 +93,12 @@ const localDevOwnerStorageKey = "sumi:dev-owner";
 const localDevEmployeeStorageKey = "sumi:dev-employee";
 const editorImageMaxSize = 1400;
 const editorImageQuality = 0.78;
+const editorImageMaxPixels = 36_000_000;
+const menuImagePublicBucket = "menu-images-public";
+const menuImageOriginalBucket = "menu-images-originals";
+const localMenuImageDbName = "sumi-menu-images";
+const localMenuImageDbVersion = 1;
+const localMenuImageStoreName = "originals";
 const aiCreditConfig = businessConfig.aiCredits || businessConfig.content?.aiCredits || {};
 const aiMonthlyCreditLimit = Math.max(1, Number(aiCreditConfig.monthlyLimit || 150));
 const aiGenerationCreditCost = Math.max(1, Number(aiCreditConfig.generationCreditCost || 2));
@@ -88,6 +116,13 @@ function serializedMenuItems() {
     brand: dish.brand,
     category: dish.category,
     photo: dish.photo,
+    photoOriginal: dish.photoOriginal || dish.highQualityPhoto || "",
+    photoOriginalName: dish.photoOriginalName || "",
+    photoOriginalType: dish.photoOriginalType || "",
+    photoOriginalSize: Number(dish.photoOriginalSize || 0),
+    photoOriginalStorageKey: dish.photoOriginalStorageKey || "",
+    photoStoragePath: dish.photoStoragePath || "",
+    photoOriginalStoragePath: dish.photoOriginalStoragePath || "",
     visible: dish.visible !== false,
     soldOut: Boolean(dish.soldOut),
     lastEditedAt: dish.lastEditedAt || "",
@@ -119,6 +154,13 @@ function applyMenuItemsState(items) {
       item.brand = savedItem.brand ?? item.brand;
       item.category = savedItem.category ?? item.category;
       item.photo = savedItem.photo ?? item.photo;
+      item.photoOriginal = savedItem.photoOriginal || savedItem.highQualityPhoto || item.photoOriginal || item.highQualityPhoto || "";
+      item.photoOriginalName = savedItem.photoOriginalName || item.photoOriginalName || "";
+      item.photoOriginalType = savedItem.photoOriginalType || item.photoOriginalType || "";
+      item.photoOriginalSize = Number(savedItem.photoOriginalSize || item.photoOriginalSize || 0);
+      item.photoOriginalStorageKey = savedItem.photoOriginalStorageKey || item.photoOriginalStorageKey || "";
+      item.photoStoragePath = savedItem.photoStoragePath || item.photoStoragePath || "";
+      item.photoOriginalStoragePath = savedItem.photoOriginalStoragePath || item.photoOriginalStoragePath || "";
       item.visible = savedItem.visible !== false;
       item.soldOut = Boolean(savedItem.soldOut);
       item.lastEditedAt = savedItem.lastEditedAt || item.lastEditedAt || "";
@@ -262,6 +304,8 @@ let selectedContentReferenceImage = "";
 let selectedContentBackgroundImage = "";
 let selectedContentBackgroundMode = "static";
 let generatedContentLibrary = loadContentLibrary();
+let adminContentDataLoading = false;
+let adminContentLoadToken = 0;
 let adminLibraryFilter = "all";
 let contentDraftOverride = { key: "", caption: "", hashtags: "" };
 let activeLibraryAssetId = "";
@@ -280,6 +324,7 @@ let loyaltySettings = {
   tierPlatinumPoints: 2000
 };
 let consumptionQrScanner = null;
+let consumptionScannerStartToken = 0;
 let activeConsumptionQrId = "";
 let activeConsumptionCustomer = null;
 let consumptionMode = "scan";
@@ -299,6 +344,9 @@ let editorAiBackgroundImage = "";
 let editorAiImprovedPhoto = "";
 let editorAiOriginalPhoto = "";
 let editorAiCompressedPhoto = "";
+let editorPendingOriginalPhoto = null;
+let editorPendingMenuPhotoBlob = null;
+let editorPendingPhotoDraftId = "";
 let homeRecentActivityItems = [];
 let activeActivityId = "";
 const homeRecentActivityPageSize = 3;
@@ -614,6 +662,8 @@ const translateButton = document.querySelector("#translateButton");
 const dishPhoto = document.querySelector("#dishPhoto");
 const dishPhotoInput = document.querySelector("#dishPhotoInput");
 const improvePhotoButton = document.querySelector("#improvePhotoButton");
+const downloadOriginalPhotoButton = document.querySelector("#downloadOriginalPhotoButton");
+const dishPhotoFormatStatus = document.querySelector("#dishPhotoFormatStatus");
 const addPresentationButton = document.querySelector("#addPresentationButton");
 const presentations = document.querySelector("#presentations");
 const brandSelect = document.querySelector("#brandSelect");
@@ -624,6 +674,7 @@ const soldOutButton = document.querySelector("#soldOutButton");
 const saveDishButton = document.querySelector("#saveDishButton");
 let lastSignupTrigger = null;
 let lastQrTrigger = null;
+let customerQrRenderToken = 0;
 let lastProfileTrigger = null;
 let signupMode = "register";
 const customerStorageKey = `sumi:loyalty:${businessId}:customerId`;
@@ -1516,7 +1567,7 @@ function resetContentGenerationState() {
   contentGenerationState = { status: "idle", result: null, error: "" };
 }
 
-function downloadFileNameFromUrl(url) {
+function downloadFileNameFromUrl(url, fallbackExtension = "png") {
   try {
     const pathname = new URL(url, window.location.href).pathname;
     const name = pathname.split("/").filter(Boolean).pop();
@@ -1524,27 +1575,52 @@ function downloadFileNameFromUrl(url) {
   } catch {
     // Use the generic name below.
   }
-  return `sumi-contenido-${Date.now()}.png`;
+  return `sumi-contenido-${Date.now()}.${fallbackExtension}`;
 }
 
-async function downloadAsset(url) {
-  if (!url) return;
-  const filename = downloadFileNameFromUrl(url);
+function sanitizedDownloadFileName(filename, fallbackExtension = "png") {
+  const normalized = String(filename || "")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ");
+  if (normalized && /\.[a-z0-9]+$/i.test(normalized)) return normalized;
+  return `${normalized || `sumi-imagen-${Date.now()}`}.${fallbackExtension}`;
+}
+
+function imageExtensionFromType(type, fallback = "png") {
+  const extensions = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/avif": "avif",
+    "image/gif": "gif"
+  };
+  return extensions[String(type || "").toLowerCase()] || fallback;
+}
+
+function triggerBlobDownload(blob, filename) {
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = sanitizedDownloadFileName(filename, imageExtensionFromType(blob.type));
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+}
+
+async function downloadAsset(url, preferredFilename = "") {
+  if (!url) return false;
   try {
     const response = await fetch(url, { mode: "cors" });
     if (!response.ok) throw new Error("No se pudo descargar la imagen.");
-    const blobUrl = URL.createObjectURL(await response.blob());
-    const link = document.createElement("a");
-    link.href = blobUrl;
-    link.download = filename;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    return;
+    const blob = await response.blob();
+    const filename = preferredFilename || downloadFileNameFromUrl(url, imageExtensionFromType(blob.type));
+    triggerBlobDownload(blob, filename);
+    return true;
   } catch {
     showToast("No se pudo descargar la imagen desde este origen.");
-    return;
+    return false;
   }
 }
 
@@ -2994,7 +3070,7 @@ async function renderCustomerQr() {
   qrError.textContent = "";
 
   try {
-    await QRCode.toCanvas(customerQrCanvas, customerQrPayload(customerId), {
+    const rendered = await renderCustomerQrCanvas(customerQrPayload(customerId), {
       width: 192,
       margin: 1,
       errorCorrectionLevel: "H",
@@ -3003,6 +3079,7 @@ async function renderCustomerQr() {
         light: "#ffffff"
       }
     });
+    if (!rendered) return;
     drawBusinessMarkOnQr(customerQrCanvas);
   } catch {
     qrError.textContent = label.qrError || "No se pudo generar el QR. Intenta de nuevo.";
@@ -3026,7 +3103,7 @@ async function openAdminCustomerQr(customerId, trigger = adminCustomerRows) {
   qrCustomerId.textContent = shortQrAlias(profile, account);
   qrError.textContent = "";
   try {
-    await QRCode.toCanvas(customerQrCanvas, customerQrPayload(qrId), {
+    const rendered = await renderCustomerQrCanvas(customerQrPayload(qrId), {
       width: 192,
       margin: 1,
       errorCorrectionLevel: "H",
@@ -3035,11 +3112,30 @@ async function openAdminCustomerQr(customerId, trigger = adminCustomerRows) {
         light: "#ffffff"
       }
     });
+    if (!rendered) return;
     drawBusinessMarkOnQr(customerQrCanvas);
   } catch {
     qrError.textContent = "No se pudo generar el QR. Intenta de nuevo.";
   }
   window.requestAnimationFrame(() => qrClose.focus());
+}
+
+async function renderCustomerQrCanvas(payload, options) {
+  const renderToken = ++customerQrRenderToken;
+  const context = customerQrCanvas?.getContext?.("2d");
+  context?.clearRect(0, 0, customerQrCanvas.width, customerQrCanvas.height);
+  customerQrCanvas?.setAttribute("aria-busy", "true");
+  try {
+    const pendingCanvas = document.createElement("canvas");
+    await qrCodeToCanvas(pendingCanvas, payload, options);
+    if (renderToken !== customerQrRenderToken || qrModal?.hidden) return false;
+    customerQrCanvas.width = pendingCanvas.width;
+    customerQrCanvas.height = pendingCanvas.height;
+    customerQrCanvas.getContext("2d")?.drawImage(pendingCanvas, 0, 0);
+    return true;
+  } finally {
+    if (renderToken === customerQrRenderToken) customerQrCanvas?.removeAttribute("aria-busy");
+  }
 }
 
 function drawBusinessMarkOnQr(canvas) {
@@ -3098,7 +3194,7 @@ function customerReferralLink() {
 async function downloadMenuQr() {
   try {
     const canvas = document.createElement("canvas");
-    await QRCode.toCanvas(canvas, publicMenuUrl(), {
+    await qrCodeToCanvas(canvas, publicMenuUrl(), {
       width: 720,
       margin: 2,
       errorCorrectionLevel: "H",
@@ -3288,7 +3384,7 @@ async function drawAdminQrPoster(canvas = adminQrPreview) {
   const theme = adminQrTheme();
   const style = adminQrStyle?.value || "editorial";
   const qrCanvas = document.createElement("canvas");
-  await QRCode.toCanvas(qrCanvas, publicMenuUrl(), {
+  await qrCodeToCanvas(qrCanvas, publicMenuUrl(), {
     width: Math.round(Math.min(width, height) * 0.48),
     margin: 2,
     errorCorrectionLevel: "H",
@@ -3630,26 +3726,32 @@ async function startConsumptionScanner() {
     if (consumptionScannerStatus) consumptionScannerStatus.textContent = "Camara no disponible. Pega el codigo QR abajo.";
     return;
   }
+  const startToken = ++consumptionScannerStartToken;
   consumptionScannerStatus.textContent = "Pidiendo permiso de camara...";
-  consumptionQrScanner = new QrScanner(
-    consumptionVideo,
-    (result) => handleConsumptionQrScan(result?.data || result),
-    {
-      preferredCamera: "environment",
-      highlightScanRegion: true,
-      returnDetailedScanResult: true,
-      maxScansPerSecond: 8
-    }
-  );
   try {
+    const QrScanner = await loadQrScanner();
+    if (startToken !== consumptionScannerStartToken || consumptionModal?.hidden) return;
+    consumptionQrScanner = new QrScanner(
+      consumptionVideo,
+      (result) => handleConsumptionQrScan(result?.data || result),
+      {
+        preferredCamera: "environment",
+        highlightScanRegion: true,
+        returnDetailedScanResult: true,
+        maxScansPerSecond: 8
+      }
+    );
     await consumptionQrScanner.start();
     consumptionScannerStatus.textContent = "Apunta la camara al QR del cliente.";
   } catch {
+    consumptionQrScanner?.destroy();
+    consumptionQrScanner = null;
     consumptionScannerStatus.textContent = "No se pudo abrir la camara. Pega el codigo QR abajo.";
   }
 }
 
 function stopConsumptionScanner() {
+  consumptionScannerStartToken += 1;
   if (!consumptionQrScanner) return;
   consumptionQrScanner.destroy();
   consumptionQrScanner = null;
@@ -4232,9 +4334,13 @@ function closedRewardRedemption(rewardId) {
 
 function showToast(message) {
   toast.textContent = message;
+  toast.dataset.state = "visible";
   toast.classList.add("show");
   window.clearTimeout(showToast.timeout);
-  showToast.timeout = window.setTimeout(() => toast.classList.remove("show"), 2200);
+  showToast.timeout = window.setTimeout(() => {
+    toast.classList.remove("show");
+    toast.dataset.state = "hidden";
+  }, 2200);
 }
 
 function openSignupModal(trigger = signupCta) {
@@ -4269,9 +4375,12 @@ function openQrModal(trigger = scanQrButton) {
 }
 
 function closeQrModal() {
+  customerQrRenderToken += 1;
   qrModal.hidden = true;
   document.body.classList.remove("qr-open");
   qrError.textContent = "";
+  customerQrCanvas?.removeAttribute("aria-busy");
+  customerQrCanvas?.getContext?.("2d")?.clearRect(0, 0, customerQrCanvas.width, customerQrCanvas.height);
   lastQrTrigger?.focus();
 }
 
@@ -4557,6 +4666,88 @@ function renderRecommendation() {
   `;
 }
 
+function setLoadingState(element, isLoading) {
+  if (!element) return;
+  element.toggleAttribute("aria-busy", isLoading);
+}
+
+function skeletonRowsMarkup(count = 4, label = "Cargando contenido") {
+  return `
+    <div class="ui-skeleton-stack" role="status" aria-label="${escapeAttribute(label)}">
+      ${Array.from({ length: count }, (_, index) => `
+        <div class="ui-skeleton-row" aria-hidden="true">
+          <span class="ui-skeleton ui-skeleton-thumb"></span>
+          <span class="ui-skeleton-copy">
+            <span class="ui-skeleton ui-skeleton-line is-wide"></span>
+            <span class="ui-skeleton ui-skeleton-line ${index % 2 ? "is-short" : ""}"></span>
+          </span>
+          <span class="ui-skeleton ui-skeleton-chip"></span>
+        </div>
+      `).join("")}
+      <span class="sr-only">${escapeHtml(label)}</span>
+    </div>
+  `;
+}
+
+function skeletonCardsMarkup(count = 4, label = "Cargando resumen") {
+  return `
+    <div class="ui-skeleton-card-grid" role="status" aria-label="${escapeAttribute(label)}">
+      ${Array.from({ length: count }, () => `
+        <article class="ui-skeleton-card" aria-hidden="true">
+          <span class="ui-skeleton ui-skeleton-line is-short"></span>
+          <span class="ui-skeleton ui-skeleton-metric"></span>
+          <span class="ui-skeleton ui-skeleton-line"></span>
+        </article>
+      `).join("")}
+      <span class="sr-only">${escapeHtml(label)}</span>
+    </div>
+  `;
+}
+
+function skeletonAssetsMarkup(count = 6, label = "Cargando biblioteca") {
+  return `
+    <div class="ui-skeleton-assets" role="status" aria-label="${escapeAttribute(label)}">
+      ${Array.from({ length: count }, (_, index) => `
+        <article class="ui-skeleton-asset" aria-hidden="true">
+          <span class="ui-skeleton ui-skeleton-asset-media ${index % 3 === 1 ? "is-vertical" : ""}"></span>
+          <span class="ui-skeleton ui-skeleton-line is-wide"></span>
+          <span class="ui-skeleton ui-skeleton-line is-short"></span>
+        </article>
+      `).join("")}
+      <span class="sr-only">${escapeHtml(label)}</span>
+    </div>
+  `;
+}
+
+function adminDataErrorMarkup(title, error = currentAdminData.error) {
+  return `
+    <div class="admin-empty admin-error-state" role="alert">
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(displayError(error))}</span>
+      <button class="outline" type="button" data-admin-retry-data="true">Reintentar</button>
+    </div>
+  `;
+}
+
+function renderPublicMenuSkeleton() {
+  hideAllSurfaces();
+  document.body.classList.add("menu-loading");
+  categoryTitle.textContent = "Cargando menu";
+  categoryCount.textContent = "";
+  categoryStrip.innerHTML = Array.from({ length: 4 }, () => `<span class="ui-skeleton ui-skeleton-filter" aria-hidden="true"></span>`).join("");
+  recommendedCard.disabled = true;
+  recommendedCard.classList.add("is-loading");
+  recommendedCard.removeAttribute("style");
+  recommendedCard.innerHTML = `
+    <span class="ui-skeleton ui-skeleton-badge" aria-hidden="true"></span>
+    <span class="ui-skeleton ui-skeleton-hero-title" aria-hidden="true"></span>
+    <span class="ui-skeleton ui-skeleton-hero-copy" aria-hidden="true"></span>
+    <span class="sr-only">Cargando producto destacado</span>
+  `;
+  setLoadingState(dishList, true);
+  dishList.innerHTML = skeletonRowsMarkup(5, "Cargando productos del menu");
+}
+
 function renderList() {
   const query = searchInput.value.trim().toLowerCase();
   const items = currentItems();
@@ -4575,6 +4766,10 @@ function renderList() {
   renderAdminPanel();
   updateHeader();
 
+  document.body.classList.remove("menu-loading");
+  recommendedCard.classList.remove("is-loading");
+  setLoadingState(dishList, false);
+
   categoryTitle.textContent = query ? labels[currentLang].results : localCategory(currentCategory);
   categoryCount.textContent = `${filtered.length} ${labels[currentLang].dishes}`;
 
@@ -4585,7 +4780,7 @@ function renderList() {
           const isPopular = dish.id === effectivePopularDishId(dish.brand);
           return `
             <button class="customer-dish-card ${soldOut ? "is-sold-out" : ""} ${isPopular ? "is-hot" : ""}" data-id="${escapeAttribute(dish.id)}" type="button">
-              <span class="customer-thumb" style="background-image:url('${dish.photo}')"></span>
+              <span class="customer-thumb"><img src="${escapeAttribute(dish.photo)}" alt="" loading="lazy" decoding="async" /></span>
               <span class="customer-info">
                 <strong>${escapeHtml(localName(dish))}</strong>
                 <small>${escapeHtml(localDescription(dish))}</small>
@@ -4694,7 +4889,8 @@ function renderAdminMenu() {
   if (!adminDishRows) return;
   const items = visibleAdminItems();
   adminMenuCount.textContent = items.length;
-  adminDishRows.innerHTML = items
+  adminDishRows.innerHTML = items.length
+    ? items
     .map((dish) => {
       const soldOut = isSoldOut(dish);
       const visible = isDishVisible(dish);
@@ -4704,23 +4900,23 @@ function renderAdminMenu() {
       const recommended = dish.id === effectiveRecommendedDishId();
       const popular = dish.id === effectivePopularDishId(dish.brand);
       return `
-      <div class="dish-row admin-dish-row ${visible ? "" : "is-hidden"} ${soldOut ? "is-sold-out" : ""}" data-admin-dish="${escapeAttribute(dish.id)}">
-        <span class="dish-title">
-          <span class="thumb" style="background-image:url('${dish.photo}')"></span>
+      <div class="dish-row admin-dish-row ${visible ? "" : "is-hidden"} ${soldOut ? "is-sold-out" : ""}" data-admin-dish="${escapeAttribute(dish.id)}" role="row">
+        <span class="dish-title" role="cell">
+          <span class="thumb"><img src="${escapeAttribute(dish.photo)}" alt="" loading="lazy" decoding="async" /></span>
           <span class="dish-name">${escapeHtml(dish.name)}</span>
         </span>
-        <span class="cell-muted">${escapeHtml(dish.category)}</span>
-        <span class="pill">${escapeHtml(dish.brand)}</span>
-        <span class="cell-muted">${escapeHtml(priceRange(dish))}</span>
-        <span class="status">${status}</span>
-        <span class="row-actions" aria-label="Acciones de ${escapeAttribute(dish.name)}">
-          <button class="icon-button ${recommended ? "is-active" : ""}" data-admin-row-action="recommend" type="button" aria-label="${recommended ? "Producto destacado" : "Destacar producto"} ${escapeAttribute(dish.name)}">
+        <span class="cell-muted" role="cell">${escapeHtml(dish.category)}</span>
+        <span class="pill ui-pill" role="cell">${escapeHtml(dish.brand)}</span>
+        <span class="cell-muted" role="cell">${escapeHtml(priceRange(dish))}</span>
+        <span class="status ui-pill" role="cell">${status}</span>
+        <span class="row-actions" role="cell" aria-label="Acciones de ${escapeAttribute(dish.name)}">
+          <button class="icon-button ${recommended ? "is-active" : ""}" data-admin-row-action="recommend" type="button" aria-pressed="${recommended}" aria-label="${recommended ? "Producto destacado" : "Destacar producto"} ${escapeAttribute(dish.name)}">
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-pin"></use></svg>
           </button>
-          <button class="icon-button hot-admin-action ${popular ? "is-active" : ""}" data-admin-row-action="popular" type="button" aria-label="${popular ? "Quitar popular" : "Marcar popular"} ${escapeAttribute(dish.name)}">
+          <button class="icon-button hot-admin-action ${popular ? "is-active" : ""}" data-admin-row-action="popular" type="button" aria-pressed="${popular}" aria-label="${popular ? "Quitar popular" : "Marcar popular"} ${escapeAttribute(dish.name)}">
             <span aria-hidden="true">🔥</span>
           </button>
-          <button class="icon-button" data-admin-row-action="visibility" type="button" aria-label="${visibilityLabel} ${escapeAttribute(dish.name)}">
+          <button class="icon-button" data-admin-row-action="visibility" type="button" aria-pressed="${visible}" aria-label="${visibilityLabel} ${escapeAttribute(dish.name)}">
             <svg class="ui-icon" aria-hidden="true"><use href="${visibilityIcon}"></use></svg>
           </button>
           <button class="icon-button" data-admin-row-action="edit" type="button" aria-label="Editar ${escapeAttribute(dish.name)}">
@@ -4733,7 +4929,8 @@ function renderAdminMenu() {
       </div>
     `;
     })
-    .join("");
+    .join("")
+    : `<div class="admin-empty" role="row"><span role="cell">No hay productos que coincidan con la busqueda.</span></div>`;
 }
 
 async function setRecommendedDish(dish) {
@@ -4770,20 +4967,23 @@ async function togglePopularDish(dish) {
 function renderAdminCustomers() {
   if (!adminCustomerRows) return;
   if (currentAdminData.error) {
-    adminCustomerRows.innerHTML = `<div class="admin-empty">No se pudieron cargar clientes: ${escapeHtml(displayError(currentAdminData.error))}</div>`;
+    setLoadingState(adminCustomerRows, false);
+    adminCustomerRows.innerHTML = adminDataErrorMarkup("No se pudieron cargar los clientes");
     return;
   }
   if (supabase && currentSession?.user && canAccessAdmin() && !currentAdminData.remoteLoaded) {
-    adminCustomerRows.innerHTML = `<div class="admin-empty">Cargando clientes del negocio...</div>`;
+    setLoadingState(adminCustomerRows, true);
+    adminCustomerRows.innerHTML = skeletonRowsMarkup(5, "Cargando clientes del negocio");
     return;
   }
 
+  setLoadingState(adminCustomerRows, false);
   syncCustomerTierFilter();
   const rows = filteredCustomerAnalytics();
 
   adminCustomerRows.innerHTML = rows.length
     ? rows.map((customer) => customerRowMarkup(customer)).join("")
-    : `<div class="admin-empty">No hay clientes que coincidan con estos filtros.</div>`;
+    : `<div class="admin-empty" role="row"><span role="cell">No hay clientes que coincidan con estos filtros.</span></div>`;
 
   if (activeAdminCustomerId) renderAdminCustomerDetail();
 }
@@ -4835,35 +5035,35 @@ function customerRowMarkup(customer) {
   const activeClass = activeAdminCustomerId === customer.profile.id ? "is-active" : "";
   const streakProgress = streakProgressModel(customer.streak, customer.lastVisit);
   return `
-    <article class="admin-customer-row ${activeClass}" data-customer-id="${escapeAttribute(customer.profile.id)}">
-      <span class="admin-row-field admin-row-identity" data-label="Cliente">
+    <article class="admin-customer-row ${activeClass}" data-customer-id="${escapeAttribute(customer.profile.id)}" role="row">
+      <span class="admin-row-field admin-row-identity" data-label="Cliente" role="cell">
         <span class="admin-row-field-value">
           <strong>${escapeHtml(customer.profile.name || "Cliente")}</strong>
           <small>${escapeHtml(customerVisibleIdentifier(customer.profile))}</small>
         </span>
       </span>
-      <span class="admin-row-field" data-label="Puntos"><b class="admin-row-field-value">${escapeHtml(formatNumber(points))} pts</b></span>
-      <span class="admin-row-field" data-label="Nivel"><span class="pill admin-row-field-value">${escapeHtml(tier)}</span></span>
-      <span class="admin-row-field" data-label="Ultima visita">
+      <span class="admin-row-field" data-label="Puntos" role="cell"><b class="admin-row-field-value">${escapeHtml(formatNumber(points))} pts</b></span>
+      <span class="admin-row-field" data-label="Nivel" role="cell"><span class="pill ui-pill admin-row-field-value">${escapeHtml(tier)}</span></span>
+      <span class="admin-row-field" data-label="Ultima visita" role="cell">
         <span class="admin-row-field-value">
           <strong>${customer.lastVisit ? escapeHtml(formatEventDate(customer.lastVisit)) : "Sin consumo"}</strong>
           <small>${escapeHtml(customer.status.label)}</small>
         </span>
       </span>
-      <span class="admin-row-field" data-label="Racha">
+      <span class="admin-row-field" data-label="Racha" role="cell">
         <span class="admin-row-field-value">
           <strong>${escapeHtml(streakProgress.title)}</strong>
           <small>${escapeHtml(streakProgress.status)}</small>
         </span>
       </span>
-      <span class="admin-row-field" data-label="Consumos">
+      <span class="admin-row-field" data-label="Consumos" role="cell">
         <span class="admin-row-field-value">
           <strong>${escapeHtml(customer.visits)}</strong>
           <small>${pending ? `${escapeHtml(pending)} canjes pendientes` : "Sin canjes pendientes"}</small>
         </span>
       </span>
-      <span class="admin-row-field" data-label="Total"><b class="admin-row-field-value">${escapeHtml(formatCurrency(customer.totalSpent))}</b></span>
-      <span class="row-actions customer-row-actions">
+      <span class="admin-row-field" data-label="Total" role="cell"><b class="admin-row-field-value">${escapeHtml(formatCurrency(customer.totalSpent))}</b></span>
+      <span class="row-actions customer-row-actions" role="cell">
         <button class="mini-action" type="button" data-customer-action="detail" data-customer-id="${escapeAttribute(customer.profile.id)}">Ver</button>
         <button class="mini-action" type="button" data-customer-action="consume" data-customer-id="${escapeAttribute(customer.profile.id)}">Cargar</button>
       </span>
@@ -5418,25 +5618,25 @@ function consumptionRowMarkup(event) {
   const activeClass = activeAdminConsumptionId === event.id ? "is-active" : "";
   const status = consumptionStatus(event);
   return `
-    <article class="admin-consumption-row ${activeClass}" data-consumption-id="${escapeAttribute(event.id)}">
-      <span class="admin-row-field admin-row-identity" data-label="Cliente">
+    <article class="admin-consumption-row ${activeClass}" data-consumption-id="${escapeAttribute(event.id)}" role="row">
+      <span class="admin-row-field admin-row-identity" data-label="Cliente" role="cell">
         <span class="admin-row-field-value">
           <strong>${escapeHtml(profile?.name || "Cliente")}</strong>
           <small>${escapeHtml(profile?.email || "Sin email")}</small>
         </span>
       </span>
-      <span class="admin-row-field" data-label="Total"><b class="admin-row-field-value">${escapeHtml(formatCurrency(event.purchase_total))}</b></span>
-      <span class="admin-row-field" data-label="Productos"><span class="cell-muted admin-row-field-value">${escapeHtml(purchaseItemsLabel(event))}</span></span>
-      <span class="admin-row-field" data-label="Puntos"><b class="admin-row-field-value">+${escapeHtml(event.points_delta || 0)} pts</b></span>
-      <span class="admin-row-field" data-label="Empleado"><span class="cell-muted admin-row-field-value">${escapeHtml(employeeLabel(event.recorded_by_auth_user_id))}</span></span>
-      <span class="admin-row-field" data-label="Metodo"><span class="pill admin-row-field-value">${escapeHtml(consumptionMethodLabel(consumptionMethod(event)))}</span></span>
-      <span class="admin-row-field" data-label="Fecha">
+      <span class="admin-row-field" data-label="Total" role="cell"><b class="admin-row-field-value">${escapeHtml(formatCurrency(event.purchase_total))}</b></span>
+      <span class="admin-row-field" data-label="Productos" role="cell"><span class="cell-muted admin-row-field-value">${escapeHtml(purchaseItemsLabel(event))}</span></span>
+      <span class="admin-row-field" data-label="Puntos" role="cell"><b class="admin-row-field-value">+${escapeHtml(event.points_delta || 0)} pts</b></span>
+      <span class="admin-row-field" data-label="Empleado" role="cell"><span class="cell-muted admin-row-field-value">${escapeHtml(employeeLabel(event.recorded_by_auth_user_id))}</span></span>
+      <span class="admin-row-field" data-label="Metodo" role="cell"><span class="pill ui-pill admin-row-field-value">${escapeHtml(consumptionMethodLabel(consumptionMethod(event)))}</span></span>
+      <span class="admin-row-field" data-label="Fecha" role="cell">
         <span class="admin-row-field-value">
           <strong>${escapeHtml(formatEventDate(event.created_at))}</strong>
           <small class="${status === "cancelled" ? "text-danger" : ""}">${escapeHtml(consumptionStatusLabel(status))}</small>
         </span>
       </span>
-      <span class="row-actions">
+      <span class="row-actions" role="cell">
         <button class="mini-action" type="button" data-consumption-action="detail" data-consumption-id="${escapeAttribute(event.id)}">Ver</button>
       </span>
     </article>
@@ -5446,20 +5646,28 @@ function consumptionRowMarkup(event) {
 function renderAdminConsumptions() {
   if (!adminConsumptionRows) return;
   if (currentAdminData.error) {
-    adminConsumptionRows.innerHTML = `<div class="admin-empty">No se pudieron cargar consumos: ${escapeHtml(displayError(currentAdminData.error))}</div>`;
+    setLoadingState(adminConsumptionRows, false);
+    setLoadingState(adminConsumptionSummary, false);
+    adminConsumptionSummary.innerHTML = "";
+    adminConsumptionRows.innerHTML = adminDataErrorMarkup("No se pudieron cargar los consumos");
     return;
   }
   if (supabase && currentSession?.user && canAccessAdmin() && !currentAdminData.remoteLoaded) {
-    adminConsumptionRows.innerHTML = `<div class="admin-empty">Cargando consumos del negocio...</div>`;
+    setLoadingState(adminConsumptionRows, true);
+    setLoadingState(adminConsumptionSummary, true);
+    adminConsumptionSummary.innerHTML = skeletonCardsMarkup(4, "Cargando resumen de consumos");
+    adminConsumptionRows.innerHTML = skeletonRowsMarkup(5, "Cargando consumos del negocio");
     return;
   }
 
+  setLoadingState(adminConsumptionRows, false);
+  setLoadingState(adminConsumptionSummary, false);
   syncConsumptionFilterOptions();
   const rows = filteredConsumptionEvents();
   renderAdminConsumptionSummary(rows);
   adminConsumptionRows.innerHTML = rows.length
     ? rows.map(consumptionRowMarkup).join("")
-    : `<div class="admin-empty">No hay consumos que coincidan con estos filtros.</div>`;
+    : `<div class="admin-empty" role="row"><span role="cell">No hay consumos que coincidan con estos filtros.</span></div>`;
   if (activeAdminConsumptionId) renderAdminConsumptionDetail();
 }
 
@@ -6379,7 +6587,8 @@ function closeActivityDrawer() {
 function renderAdminAnalytics() {
   if (!analyticsKpiGrid) return;
   if (currentAdminData.error) {
-    analyticsKpiGrid.innerHTML = analyticsEmpty("No se pudo cargar el inicio", displayError(currentAdminData.error));
+    setLoadingState(analyticsKpiGrid, false);
+    analyticsKpiGrid.innerHTML = adminDataErrorMarkup("No se pudo cargar el inicio");
     analyticsActionStrip.innerHTML = "";
     homeUrgentPanel.innerHTML = "";
     homeRecentPanel.innerHTML = "";
@@ -6387,25 +6596,16 @@ function renderAdminAnalytics() {
     return;
   }
   if (supabase && currentSession?.user && canAccessAdmin() && !currentAdminData.remoteLoaded) {
-    analyticsKpiGrid.innerHTML = [
-      ["Canjes pendientes", "...", "cargando solicitudes"],
-      ["Consumos hoy", "...", "cargando consumos"],
-      ["Clientes nuevos hoy", "...", "cargando registros"],
-      ["Puntos hoy", "...", "cargando actividad"]
-    ].map(([label, value, note], index) => `
-      <article class="analytics-kpi-card" data-kpi-tone="${index % 4}">
-        <span>${escapeHtml(label)}</span>
-        <strong>${escapeHtml(value)}</strong>
-        <small>${escapeHtml(note)}</small>
-      </article>
-    `).join("");
+    setLoadingState(analyticsKpiGrid, true);
+    analyticsKpiGrid.innerHTML = skeletonCardsMarkup(4, "Cargando indicadores del negocio");
     analyticsActionStrip.innerHTML = "";
-    homeUrgentPanel.innerHTML = analyticsEmpty("Cargando datos del negocio", "Estamos trayendo clientes, consumos y canjes desde Supabase.");
-    homeRecentPanel.innerHTML = analyticsEmpty("Cargando actividad", "En unos segundos aparecen los ultimos registros.");
+    homeUrgentPanel.innerHTML = skeletonRowsMarkup(3, "Cargando tareas urgentes");
+    homeRecentPanel.innerHTML = skeletonRowsMarkup(3, "Cargando actividad reciente");
     if (homeInsightGrid) homeInsightGrid.innerHTML = "";
     return;
   }
 
+  setLoadingState(analyticsKpiGrid, false);
   const model = buildAnalyticsModel();
   const todayPurchases = model.purchases.filter((event) => isToday(event.created_at));
   const todayCustomers = currentAdminData.customers.filter((profile) => isToday(profile.created_at));
@@ -6571,6 +6771,21 @@ function renderAiCreditPanel() {
 
 function renderAdminContent() {
   if (!adminContentRows || !adminContentPreview || !adminContentDishSelect || !adminContentTypeSelect) return;
+  if (adminContentDataLoading) {
+    setLoadingState(adminContentRows, true);
+    setLoadingState(adminContentPreview, true);
+    adminContentRows.innerHTML = skeletonRowsMarkup(4, "Cargando contenido del negocio");
+    adminContentPreview.innerHTML = `
+      <div class="ui-skeleton-preview" role="status" aria-label="Preparando vista previa">
+        <span class="ui-skeleton ui-skeleton-asset-media" aria-hidden="true"></span>
+        <span class="ui-skeleton ui-skeleton-line is-wide" aria-hidden="true"></span>
+        <span class="sr-only">Preparando vista previa</span>
+      </div>
+    `;
+    return;
+  }
+  setLoadingState(adminContentRows, false);
+  setLoadingState(adminContentPreview, false);
   renderAiCreditPanel();
   const dish = selectedContentDish();
   const format = selectedContentFormat();
@@ -6641,7 +6856,9 @@ function renderAdminContent() {
   adminContentCount.textContent = draft.variants.length;
 
   adminToneRow.querySelectorAll("[data-admin-tone]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.adminTone === selectedContentTone);
+    const active = button.dataset.adminTone === selectedContentTone;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
   });
 
   adminContentRows.innerHTML = `
@@ -6748,6 +6965,15 @@ function renderContentGenerationPreview(dish, format) {
 
 function renderAdminLibrary() {
   if (!adminLibraryGrid) return;
+  if (adminContentDataLoading) {
+    if (adminLibraryTitle) adminLibraryTitle.textContent = "Cargando biblioteca";
+    if (adminLibrarySubtitle) adminLibrarySubtitle.textContent = "Estamos preparando tus piezas guardadas.";
+    if (adminLibraryFilters) adminLibraryFilters.innerHTML = "";
+    setLoadingState(adminLibraryGrid, true);
+    adminLibraryGrid.innerHTML = skeletonAssetsMarkup();
+    return;
+  }
+  setLoadingState(adminLibraryGrid, false);
   const items = libraryItems();
   const visibleLibraryItems = dedupeLibraryItems(generatedContentLibrary);
   const totalItems = visibleLibraryItems.length;
@@ -6763,7 +6989,7 @@ function renderAdminLibrary() {
   if (adminLibraryFilters) {
     adminLibraryFilters.innerHTML = libraryFilterDefinitions()
       .map((filter) => `
-        <button class="admin-library-filter ${adminLibraryFilter === filter.id ? "is-active" : ""}" type="button" data-library-filter="${filter.id}">
+        <button class="admin-library-filter ui-filter-pill ${adminLibraryFilter === filter.id ? "is-active" : ""}" type="button" data-library-filter="${filter.id}" aria-pressed="${adminLibraryFilter === filter.id ? "true" : "false"}">
           <span>${escapeHtml(filter.label)}</span>
           <b>${filter.count}</b>
         </button>
@@ -6774,7 +7000,8 @@ function renderAdminLibrary() {
     ? items
         .map((item) => `
           <article class="admin-asset-card ${item.legacy ? "is-legacy" : ""} ${isVerticalContentAsset(item) ? "is-vertical" : ""}">
-            <button class="admin-asset-preview ${isVerticalContentAsset(item) ? "is-vertical" : ""}" type="button" data-admin-open-content="${escapeAttribute(item.id)}" style="background-image:url(&quot;${escapeAttribute(item.imageUrl || item.photo)}&quot;)" aria-label="Abrir pieza de ${escapeAttribute(item.dishName)}">
+            <button class="admin-asset-preview ${isVerticalContentAsset(item) ? "is-vertical" : ""}" type="button" data-admin-open-content="${escapeAttribute(item.id)}" aria-label="Abrir pieza de ${escapeAttribute(item.dishName)}">
+              <img src="${escapeAttribute(item.imageUrl || item.photo)}" alt="" loading="lazy" decoding="async" />
               <span class="asset-format-pill">${escapeHtml(libraryFormatBadge(item))}</span>
               <span class="asset-status-pill">${escapeHtml(libraryStatusLabel(item))}</span>
             </button>
@@ -6857,6 +7084,24 @@ function renderAdminRedemptions() {
 
 function renderAdminRewards() {
   if (!adminRewardRows || !adminRedemptionRows) return;
+  if (currentAdminData.error) {
+    setLoadingState(adminRewardRows, false);
+    setLoadingState(adminRedemptionRows, false);
+    adminRewardRows.innerHTML = adminDataErrorMarkup("No se pudieron cargar los premios");
+    adminRedemptionRows.innerHTML = adminDataErrorMarkup("No se pudieron cargar los canjes");
+    return;
+  }
+  if (supabase && currentSession?.user && canAccessAdmin() && !currentAdminData.remoteLoaded) {
+    if (adminRewardsCount) adminRewardsCount.textContent = "...";
+    if (adminRedemptionsCount) adminRedemptionsCount.textContent = "...";
+    setLoadingState(adminRewardRows, true);
+    setLoadingState(adminRedemptionRows, true);
+    adminRewardRows.innerHTML = skeletonRowsMarkup(3, "Cargando premios");
+    adminRedemptionRows.innerHTML = skeletonRowsMarkup(3, "Cargando canjes");
+    return;
+  }
+  setLoadingState(adminRewardRows, false);
+  setLoadingState(adminRedemptionRows, false);
   if (loyaltyEarnRateInput) loyaltyEarnRateInput.value = Math.round((loyaltySettings.earnRate || 0) * 100);
   if (loyaltySignupBonusInput) loyaltySignupBonusInput.value = loyaltySettings.signupBonusPoints || 0;
   if (loyaltyReferralOwnerInput) loyaltyReferralOwnerInput.value = loyaltySettings.referralReferrerPoints || 0;
@@ -7526,6 +7771,7 @@ async function ensureAdminContentData() {
 
 function hideAllSurfaces() {
   stopAdminAutoRefresh();
+  stopConsumptionScanner();
   document.body.classList.remove("landing-active", "admin-active", "admin-manager");
   detailView.classList.remove("open");
   editorPanel.classList.remove("open");
@@ -7568,6 +7814,8 @@ async function showAdminSection(view = "home") {
   setAdminView(view);
   traceInit(`admin:${view}:view-set`);
   const renderLoadingState = Boolean(supabase && currentSession?.user && !isLocalDevOwner());
+  const contentLoadToken = ++adminContentLoadToken;
+  adminContentDataLoading = Boolean(renderLoadingState && isOwner() && (view === "content" || view === "library"));
   if (renderLoadingState) {
     renderAdminPanel();
     traceInit(`admin:${view}:loading-render`);
@@ -7577,7 +7825,11 @@ async function showAdminSection(view = "home") {
   await loadBusinessRewards({ owner: canAccessAdmin() });
   traceInit(`admin:${view}:rewards-ready`);
   if (view === "home" || view === "content" || view === "library") {
-    await ensureAdminContentData();
+    try {
+      await ensureAdminContentData();
+    } finally {
+      if (contentLoadToken === adminContentLoadToken) adminContentDataLoading = false;
+    }
   }
   traceInit(`admin:${view}:content-ready`);
   renderAdminPanel();
@@ -7671,7 +7923,8 @@ function setAdminView(view) {
   adminNavItems.forEach((item) => {
     const active = item.dataset.adminNav === currentAdminView;
     item.classList.toggle("active", active);
-    item.setAttribute("aria-current", active ? "page" : "false");
+    if (active) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
   });
 }
 
@@ -7716,25 +7969,31 @@ function canvasToImageBlob(canvas, type, quality) {
   });
 }
 
+async function createMenuWebpVariant(sourceUrl) {
+  const image = await loadImageBitmapUrl(sourceUrl);
+  if (image.naturalWidth * image.naturalHeight > editorImageMaxPixels) {
+    throw new Error("La imagen tiene demasiados pixeles. Usa una imagen de hasta 36 megapixeles.");
+  }
+  const scale = Math.min(1, editorImageMaxSize / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("No se pudo preparar la imagen.");
+  context.drawImage(image, 0, 0, width, height);
+  const blob = await canvasToImageBlob(canvas, "image/webp", editorImageQuality);
+  if (!blob || blob.type !== "image/webp") {
+    throw new Error("Este navegador no puede crear la version WebP del menu.");
+  }
+  return { blob, dataUrl: await imageBlobToDataUrl(blob), width, height };
+}
+
 async function compressEditorImage(file) {
   const objectUrl = URL.createObjectURL(file);
   try {
-    const image = await loadImageBitmapUrl(objectUrl);
-    const scale = Math.min(1, editorImageMaxSize / Math.max(image.naturalWidth, image.naturalHeight));
-    const width = Math.max(1, Math.round(image.naturalWidth * scale));
-    const height = Math.max(1, Math.round(image.naturalHeight * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("No se pudo preparar la imagen.");
-    context.drawImage(image, 0, 0, width, height);
-
-    const preferredType = file.type === "image/png" && file.size < 450 * 1024 ? "image/png" : "image/webp";
-    const blob = await canvasToImageBlob(canvas, preferredType, editorImageQuality)
-      || await canvasToImageBlob(canvas, "image/jpeg", editorImageQuality);
-    if (!blob) throw new Error("No se pudo comprimir la imagen.");
-    return imageBlobToDataUrl(blob);
+    return await createMenuWebpVariant(objectUrl);
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -7750,23 +8009,260 @@ async function compressEditorImageUrl(imageUrl) {
       objectUrl = URL.createObjectURL(await response.blob());
       sourceUrl = objectUrl;
     }
-    const image = await loadImageBitmapUrl(sourceUrl);
-    const scale = Math.min(1, editorImageMaxSize / Math.max(image.naturalWidth, image.naturalHeight));
-    const width = Math.max(1, Math.round(image.naturalWidth * scale));
-    const height = Math.max(1, Math.round(image.naturalHeight * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("No se pudo preparar la imagen.");
-    context.drawImage(image, 0, 0, width, height);
-    const blob = await canvasToImageBlob(canvas, "image/webp", editorImageQuality)
-      || await canvasToImageBlob(canvas, "image/jpeg", editorImageQuality);
-    if (!blob) throw new Error("No se pudo comprimir la imagen.");
-    return imageBlobToDataUrl(blob);
+    return await createMenuWebpVariant(sourceUrl);
   } finally {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
+}
+
+function openLocalMenuImageDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error("El navegador no permite conservar la imagen original localmente."));
+      return;
+    }
+    const request = window.indexedDB.open(localMenuImageDbName, localMenuImageDbVersion);
+    request.addEventListener("upgradeneeded", () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(localMenuImageStoreName)) {
+        db.createObjectStore(localMenuImageStoreName, { keyPath: "key" });
+      }
+    });
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => reject(request.error || new Error("No se pudo abrir el almacen local de imagenes.")));
+  });
+}
+
+async function storeLocalOriginalPhoto(key, file) {
+  const db = await openLocalMenuImageDb();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(localMenuImageStoreName, "readwrite");
+      transaction.objectStore(localMenuImageStoreName).put({
+        key,
+        blob: file,
+        name: file.name || "imagen-original",
+        type: file.type || "application/octet-stream",
+        size: file.size || 0,
+        savedAt: new Date().toISOString()
+      });
+      transaction.addEventListener("complete", resolve);
+      transaction.addEventListener("abort", () => reject(transaction.error || new Error("No se pudo conservar la imagen original.")));
+      transaction.addEventListener("error", () => reject(transaction.error || new Error("No se pudo conservar la imagen original.")));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function readLocalOriginalPhoto(key) {
+  if (!key) return null;
+  const db = await openLocalMenuImageDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = db.transaction(localMenuImageStoreName, "readonly")
+        .objectStore(localMenuImageStoreName)
+        .get(key);
+      request.addEventListener("success", () => resolve(request.result || null));
+      request.addEventListener("error", () => reject(request.error || new Error("No se pudo leer la imagen original.")));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function deleteLocalOriginalPhoto(key) {
+  if (!key || !window.indexedDB) return;
+  const db = await openLocalMenuImageDb();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(localMenuImageStoreName, "readwrite");
+      transaction.objectStore(localMenuImageStoreName).delete(key);
+      transaction.addEventListener("complete", resolve);
+      transaction.addEventListener("abort", () => reject(transaction.error));
+      transaction.addEventListener("error", () => reject(transaction.error));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+function safeStorageSegment(value, fallback = "imagen") {
+  const safe = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return safe || fallback;
+}
+
+function originalImageExtension(file) {
+  const mimeExtension = imageExtensionFromType(file?.type, "");
+  if (mimeExtension) return mimeExtension;
+  const nameExtension = String(file?.name || "").match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+  return ["jpg", "jpeg", "png", "webp", "avif", "gif"].includes(nameExtension) ? nameExtension : "bin";
+}
+
+function publicMenuImageUrl(path) {
+  return supabase?.storage.from(menuImagePublicBucket).getPublicUrl(path).data.publicUrl || "";
+}
+
+async function uploadMenuImageBlob(bucket, path, blob, contentType) {
+  const { error } = await supabase.storage
+    .from(bucket)
+    .upload(path, blob, { contentType, cacheControl: "31536000", upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+async function uploadImportedMenuPhoto(dishId, originalFile, menuBlob) {
+  const version = `${Date.now().toString(36)}-${window.crypto?.randomUUID?.() || fallbackId()}`;
+  const directory = `${businessId}/${safeStorageSegment(dishId)}/${version}`;
+  const originalPath = `${directory}/original.${originalImageExtension(originalFile)}`;
+  const menuPath = `${directory}/menu.webp`;
+  const uploadedPaths = [];
+  const uploadedOriginalPaths = [];
+  try {
+    await uploadMenuImageBlob(menuImageOriginalBucket, originalPath, originalFile, originalFile.type || "application/octet-stream");
+    uploadedOriginalPaths.push(originalPath);
+    await uploadMenuImageBlob(menuImagePublicBucket, menuPath, menuBlob, "image/webp");
+    uploadedPaths.push(menuPath);
+    return {
+      photo: publicMenuImageUrl(menuPath),
+      photoOriginal: "",
+      photoStoragePath: menuPath,
+      photoOriginalStoragePath: originalPath,
+      uploadedPaths,
+      uploadedOriginalPaths
+    };
+  } catch (error) {
+    await removeRemoteMenuImages(uploadedPaths, uploadedOriginalPaths);
+    throw error;
+  }
+}
+
+async function uploadGeneratedMenuPhoto(dishId, originalUrl, menuBlob) {
+  const version = `${Date.now().toString(36)}-${window.crypto?.randomUUID?.() || fallbackId()}`;
+  const directory = `${businessId}/${safeStorageSegment(dishId)}/${version}`;
+  const response = await fetch(originalUrl, { mode: "cors" });
+  if (!response.ok) throw new Error("No se pudo conservar la imagen original generada.");
+  const originalBlob = await response.blob();
+  const originalType = originalBlob.type || "image/png";
+  const originalPath = `${directory}/original.${imageExtensionFromType(originalType)}`;
+  const menuPath = `${directory}/menu.webp`;
+  const uploadedPaths = [];
+  const uploadedOriginalPaths = [];
+  try {
+    await uploadMenuImageBlob(menuImageOriginalBucket, originalPath, originalBlob, originalType);
+    uploadedOriginalPaths.push(originalPath);
+    await uploadMenuImageBlob(menuImagePublicBucket, menuPath, menuBlob, "image/webp");
+    uploadedPaths.push(menuPath);
+    return {
+      photo: publicMenuImageUrl(menuPath),
+      photoOriginal: "",
+      photoOriginalName: downloadFileNameFromUrl(originalUrl, imageExtensionFromType(originalType)),
+      photoOriginalType: originalType,
+      photoOriginalSize: originalBlob.size,
+      photoStoragePath: menuPath,
+      photoOriginalStoragePath: originalPath,
+      uploadedPaths,
+      uploadedOriginalPaths
+    };
+  } catch (error) {
+    await removeRemoteMenuImages(uploadedPaths, uploadedOriginalPaths);
+    throw error;
+  }
+}
+
+async function removeRemoteMenuImages(publicPaths = [], originalPaths = []) {
+  if (!supabase) return;
+  const uniquePublicPaths = [...new Set(publicPaths.filter(Boolean))];
+  const uniqueOriginalPaths = [...new Set(originalPaths.filter(Boolean))];
+  if (uniquePublicPaths.length) {
+    await supabase.storage.from(menuImagePublicBucket).remove(uniquePublicPaths).catch(() => null);
+  }
+  if (uniqueOriginalPaths.length) {
+    await supabase.storage.from(menuImageOriginalBucket).remove(uniqueOriginalPaths).catch(() => null);
+  }
+}
+
+function originalPhotoName(dish) {
+  if (dish?.photoOriginalName) return dish.photoOriginalName;
+  const source = dish?.photoOriginal || dish?.highQualityPhoto || dish?.photo || "";
+  return downloadFileNameFromUrl(source, imageExtensionFromType(dish?.photoOriginalType));
+}
+
+function formatImageBytes(value) {
+  const bytes = Number(value || 0);
+  if (!bytes) return "";
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function renderEditorPhotoState(dish = editorDish()) {
+  if (!dish) return;
+  const hasOriginal = Boolean(editorPendingOriginalPhoto || dish.photoOriginalStorageKey || dish.photoOriginalStoragePath || dish.photoOriginal || dish.highQualityPhoto || dish.photo);
+  if (downloadOriginalPhotoButton) downloadOriginalPhotoButton.disabled = !hasOriginal;
+  if (!dishPhotoFormatStatus) return;
+  if (editorPendingOriginalPhoto) {
+    const originalSize = formatImageBytes(editorPendingOriginalPhoto.size);
+    const optimizedSize = formatImageBytes(editorPendingMenuPhotoBlob?.size);
+    dishPhotoFormatStatus.textContent = `Menu: WebP${optimizedSize ? ` · ${optimizedSize}` : ""}. Original: ${originalSize || "calidad completa"}.`;
+    return;
+  }
+  const originalSize = formatImageBytes(dish.photoOriginalSize);
+  dishPhotoFormatStatus.textContent = dish.photoOriginal || dish.photoOriginalStorageKey || dish.photoOriginalStoragePath || dish.highQualityPhoto
+    ? `Menu: imagen optimizada. Original conservado${originalSize ? ` · ${originalSize}` : ""}.`
+    : "Las nuevas cargas se sirven en WebP y conservan el original para descargar.";
+}
+
+async function downloadEditorOriginalPhoto() {
+  const dish = editorDish();
+  if (!dish) return;
+  if (editorPendingOriginalPhoto) {
+    triggerBlobDownload(editorPendingOriginalPhoto, editorPendingOriginalPhoto.name);
+    return;
+  }
+  if (dish.photoOriginalStorageKey) {
+    try {
+      const stored = await readLocalOriginalPhoto(dish.photoOriginalStorageKey);
+      if (!stored?.blob) throw new Error("No se encontro el original local.");
+      triggerBlobDownload(stored.blob, stored.name || originalPhotoName(dish));
+      return;
+    } catch (error) {
+      showToast(displayError(error));
+      return;
+    }
+  }
+  if (dish.photoOriginalStoragePath && supabase) {
+    const { data, error } = await supabase.storage
+      .from(menuImageOriginalBucket)
+      .createSignedUrl(dish.photoOriginalStoragePath, 60, { download: originalPhotoName(dish) });
+    if (error || !data?.signedUrl) {
+      showToast(displayError(error || new Error("No se pudo autorizar la descarga original.")));
+      return;
+    }
+    await downloadAsset(data.signedUrl, originalPhotoName(dish));
+    return;
+  }
+  await downloadAsset(dish.photoOriginal || dish.highQualityPhoto || dish.photo, originalPhotoName(dish));
+}
+
+async function originalPhotoForAi(dish) {
+  if (editorPendingOriginalPhoto) return fileToDataUrl(editorPendingOriginalPhoto);
+  if (dish?.photoOriginalStorageKey) {
+    const stored = await readLocalOriginalPhoto(dish.photoOriginalStorageKey).catch(() => null);
+    if (stored?.blob) return imageBlobToDataUrl(stored.blob);
+  }
+  if (dish?.photoOriginalStoragePath && supabase) {
+    const { data } = await supabase.storage
+      .from(menuImageOriginalBucket)
+      .createSignedUrl(dish.photoOriginalStoragePath, 120);
+    if (data?.signedUrl) return data.signedUrl;
+  }
+  return dish?.photoOriginal || dish?.highQualityPhoto || dish?.photo || "";
 }
 
 async function readContentReferenceImage(file) {
@@ -7875,7 +8371,7 @@ async function improveEditorPhotoWithAi() {
     return;
   }
 
-  const productImage = await imageReferenceForGeneration(dish.photo);
+  const productImage = await imageReferenceForGeneration(await originalPhotoForAi(dish));
   if (!productImage) {
     showToast("No se pudo preparar la imagen del producto.");
     return;
@@ -7956,24 +8452,74 @@ async function applyImprovedEditorPhoto() {
   }
   photoAiApply.disabled = true;
   photoAiApply.setAttribute("aria-busy", "true");
+  let uploadedPaths = [];
+  let uploadedOriginalPaths = [];
   try {
-    const compressedPhoto = await compressEditorImageUrl(editorAiImprovedPhoto);
-    editorAiCompressedPhoto = compressedPhoto;
-    const previousPhoto = dish.photo;
-    const previousHighQualityPhoto = dish.highQualityPhoto;
-    dish.photo = compressedPhoto;
-    dish.highQualityPhoto = editorAiImprovedPhoto;
+    const menuVariant = await compressEditorImageUrl(editorAiImprovedPhoto);
+    const remoteVariant = canPublishRemoteMenuCatalog()
+      ? await uploadGeneratedMenuPhoto(dish.id, editorAiImprovedPhoto, menuVariant.blob)
+      : {
+          photo: menuVariant.dataUrl,
+          photoOriginal: editorAiImprovedPhoto,
+          photoOriginalName: downloadFileNameFromUrl(editorAiImprovedPhoto, "png"),
+          photoOriginalType: "image/png",
+          photoOriginalSize: 0,
+          photoStoragePath: "",
+          photoOriginalStoragePath: "",
+          uploadedPaths: [],
+          uploadedOriginalPaths: []
+        };
+    uploadedPaths = remoteVariant.uploadedPaths;
+    uploadedOriginalPaths = remoteVariant.uploadedOriginalPaths;
+    editorAiCompressedPhoto = remoteVariant.photo;
+    const previousPhotoState = {
+      photo: dish.photo,
+      photoOriginal: dish.photoOriginal,
+      highQualityPhoto: dish.highQualityPhoto,
+      photoOriginalName: dish.photoOriginalName,
+      photoOriginalType: dish.photoOriginalType,
+      photoOriginalSize: dish.photoOriginalSize,
+      photoOriginalStorageKey: dish.photoOriginalStorageKey,
+      photoStoragePath: dish.photoStoragePath,
+      photoOriginalStoragePath: dish.photoOriginalStoragePath
+    };
+    dish.photo = remoteVariant.photo;
+    dish.photoOriginal = remoteVariant.photoOriginal;
+    dish.highQualityPhoto = remoteVariant.photoOriginal;
+    dish.photoOriginalName = remoteVariant.photoOriginalName;
+    dish.photoOriginalType = remoteVariant.photoOriginalType;
+    dish.photoOriginalSize = remoteVariant.photoOriginalSize;
+    dish.photoOriginalStorageKey = "";
+    dish.photoStoragePath = remoteVariant.photoStoragePath;
+    dish.photoOriginalStoragePath = remoteVariant.photoOriginalStoragePath;
     try {
       await publishMenuCatalog();
     } catch (error) {
-      dish.photo = previousPhoto;
-      dish.highQualityPhoto = previousHighQualityPhoto;
+      Object.assign(dish, previousPhotoState);
+      try { persistMenuState(); } catch { /* Keep the in-memory rollback even if local storage is full. */ }
+      await removeRemoteMenuImages(uploadedPaths, uploadedOriginalPaths);
       throw error;
     }
-    draft.photo = compressedPhoto;
-    draft.highQualityPhoto = editorAiImprovedPhoto;
+    await removeRemoteMenuImages(
+      [previousPhotoState.photoStoragePath],
+      [previousPhotoState.photoOriginalStoragePath]
+    );
+    if (previousPhotoState.photoOriginalStorageKey) {
+      await deleteLocalOriginalPhoto(previousPhotoState.photoOriginalStorageKey).catch(() => null);
+    }
+    draft.photo = remoteVariant.photo;
+    draft.photoOriginal = remoteVariant.photoOriginal;
+    draft.highQualityPhoto = remoteVariant.photoOriginal;
+    draft.photoOriginalName = dish.photoOriginalName;
+    draft.photoOriginalType = dish.photoOriginalType;
+    draft.photoOriginalSize = remoteVariant.photoOriginalSize;
+    draft.photoOriginalStorageKey = "";
+    draft.photoStoragePath = remoteVariant.photoStoragePath;
+    draft.photoOriginalStoragePath = remoteVariant.photoOriginalStoragePath;
+    clearPendingEditorPhoto();
     editorDraft = cloneDishForEditor(draft);
-    dishPhoto.style.backgroundImage = `url('${compressedPhoto}')`;
+    dishPhoto.style.backgroundImage = `url('${remoteVariant.photo}')`;
+    renderEditorPhotoState(editorDraft);
     renderAdminMenu();
     renderAdminContent();
     renderAdminLibrary();
@@ -7984,6 +8530,9 @@ async function applyImprovedEditorPhoto() {
     closePhotoAiModal();
     showToast("Imagen publicada en el menu.");
   } catch (error) {
+    if (uploadedPaths.length || uploadedOriginalPaths.length) {
+      await removeRemoteMenuImages(uploadedPaths, uploadedOriginalPaths);
+    }
     showToast(displayError(error));
   } finally {
     photoAiApply.disabled = false;
@@ -8037,8 +8586,9 @@ function newDishDraft() {
 
 async function updateEditorPhoto(file) {
   if (!file) return;
-  if (!file.type.startsWith("image/")) {
-    showToast("Carga un archivo de imagen.");
+  const supportedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
+  if (!supportedTypes.has(file.type)) {
+    showToast("Carga una imagen JPG, PNG, WebP, AVIF o GIF.");
     return;
   }
   if (file.size > 8 * 1024 * 1024) {
@@ -8051,13 +8601,24 @@ async function updateEditorPhoto(file) {
 
   dishPhoto.classList.add("is-loading");
   try {
-    const photoUrl = await compressEditorImage(file);
-    if (!photoUrl) return;
-    dish.photo = photoUrl;
-    dishPhoto.style.backgroundImage = `url('${photoUrl}')`;
-    showToast("Foto lista. Presiona Guardar para aplicar.");
-  } catch {
-    showToast("No se pudo optimizar la imagen.");
+    const menuVariant = await compressEditorImage(file);
+    editorPendingOriginalPhoto = file;
+    editorPendingMenuPhotoBlob = menuVariant.blob;
+    editorPendingPhotoDraftId = String(currentEditorDishId || dish.id || "new");
+    dish.photo = menuVariant.dataUrl;
+    dish.photoOriginal = "";
+    dish.highQualityPhoto = "";
+    dish.photoOriginalName = file.name;
+    dish.photoOriginalType = file.type;
+    dish.photoOriginalSize = file.size;
+    dish.photoOriginalStorageKey = "";
+    dish.photoStoragePath = "";
+    dish.photoOriginalStoragePath = "";
+    dishPhoto.style.backgroundImage = `url('${menuVariant.dataUrl}')`;
+    renderEditorPhotoState(dish);
+    showToast("WebP listo para el menu. El original se conserva para descargar.");
+  } catch (error) {
+    showToast(displayError(error));
   } finally {
     dishPhoto.classList.remove("is-loading");
   }
@@ -8151,6 +8712,7 @@ function renderEditorLanguageTabs() {
     tab.classList.toggle("needs-review", status.className === "needs-review");
     tab.classList.toggle("missing", status.className === "missing");
     tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
     const statusElement = tab.querySelector(".translation-status");
     if (statusElement) {
       statusElement.textContent = status.label;
@@ -8164,17 +8726,36 @@ function renderEditorLanguageTabsMarkup() {
   editorLanguageTabsContainer.innerHTML = languages.map((language) => {
     const status = editorTranslationStatus(language.code);
     return `
-    <button class="tab ${language.code === currentEditorLang ? "active" : ""} ${status.className === "needs-review" ? "needs-review" : ""} ${status.className === "missing" ? "missing" : ""}" data-lang="${escapeAttribute(language.code)}" type="button" role="tab" aria-selected="${language.code === currentEditorLang}">
+    <button class="tab ${language.code === currentEditorLang ? "active" : ""} ${status.className === "needs-review" ? "needs-review" : ""} ${status.className === "missing" ? "missing" : ""}" data-lang="${escapeAttribute(language.code)}" type="button" role="tab" aria-selected="${language.code === currentEditorLang}" tabindex="${language.code === currentEditorLang ? "0" : "-1"}">
       ${escapeHtml(language.label)}
       <span class="translation-status ${escapeAttribute(status.className)}">${escapeHtml(status.label)}</span>
     </button>
   `;
   }).join("");
   editorLanguageTabs = editorLanguageTabsContainer.querySelectorAll(".tab[data-lang]");
-  editorLanguageTabs.forEach((tab) => {
-    tab.addEventListener("click", () => setEditorLanguage(tab.dataset.lang));
-  });
 }
+
+editorLanguageTabsContainer?.addEventListener("click", (event) => {
+  const tab = event.target.closest(".tab[data-lang]");
+  if (!tab || !editorLanguageTabsContainer.contains(tab)) return;
+  setEditorLanguage(tab.dataset.lang);
+});
+
+editorLanguageTabsContainer?.addEventListener("keydown", (event) => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  const tabs = Array.from(editorLanguageTabsContainer.querySelectorAll('.tab[data-lang]:not(:disabled)'));
+  const currentIndex = tabs.indexOf(document.activeElement);
+  if (currentIndex < 0 || !tabs.length) return;
+  event.preventDefault();
+  const nextIndex = event.key === 'Home'
+    ? 0
+    : event.key === 'End'
+      ? tabs.length - 1
+      : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  const nextTab = tabs[nextIndex];
+  setEditorLanguage(nextTab.dataset.lang);
+  nextTab.focus();
+});
 
 function renderEditorLanguageFields(dish = editorDish()) {
   if (!dish) return;
@@ -8234,6 +8815,44 @@ function renderEditorForm() {
   presentations.innerHTML = dish.presentations
     .map((presentation) => presentationRowTemplate(presentation))
     .join("");
+  renderEditorPhotoState(dish);
+}
+
+async function preparePendingEditorPhotoAssets(dishId, draft) {
+  if (!editorPendingOriginalPhoto || !editorPendingMenuPhotoBlob) return null;
+  const pendingMatchesDraft = editorPendingPhotoDraftId === String(currentEditorDishId || draft?.id || "new");
+  if (!pendingMatchesDraft) return null;
+  const metadata = {
+    photoOriginalName: editorPendingOriginalPhoto.name || "imagen-original",
+    photoOriginalType: editorPendingOriginalPhoto.type || "application/octet-stream",
+    photoOriginalSize: editorPendingOriginalPhoto.size || 0
+  };
+  if (canPublishRemoteMenuCatalog()) {
+    return {
+      ...metadata,
+      ...(await uploadImportedMenuPhoto(dishId, editorPendingOriginalPhoto, editorPendingMenuPhotoBlob)),
+      photoOriginalStorageKey: "",
+      localStorageKey: ""
+    };
+  }
+  const localStorageKey = `${businessId}:${dishId}:${Date.now().toString(36)}-${window.crypto?.randomUUID?.() || fallbackId()}`;
+  await storeLocalOriginalPhoto(localStorageKey, editorPendingOriginalPhoto);
+  return {
+    ...metadata,
+    photo: draft.photo,
+    photoOriginal: "",
+    photoOriginalStorageKey: localStorageKey,
+    photoStoragePath: "",
+    photoOriginalStoragePath: "",
+    uploadedPaths: [],
+    localStorageKey
+  };
+}
+
+function clearPendingEditorPhoto() {
+  editorPendingOriginalPhoto = null;
+  editorPendingMenuPhotoBlob = null;
+  editorPendingPhotoDraftId = "";
 }
 
 async function saveEditorDish({ silent = false } = {}) {
@@ -8249,8 +8868,33 @@ async function saveEditorDish({ silent = false } = {}) {
   const previousEditorDishId = currentEditorDishId;
   const translations = ensureDishTranslations(draft);
   const primaryText = translations[primaryLanguageCode] || translations[currentEditorLang];
+  const nextId = dish?.id || uniqueDishId(primaryText?.name || draft.name);
+  const previousPhotoState = dish ? {
+    photoStoragePath: dish.photoStoragePath || "",
+    photoOriginalStoragePath: dish.photoOriginalStoragePath || "",
+    photoOriginalStorageKey: dish.photoOriginalStorageKey || ""
+  } : { photoStoragePath: "", photoOriginalStoragePath: "", photoOriginalStorageKey: "" };
+  let preparedPhotoAssets = null;
+  try {
+    preparedPhotoAssets = await preparePendingEditorPhotoAssets(nextId, draft);
+    if (preparedPhotoAssets) {
+      Object.assign(draft, {
+        photo: preparedPhotoAssets.photo,
+        photoOriginal: preparedPhotoAssets.photoOriginal,
+        highQualityPhoto: preparedPhotoAssets.photoOriginal,
+        photoOriginalName: preparedPhotoAssets.photoOriginalName,
+        photoOriginalType: preparedPhotoAssets.photoOriginalType,
+        photoOriginalSize: preparedPhotoAssets.photoOriginalSize,
+        photoOriginalStorageKey: preparedPhotoAssets.photoOriginalStorageKey,
+        photoStoragePath: preparedPhotoAssets.photoStoragePath,
+        photoOriginalStoragePath: preparedPhotoAssets.photoOriginalStoragePath
+      });
+    }
+  } catch (error) {
+    showToast(displayError(error));
+    return null;
+  }
   if (!dish) {
-    const nextId = uniqueDishId(primaryText?.name || draft.name);
     dish = {
       id: nextId,
       brand: draft.brand,
@@ -8259,6 +8903,13 @@ async function saveEditorDish({ silent = false } = {}) {
       description: primaryText?.description?.trim() || draft.description,
       presentations: [],
       photo: draft.photo,
+      photoOriginal: draft.photoOriginal || "",
+      photoOriginalName: draft.photoOriginalName || "",
+      photoOriginalType: draft.photoOriginalType || "",
+      photoOriginalSize: Number(draft.photoOriginalSize || 0),
+      photoOriginalStorageKey: draft.photoOriginalStorageKey || "",
+      photoStoragePath: draft.photoStoragePath || "",
+      photoOriginalStoragePath: draft.photoOriginalStoragePath || "",
       visible: Boolean(draft.visible),
       soldOut: Boolean(draft.soldOut),
       lastEditedAt: "",
@@ -8276,6 +8927,14 @@ async function saveEditorDish({ silent = false } = {}) {
   dish.brand = brandSelect.value;
   dish.category = categorySelect.value;
   dish.photo = draft.photo;
+  dish.photoOriginal = draft.photoOriginal || draft.highQualityPhoto || "";
+  dish.highQualityPhoto = dish.photoOriginal;
+  dish.photoOriginalName = draft.photoOriginalName || "";
+  dish.photoOriginalType = draft.photoOriginalType || "";
+  dish.photoOriginalSize = Number(draft.photoOriginalSize || 0);
+  dish.photoOriginalStorageKey = draft.photoOriginalStorageKey || "";
+  dish.photoStoragePath = draft.photoStoragePath || "";
+  dish.photoOriginalStoragePath = draft.photoOriginalStoragePath || "";
   dish.visible = Boolean(draft.visible);
   dish.soldOut = Boolean(draft.soldOut);
   dish.lastEditedAt = new Date().toISOString();
@@ -8290,7 +8949,15 @@ async function saveEditorDish({ silent = false } = {}) {
   try {
     await publishMenuCatalog();
   } catch (error) {
+    await removeRemoteMenuImages(
+      preparedPhotoAssets?.uploadedPaths || [],
+      preparedPhotoAssets?.uploadedOriginalPaths || []
+    );
+    if (preparedPhotoAssets?.localStorageKey) {
+      await deleteLocalOriginalPhoto(preparedPhotoAssets.localStorageKey).catch(() => null);
+    }
     applyMenuItemsState(previousItems);
+    persistMenuState();
     currentEditorDishId = previousEditorDishId;
     showToast(displayError(error));
     renderAdminMenu();
@@ -8299,12 +8966,24 @@ async function saveEditorDish({ silent = false } = {}) {
     renderList();
     return null;
   }
+  if (preparedPhotoAssets) {
+    await removeRemoteMenuImages(
+      [previousPhotoState.photoStoragePath],
+      [previousPhotoState.photoOriginalStoragePath]
+    );
+    if (previousPhotoState.photoOriginalStorageKey
+      && previousPhotoState.photoOriginalStorageKey !== preparedPhotoAssets.photoOriginalStorageKey) {
+      await deleteLocalOriginalPhoto(previousPhotoState.photoOriginalStorageKey).catch(() => null);
+    }
+    clearPendingEditorPhoto();
+  }
   normalizeCurrentCategory();
 
   editorTitle.textContent = dish.name;
   renderEditorMeta(editorDraft);
   descCount.textContent = dishDescriptionInput.value.length;
   updateEditorActionState(editorDraft);
+  renderEditorPhotoState(editorDraft);
   renderAdminMenu();
   renderAdminContent();
   renderAdminLibrary();
@@ -8323,6 +9002,7 @@ function openNewAdminEditor() {
   const keepPreviewDraft = currentEditorDishId === "new" && editorDraft && editorPreviewDraft;
   currentEditorDishId = "new";
   if (!keepPreviewDraft) {
+    clearPendingEditorPhoto();
     editorDraft = newDishDraft();
     editorPreviewDraft = null;
   }
@@ -8340,6 +9020,7 @@ function openAdminEditor(dishId) {
   const keepPreviewDraft = editorDraft?.id === dish.id && editorPreviewDraft?.id === dish.id;
   currentEditorDishId = dish.id;
   if (!keepPreviewDraft) {
+    clearPendingEditorPhoto();
     editorDraft = cloneDishForEditor(dish);
     editorPreviewDraft = null;
   }
@@ -8855,6 +9536,13 @@ adminHome?.addEventListener("click", (event) => {
   if (["menu", "customers", "consumptions", "rewards", "qrs", "library"].includes(action)) {
     navigate("admin-section", { view: action });
   }
+});
+
+adminPanel?.addEventListener("click", async (event) => {
+  const retryButton = event.target.closest("[data-admin-retry-data]");
+  if (!retryButton || retryButton.disabled) return;
+  retryButton.disabled = true;
+  await reloadAdminData();
 });
 
 homeRecentPanel?.addEventListener("click", (event) => {
@@ -9490,6 +10178,7 @@ photoAiCompareRange?.addEventListener("pointermove", (event) => {
 photoAiApply?.addEventListener("click", applyImprovedEditorPhoto);
 
 backButton.addEventListener("click", () => {
+  clearPendingEditorPhoto();
   editorDraft = null;
   editorPreviewDraft = null;
   navigate("admin-section", { view: "menu" });
@@ -9564,6 +10253,7 @@ saveDishButton.addEventListener("click", async () => {
 });
 
 improvePhotoButton?.addEventListener("click", openPhotoAiModal);
+downloadOriginalPhotoButton?.addEventListener("click", downloadEditorOriginalPhoto);
 
 dishPhoto.addEventListener("click", () => {
   dishPhotoInput.click();
@@ -10055,5 +10745,13 @@ document.addEventListener("visibilitychange", () => {
     refreshAuthenticatedCustomer({ silent: true });
   }
 });
+document.addEventListener("error", (event) => {
+  const image = event.target;
+  if (!(image instanceof HTMLImageElement)) return;
+  if (!image.matches(".customer-thumb img, .thumb img, .admin-asset-preview > img")) return;
+  image.hidden = true;
+  image.parentElement?.classList.add("is-image-error");
+}, true);
+if (parseRoute().name !== "landing") renderPublicMenuSkeleton();
 await initializeAuth();
 traceInit("module:complete");

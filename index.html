@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Sumi Menu Admin</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ff890a'/%3E%3Ctext x='32' y='41' text-anchor='middle' font-family='Georgia,serif' font-size='28' font-weight='700' fill='%23351202'%3EHB%3C/text%3E%3C/svg%3E" />
-    <script src="businesses/sumi/config.js"></script>
     <link rel="stylesheet" href="styles.css" />
+    <script src="businesses/sumi/config.js"></script>
   </head>
   <body class="landing-active">
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
@@ -75,6 +75,9 @@
         <path d="M5 4h12l2 2v14H5z" />
         <path d="M8 4v6h8V4" />
         <path d="M8 20v-6h8v6" />
+      </symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24">
+        <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
       </symbol>
       <symbol id="icon-slash" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9" />
@@ -270,7 +273,7 @@
           </div>
           <p class="consumption-status" id="consumptionScannerStatus">Apunta la camara al QR del cliente.</p>
           <div class="consumption-manual">
-            <input id="consumptionQrInput" type="text" autocomplete="off" placeholder="Pegar codigo QR si la camara falla" />
+            <input id="consumptionQrInput" type="text" autocomplete="off" aria-label="Codigo QR del cliente" placeholder="Pegar codigo QR si la camara falla" />
             <button id="consumptionQrSubmit" type="button">Buscar</button>
           </div>
           <div class="consumption-customer-picker" id="consumptionCustomerPicker" hidden>
@@ -490,7 +493,7 @@
       </section>
     </aside>
 
-    <main class="shell admin-panel" id="adminPanel" hidden>
+    <main class="shell admin-panel" id="adminPanel" tabindex="-1" hidden>
       <section class="admin-section admin-home" id="adminHome">
         <header class="admin-hero admin-dashboard-hero">
           <div>
@@ -517,9 +520,11 @@
           <div>
             <p class="eyebrow">Mi menu</p>
             <h1><span id="adminMenuCount">0</span> platillos en la mesa</h1>
+            <p class="topbar-subtitle">Administra disponibilidad, precios y visibilidad del catalogo.</p>
           </div>
           <div class="topbar-actions">
-            <label class="search">
+            <label class="search ui-search">
+              <span class="sr-only">Buscar en el menu</span>
               <svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
               <input id="adminSearchInput" type="search" placeholder="Busca por nombre, categoria o ingrediente..." />
             </label>
@@ -527,16 +532,16 @@
           </div>
         </header>
 
-        <section class="menu-board" aria-label="Menu editable">
-          <div class="table-head">
-            <span>Platillo</span>
-            <span>Categoria</span>
-            <span>Marca</span>
-            <span>Precio</span>
-            <span>Estado</span>
-            <span></span>
+        <section class="menu-board ui-data-table" role="table" aria-label="Menu editable">
+          <div class="table-head" role="row">
+            <span role="columnheader">Platillo</span>
+            <span role="columnheader">Categoria</span>
+            <span role="columnheader">Marca</span>
+            <span role="columnheader">Precio</span>
+            <span role="columnheader">Estado</span>
+            <span class="actions-column-label" role="columnheader">Acciones</span>
           </div>
-          <div id="adminDishRows"></div>
+          <div id="adminDishRows" role="rowgroup"></div>
         </section>
       </section>
 
@@ -547,14 +552,15 @@
             <h1>Clientes y puntos</h1>
           </div>
           <div class="topbar-actions">
-            <label class="search">
+            <label class="search ui-search">
+              <span class="sr-only">Buscar clientes</span>
               <svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
               <input id="adminCustomerSearchInput" type="search" placeholder="Buscar por nombre, email o telefono..." />
             </label>
           </div>
         </header>
 
-        <section class="admin-card admin-customer-filters" aria-label="Filtros de clientes">
+        <section class="admin-card admin-customer-filters ui-filter-panel" aria-label="Filtros de clientes">
           <label>
             <span>Nivel</span>
             <select id="adminCustomerTierFilter">
@@ -596,18 +602,18 @@
         </section>
 
         <div class="admin-customers-layout">
-          <section class="menu-board admin-customers-board" aria-label="Clientes registrados">
-            <div class="table-head admin-customers-head">
-              <span>Cliente</span>
-              <span>Puntos</span>
-              <span>Nivel</span>
-              <span>Ultima visita</span>
-              <span>Racha</span>
-              <span>Consumos</span>
-              <span>Total</span>
-              <span></span>
+          <section class="menu-board admin-customers-board ui-data-table" role="table" aria-label="Clientes registrados">
+            <div class="table-head admin-customers-head" role="row">
+              <span role="columnheader">Cliente</span>
+              <span role="columnheader">Puntos</span>
+              <span role="columnheader">Nivel</span>
+              <span role="columnheader">Ultima visita</span>
+              <span role="columnheader">Racha</span>
+              <span role="columnheader">Consumos</span>
+              <span role="columnheader">Total</span>
+              <span role="columnheader"><span class="sr-only">Acciones</span></span>
             </div>
-            <div id="adminCustomerRows"></div>
+            <div id="adminCustomerRows" role="rowgroup"></div>
           </section>
 
           <aside class="admin-card admin-customer-detail" id="adminCustomerDetailPanel" hidden>
@@ -635,7 +641,7 @@
 
         <section class="consumption-summary-grid" id="adminConsumptionSummary" aria-label="Resumen de consumos"></section>
 
-        <section class="admin-card admin-consumption-filters" aria-label="Filtros de consumos">
+        <section class="admin-card admin-consumption-filters ui-filter-panel" aria-label="Filtros de consumos">
           <label>
             <span>Desde</span>
             <input id="adminConsumptionDateFromFilter" type="date" />
@@ -699,18 +705,18 @@
         </section>
 
         <div class="admin-consumptions-layout">
-          <section class="menu-board admin-consumptions-board" aria-label="Consumos registrados">
-            <div class="table-head admin-consumptions-head">
-              <span>Cliente</span>
-              <span>Monto</span>
-              <span>Productos</span>
-              <span>Puntos</span>
-              <span>Empleado</span>
-              <span>Metodo</span>
-              <span>Fecha</span>
-              <span></span>
+          <section class="menu-board admin-consumptions-board ui-data-table" role="table" aria-label="Consumos registrados">
+            <div class="table-head admin-consumptions-head" role="row">
+              <span role="columnheader">Cliente</span>
+              <span role="columnheader">Monto</span>
+              <span role="columnheader">Productos</span>
+              <span role="columnheader">Puntos</span>
+              <span role="columnheader">Empleado</span>
+              <span role="columnheader">Metodo</span>
+              <span role="columnheader">Fecha</span>
+              <span role="columnheader"><span class="sr-only">Acciones</span></span>
             </div>
-            <div id="adminConsumptionRows"></div>
+            <div id="adminConsumptionRows" role="rowgroup"></div>
           </section>
 
           <aside class="admin-card admin-consumption-detail" id="adminConsumptionDetailPanel" hidden>
@@ -807,14 +813,14 @@
                 </div>
                 <span>2 creditos</span>
               </div>
-              <textarea id="adminContentInstructions" rows="5" placeholder='Ej: "promocion 2x1", "nuevo en el menu", "regreso del especial de viernes"'></textarea>
+              <textarea id="adminContentInstructions" rows="5" aria-label="Instrucciones del contenido" placeholder='Ej: "promocion 2x1", "nuevo en el menu", "regreso del especial de viernes"'></textarea>
 
-              <div class="admin-tone-row" id="adminToneRow" aria-label="Tono del contenido">
-                <button class="tone-chip" type="button" data-admin-tone="casual">Tono casual</button>
-                <button class="tone-chip" type="button" data-admin-tone="elegante">Tono elegante</button>
-                <button class="tone-chip" type="button" data-admin-tone="divertido">Tono divertido</button>
-                <button class="tone-chip" type="button" data-admin-tone="antojador">Antojador</button>
-                <button class="tone-chip" type="button" data-admin-tone="finde">Para fin de semana</button>
+              <div class="admin-tone-row" id="adminToneRow" role="group" aria-label="Tono del contenido">
+                <button class="tone-chip ui-filter-pill" type="button" data-admin-tone="casual" aria-pressed="false">Tono casual</button>
+                <button class="tone-chip ui-filter-pill" type="button" data-admin-tone="elegante" aria-pressed="false">Tono elegante</button>
+                <button class="tone-chip ui-filter-pill" type="button" data-admin-tone="divertido" aria-pressed="false">Tono divertido</button>
+                <button class="tone-chip ui-filter-pill" type="button" data-admin-tone="antojador" aria-pressed="false">Antojador</button>
+                <button class="tone-chip ui-filter-pill" type="button" data-admin-tone="finde" aria-pressed="false">Para fin de semana</button>
               </div>
 
               <button class="primary admin-generate-button" id="adminCreateContentButton" type="button">
@@ -847,14 +853,15 @@
             <p id="adminLibrarySubtitle">Todo lo que has generado con IA. Edita, descarga o publica directo.</p>
           </div>
           <div class="topbar-actions">
-            <label class="search">
+            <label class="search ui-search">
+              <span class="sr-only">Buscar en la biblioteca</span>
               <svg class="ui-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
               <input id="adminLibrarySearchInput" type="search" placeholder="Buscar por pieza, platillo o formato..." />
             </label>
           </div>
         </header>
 
-        <nav class="admin-library-filters" id="adminLibraryFilters" aria-label="Filtros de biblioteca"></nav>
+        <div class="admin-library-filters" id="adminLibraryFilters" role="group" aria-label="Filtros de biblioteca"></div>
 
         <section class="admin-library-grid" id="adminLibraryGrid" aria-label="Biblioteca de contenido generado"></section>
       </section>
@@ -1259,7 +1266,7 @@
       </article>
     </section>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
     <section class="profile-modal" id="profileModal" role="dialog" aria-modal="true" aria-labelledby="profileTitle" hidden>
       <div class="signup-backdrop" data-profile-close></div>
@@ -1335,9 +1342,9 @@
               </div>
 
               <div class="tabs" id="editorLanguageTabs" role="tablist">
-                <button class="tab active" data-lang="es" type="button">Espanol <span></span></button>
-                <button class="tab" data-lang="en" type="button">English <span></span></button>
-                <button class="tab" data-lang="ar" type="button">&#1575;&#1604;&#1593;&#1585;&#1576;&#1610;&#1577; <span></span></button>
+                <button class="tab active" data-lang="es" type="button" role="tab" aria-selected="true" tabindex="0">Espanol <span></span></button>
+                <button class="tab" data-lang="en" type="button" role="tab" aria-selected="false" tabindex="-1">English <span></span></button>
+                <button class="tab" data-lang="ar" type="button" role="tab" aria-selected="false" tabindex="-1">&#1575;&#1604;&#1593;&#1585;&#1576;&#1610;&#1577; <span></span></button>
               </div>
 
               <label class="field">
@@ -1379,11 +1386,18 @@
                 <span class="photo-edit-cue"><svg class="ui-icon" aria-hidden="true"><use href="#icon-image"></use></svg> Cambiar foto</span>
                 <span class="photo-drop-hint">Suelta la imagen aqui</span>
               </div>
-              <input id="dishPhotoInput" class="photo-input" type="file" accept="image/*" hidden />
-              <button class="outline photo-ai-trigger" id="improvePhotoButton" type="button">
-                <svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
-                Mejorar con IA
-              </button>
+              <input id="dishPhotoInput" class="photo-input" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" hidden />
+              <div class="photo-card-actions">
+                <button class="outline photo-ai-trigger" id="improvePhotoButton" type="button">
+                  <svg class="ui-icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
+                  Mejorar con IA
+                </button>
+                <button class="outline photo-original-download" id="downloadOriginalPhotoButton" type="button">
+                  <svg class="ui-icon" aria-hidden="true"><use href="#icon-download"></use></svg>
+                  Descargar original
+                </button>
+              </div>
+              <p class="photo-format-status" id="dishPhotoFormatStatus">Las nuevas cargas se sirven en WebP y conservan el original para descargar.</p>
             </section>
 
             <section class="panel compact">

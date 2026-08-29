@@ -14,6 +14,30 @@
 - **Responsable de la decisión:** el usuario; el agente raíz coordina integración, autorizaciones, mutaciones externas y entrega. El `documenter` mantiene este ledger, briefs, decisiones, hechos, supuestos, preguntas y evidencias.
 - **Objetivo maestro vigente:** completar y entregar Sumi con un flujo seguro y auditable de canjes para empleados y dueños; validar y aplicar las migraciones en Supabase renombrado como Sumi; desplegar el proyecto en Vercel; conectar el dominio administrado en Hostinger; retirar Lovable sólo tras verificar una sustitución recuperable; realizar commit y push de cambios revisados; y dejar diseñado o implementado un centro de mando freelance reusable con onboarding de clientes, contexto compartido para subagentes y acceso seguro a credenciales sin secretos en texto plano.
 
+## Checkpoint de frente — 2026-08-28 — UI/UX, Banco de piezas y optimización
+
+- **Alcance solicitado:** revisar la UI/UX de Sumi, consultar el proyecto **Banco de piezas** para identificar componentes reemplazables, proponer mejoras, revisar el peso/rendimiento de la webapp y agregar estados skeleton para cargas de página.
+- **Dirección de componentes registrada:** evaluar/adoptar un Skeleton de estilo shadcn adaptado a HTML/CSS/JS sin React, Filter Pills accesibles y una `Sumi Masonry Gallery`; aplicar lazy loading y dynamic imports donde reduzcan la carga inicial. Esta entrada registra la dirección de trabajo, no una implementación ya verificada.
+- **Límite de este checkpoint:** el documenter sólo actualiza `PROJECT_LEDGER.md`. No se autoriza cambiar `app.js`, `styles.css` ni `index.html`, borrar historia, ejecutar build/browser ni iniciar una recompresión masiva.
+- **Gate:** build, revisión en navegador y recompresión masiva quedan pendientes de manifiesto y aprobación explícita del usuario/root. En este frente no se ejecutaron pruebas ni comandos externos.
+- **Estado:** auditoría y propuesta documentadas; implementación, inventario de piezas, medición de bundle y validación visual pendientes del especialista/root que corresponda.
+
+## Checkpoint de estado integrado — 2026-08-28 — UI/UX y rendimiento
+
+> Este checkpoint actualiza el estado del frente anterior sin borrarlo: la
+> propuesta documental y sus preguntas históricas se conservan arriba; sólo
+> queda supersedido su estado provisional de “implementación pendiente”.
+
+- **Auditoría y consulta:** la auditoría estática UI/UX y la consulta al proyecto **Banco de piezas** quedaron completadas con evidencia reportada al documenter. La compatibilidad de runtime y la calidad visual final aún requieren build/browser.
+- **Implementación integrada no validada:** el árbol de producto ya contiene cambios en `app.js`, `styles.css`, `index.html` y `scripts/build.mjs`, pero en este checkpoint no se declara build, browser ni prueba de runtime ejecutada.
+- **Skeletons:** hay estados skeleton para cargas de menú, admin, contenido y biblioteca, con la intención de reservar la geometría del contenido; la cobertura visual, accesibilidad y CLS siguen pendientes de validación browser.
+- **Filter Pills:** hay filtros con estado `aria-pressed`; falta verificar teclado, foco visible, lectura asistida, contraste y comportamiento de limpieza en navegador.
+- **Galería:** existe la dirección/implementación `Sumi Masonry Gallery` con relaciones 1:1 y 9:16; falta validar breakpoints, reserva de dimensiones, fallback y estabilidad visual en browser.
+- **Carga diferida:** hay imágenes lazy con fallback y dynamic imports para QR/scanner, incluyendo tokens, manejo de error/retry, touch targets, tablet y labels; falta comprobar chunk inicial, errores de navegación y rendimiento real.
+- **Build y alcance de assets:** `scripts/build.mjs` excluye `assets/products`; la exclusión y el peso final deben confirmarse en el build aprobado.
+- **Backlog priorizado:** P1: imágenes con un peso agregado aproximado de **48,2 MB**; P2: modularización del admin. Son deuda registrada, no una autorización para recomprimir o reestructurar ahora.
+- **Gates:** build, revisión browser/responsive y recompresión masiva siguen pendientes de aprobación explícita y manifiesto. La recompresión requiere allowlist, originales/rollback y umbrales de calidad/peso.
+
 ## Checkpoint de entrega — 2026-08-25
 
 - **GitHub:** `main` avanzó por fast-forward hasta `a73d925`, commit que sirve
@@ -114,6 +138,16 @@
 - **Artefacto vigente:** `docs/FREELANCE_COMMAND_CENTER.md` contiene la arquitectura versionada, el esquema de ficha/context pack, onboarding, broker allowlisted, política de credenciales y criterios de aceptación. Su estado declarado es “arquitectura aprobable, implementación pendiente”.
 - **Decisión de seguridad:** agentes y subagentes deben operar con mínimo privilegio, sesiones autenticadas o tokens acotados/revocables cuando corresponda; las acciones privilegiadas sobre GitHub, Supabase, Vercel, Hostinger o Lovable deben quedar bajo coordinación y aprobación del agente raíz/usuario. Una simple interfaz no constituye aislamiento criptográfico si un proceso posee el mismo acceso de shell al equipo.
 
+### Frente UI/UX y rendimiento — 2026-08-28
+
+- **Objetivo:** hacer más clara y estable la experiencia de carga, filtros y galerías, y reducir el coste de carga inicial de la webapp sin introducir un runtime UI pesado.
+- **Fuente de referencias:** el proyecto **Banco de piezas** es la fuente de catálogo que debe consultar el especialista; la compatibilidad concreta con la implementación vanilla de Sumi debe verificarse antes de adoptar código o assets.
+- **Piezas candidatas:** Skeleton tipo shadcn adaptado sin React; Filter Pills con interacción y semántica accesibles; `Sumi Masonry Gallery` para contenido visual responsive. Son candidatas/propuestas hasta contar con evidencia de catálogo, integración y revisión.
+- **Rendimiento incluido:** lazy loading de imágenes y recursos, dynamic imports de rutas/funciones no críticas, control del tamaño de chunks y revisión de fuentes/assets. La recompresión masiva queda fuera de ejecución hasta aprobar el manifiesto y los límites de calidad, alcance y rollback.
+- **No incluido en este frente documental:** edición de `app.js`, `styles.css`, `index.html` u otros archivos de producto; pruebas de build/browser; escrituras masivas sobre assets; cambios externos o eliminación de historia.
+- **Estado integrado 2026-08-28:** la auditoría estática y la consulta al Banco de piezas ya cuentan con evidencia; la implementación reportada cubre skeletons de menú/admin/contenido/biblioteca, Filter Pills con `aria-pressed`, `Sumi Masonry Gallery` 1:1/9:16, imágenes lazy con fallback y dynamic imports de QR/scanner. La implementación aún no está validada por build/browser.
+- **Deuda registrada:** P1 de imágenes (~48,2 MB agregados) y P2 de modularización del admin. El build debe mantener la exclusión de `assets/products`; cualquier recompresión queda bloqueada hasta aprobación.
+
 ## Hechos verificados
 
 | Hecho | Evidencia | Fecha |
@@ -146,6 +180,15 @@
 | El preflight agregado se ejecutó en Supabase Sumi: 2 canjes aprobados, sin actores huérfanos, clientes cruzados/faltantes, duplicados, contextos grandes ni claves reservadas. Los RPC nuevos siguen ausentes, como corresponde antes de la migración. | CSV exportado del SQL Editor y `supabase/verification/20260824000100_audited_reward_redemptions_preflight.sql`. | 2026-08-25 |
 | El preflight mostró privilegios directos amplios, incluido `TRUNCATE`, para `anon` y `authenticated`; la migración fue corregida para usar `REVOKE ALL PRIVILEGES` y luego conceder únicamente `SELECT` a `authenticated`. La auditoría local volvió a pasar sus 16 invariantes. | Grants del preflight, migración corregida y salida de `npm run audit:redemptions`. | 2026-08-25 |
 | El visor responsive de desarrollo permite alternar Teléfono, Tablet y Escritorio y no forma parte del artefacto de producción `dist`. | `dev-preview.html` y verificación de exclusión del build. | 2026-08-24 |
+| **Hecho estático reportado:** la auditoría UI/UX y la consulta del proyecto **Banco de piezas** del frente 2026-08-28 quedaron completadas con evidencia; la evidencia no equivale a validación de runtime. | Context packet/informe integrado del root al documenter; alcance y piezas contrastados en la revisión estática. | 2026-08-28 |
+| **Hecho estático reportado:** existen skeletons para cargas de menú, admin, contenido y biblioteca; Filter Pills con estado `aria-pressed`; y `Sumi Masonry Gallery` con relaciones 1:1 y 9:16. | Implementación reportada en `app.js`, `styles.css` e `index.html`; auditoría estática UI/UX. | 2026-08-28 |
+| **Hecho estático reportado:** la implementación incluye imágenes lazy con fallback y dynamic imports de QR/scanner con tokens, error/retry, touch targets, soporte tablet y labels. | Implementación reportada en `app.js`/`styles.css`/`index.html`; revisión estática integrada. | 2026-08-28 |
+| **Hecho estático reportado:** `scripts/build.mjs` excluye `assets/products` del build; todavía falta confirmar el artefacto final mediante el build aprobado. | Lectura/revisión estática reportada de `scripts/build.mjs`; gate de build aún pendiente. | 2026-08-28 |
+| **Backlog de rendimiento reportado:** P1 de imágenes con peso agregado aproximado de **48,2 MB** y P2 de modularización del admin. | Hallazgo de la auditoría estática/context packet del frente UI/UX. | 2026-08-28 |
+| **Estado de validación:** la implementación UI/UX integrada aún no tiene build ni revisión browser declarados en este frente; la recompresión masiva tampoco se ejecutó. | Gate de aprobación vigente y alcance del documenter; no se infieren resultados de los checkpoints históricos. | 2026-08-28 |
+| El encargo del 2026-08-28 incorpora una auditoría UI/UX con consulta al proyecto **Banco de piezas**, evaluación de Skeleton tipo shadcn sin React, Filter Pills accesibles, `Sumi Masonry Gallery`, skeletons de carga y optimización mediante lazy loading/dynamic imports. | Brief recibido del usuario/agente raíz y checkpoint documental de este frente; no constituye evidencia de implementación. | 2026-08-28 |
+| La propiedad documental de este frente está limitada a `PROJECT_LEDGER.md`; `app.js`, `styles.css` e `index.html` quedan fuera de las acciones autorizadas y la historia del ledger debe conservarse. | Encargo del agente raíz y reglas del protocolo compartido. | 2026-08-28 |
+| En este frente no se ejecutaron build, pruebas de runtime, revisión en navegador ni recompresión masiva; la consulta/auditoría estática del Banco de piezas sí quedó reportada con evidencia en el estado integrado. | Restricción explícita del encargo, estado integrado y alcance documental ejecutado. | 2026-08-28 |
 | **[Superseded]** El runbook de despliegue recuperable se creó inicialmente sin ejecutar. | Estado histórico anterior al checkpoint de entrega del 2026-08-25. | 2026-08-24 |
 | El baseline público read-only observado para rollback es `sumi.business` A `147.93.37.70` TTL `1800` y `www.sumi.business` CNAME a `sumi.business` TTL `300`; HTTPS respondió `200`, con título `Sumi Menu Admin`, servidor `LiteSpeed`, CSP sólo `upgrade-insecure-requests` y sin HSTS/`Cache-Control` observados. | Verificación pública read-only del 2026-08-24; no se ingresó a Hostinger ni se modificó DNS. | 2026-08-24 |
 | La consulta pública observó nameservers `horizon.dns-parking.com` y `orbit.dns-parking.com` con TTL aproximado `86400`, y no observó registros públicos `MX`, `TXT` ni `CAA`; no se deben cambiar nameservers completos y el cutover debe limitarse a registros web. | Verificación DNS read-only del 2026-08-24; no se ingresó a Hostinger ni se modificó DNS. | 2026-08-24 |
@@ -176,7 +219,13 @@
 | **Pregunta:** ¿qué parte del centro de mando será MVP local y qué parte quedará sólo diseñada? | Evita declarar “listo” un sistema que sólo tiene un brief. | Pendiente del root después del informe de arquitectura freelance. |
 | **Supuesto de seguridad:** referencias/alias a credenciales son compartibles; secretos, cookies, contraseñas y claves privadas no. | Un agente puede necesitar contexto sin recibir material de autenticación. | Decisión adoptada; requiere diseño/implementación de broker o ejecución privilegiada del root. |
 | **Pregunta:** ¿qué jurisdicción y entidades legales deben regir términos y políticas de los clientes? | El consultor legal no puede redactar documentos finales válidos sin jurisdicción y datos reales. | Fuera de la integración técnica inmediata; pendiente de brief legal. |
-| **Pregunta resuelta:** ¿se permite una prueba local de solo lectura? | El manifiesto local fue aprobado y la validación aislada se ejecutó sin APIs, DB, Storage ni red externa. | Resuelta para el alcance local; la identidad/preflight remoto de Supabase aún requiere aprobación específica. |
+| **Pregunta resuelta (estado histórico):** ¿se permite una prueba local de solo lectura? | El manifiesto local fue aprobado y la validación aislada se ejecutó sin APIs, DB, Storage ni red externa. | **Superseded para el estado remoto:** la aprobación específica, identidad/preflight, apply y postflight de Supabase quedaron resueltos en el checkpoint del 2026-08-25; conservar la restricción para nuevos frentes. |
+| **[Superseded por el checkpoint integrado 2026-08-28] Pregunta de UI/UX:** ¿qué piezas concretas del proyecto Banco de piezas son compatibles con la arquitectura vanilla actual de Sumi? | Evita introducir React, dependencias innecesarias o patrones que rompan el bundle existente. | Estado anterior: pendiente de consulta/evidencia; conservar como historial. La consulta/auditoría estática ya quedó completada, con runtime pendiente. |
+| **[Superseded por el checkpoint integrado 2026-08-28] Pregunta de alcance:** ¿en qué rutas, paneles y estados de carga deben aparecer los skeletons y qué layout debe reservar cada uno? | La cobertura incompleta puede producir saltos visuales o duplicar patrones de carga. | Estado anterior: pendiente de inventario/decisión; conservar como historial. La implementación estática reporta menú, admin, contenido y biblioteca; browser/CLS siguen pendientes. |
+| **Estado UI/UX integrado:** la consulta al Banco de piezas y la auditoría estática están completadas con evidencia; la implementación reportada cubre skeletons, Filter Pills, masonry, lazy/fallback e imports de QR/scanner. | Distingue evidencia estática de validación de runtime. | Build, browser y recompresión siguen pendientes de aprobación. |
+| **Supuesto de rendimiento:** lazy loading y dynamic imports deben reducir carga inicial sin empeorar navegación, accesibilidad ni estabilidad visual. | Un split prematuro puede aumentar requests o introducir parpadeos y errores de navegación. | Hipótesis de aceptación; requiere medición de bundle/browser antes de declararse verificada. |
+| **Gate de aprobación:** build local, browser/responsive review y recompresión masiva requieren manifiesto, límites, recuperación y aprobación explícita. | Build/browser producen artefactos o procesos; la recompresión puede sobrescribir muchos assets y es difícil de revertir. | Pendiente; no ejecutar hasta que el root/usuario lo autorice. |
+| **Pregunta de assets:** ¿qué formatos, umbrales de calidad/peso y conjunto allowlisted regirán la recompresión? | Sin límites se puede degradar la galería o perder originales recuperables. | Pendiente de inventario y aprobación; conservar originales/rollback como requisito. |
 
 ## Matriz de autorización
 
@@ -185,10 +234,13 @@
 | `owner` | Panel, clientes, consumos, menú, premios, ajustes | Leer y administrar según RLS; corregir/cancelar consumos y ajustar puntos con motivo en el flujo existente | Sólo `business_id` con membresía owner | Responsable del negocio; `is_business_admin`/RLS |
 | `manager` | Inicio, Clientes, Consumos, Menú, Fidelización | Lectura y operaciones permitidas por `is_business_manager`; no asumir acceso a ajustes, contenido, biblioteca o QRs hasta verificar | Sólo su negocio | Las migraciones amplían lectura/gestión operativa a manager; la UI limita vistas explícitamente |
 | `employee` | Lookup de cliente y registro de consumo | Buscar por QR/nombre/correo y registrar consumo vía RPC; no editar perfiles ni quitar puntos libremente | Sólo clientes del `business_id` autenticado | Uso móvil de caja; `is_business_staff` y workspace separado |
-| `employee` (canjes) | Solicitudes de canje | Aprobar y marcar entregado mediante cola/RPC estricto y confirmación; no cancelar | Sólo canjes del negocio | Implementación local completada; falta auditoría/pruebas autorizadas, apply y verificación remota |
+| `employee` (canjes) | Solicitudes de canje | Aprobar y marcar entregado mediante cola/RPC estricto y confirmación; no cancelar | Sólo canjes del negocio | Implementación local, apply transaccional y postflight remoto verificados el 2026-08-25 |
 | `customer` | Perfil, puntos, QR, historial, canjes | Leer/escribir sólo su perfil permitido y solicitar premios; no acreditar puntos desde el frontend | Sólo su `customer_profile` y cuenta | RLS y RPC de solicitud |
 | `platform_operator` | Onboarding e invitaciones | Administrar invitaciones, submissions y archivos privados según RLS | Plataforma, no datos operativos de un negocio salvo reglas explícitas | Flujo B2B de onboarding |
 | Agentes/subagentes | Contexto de proyectos | Consultar briefs, hechos, decisiones, alias y estado; proponer o editar sólo archivos asignados | Sin secretos en texto plano; mínimo privilegio; root coordina acciones externas | Separar contexto compartido de credenciales privilegiadas |
+| `documenter` (frente 2026-08-28) | `PROJECT_LEDGER.md` y context packet | Registrar alcance, hechos, supuestos, decisiones, criterios, manifiestos, riesgos y estado; no editar archivos de producto ni ejecutar pruebas | Sólo documentación compartida; preservar historia | Custodia de consistencia del ledger |
+| Especialista UI/UX/rendimiento | Banco de piezas y archivos que el root asigne | Consulta/auditoría estática completada; implementación reportada; aportar evidencia de accesibilidad, bundle y browser antes del cierre | Sin asumir aprobación de build, browser, recompression o cambios externos | Estado integrado; validación runtime y cierre técnico pendientes |
+| `root` (frente 2026-08-28) | Integración de producto y puertas de ejecución | Decidir alcance final, asignar especialista, aprobar manifiestos y revisar cambios/evidencia antes de integrar | Usuario/root conserva aprobación de acciones sensibles; sólo root actualiza el objetivo oficial | Coordinación e integración |
 
 ## Decisiones
 
@@ -197,7 +249,7 @@
 | Usar **Sumi** como nombre coherente del producto y `businessId` local. | El frontend/config ya lo usa; evita seguir propagando el nombre histórico. | Mantener `scan-and-earn-buddy` en todos los sistemas. | Usuario/root | 2026-08-24 |
 | Tratar el nombre externo de Supabase como **Sumi** y conservar la discrepancia de la caché local como riesgo operativo. | El dashboard visible figura como Sumi, pero `.temp/linked-project.json` aún dice `scan-and-earn-buddy`; no se debe aplicar una migración al destino equivocado. | Declararlo reconciliado sin refrescar la referencia local. | Documenter/root | 2026-08-24 |
 | Mantener el flujo de puntos correctivos del owner; el empleado no puede quitar puntos a voluntad. | Reduce abuso y permite revisión de errores de monto. | Permitir reversión directa al empleado. | Usuario/root | Conversación previa; fecha exacta no registrada |
-| El canje debe tener transiciones estrictas, historial inmutable de actores y confirmación antes de una acción irreversible. | Evita `requested → redeemed` accidental, doble toque y pérdida de quién aprobó/entregó. | Actualizar sólo el último status en `reward_redemptions`. | Usuario/root + implementador | Conversación previa; implementación pendiente de evidencia |
+| El canje debe tener transiciones estrictas, historial inmutable de actores y confirmación antes de una acción irreversible. | Evita `requested → redeemed` accidental, doble toque y pérdida de quién aprobó/entregó. | Actualizar sólo el último status en `reward_redemptions`. | Usuario/root + implementador | Conversación previa; decisión vigente; implementación/apply/postflight verificados el 2026-08-25 |
 | No tocar DNS hasta tener despliegue Vercel verificado; no retirar Lovable hasta tener sustitución recuperable y aprobación de acción destructiva. | Evita dejar el dominio o servicio sin destino. | Cambiar DNS/borrar Lovable primero. | Root/usuario | 2026-08-24 |
 | No entregar credenciales de clientes en texto plano a ningún agente. | Reduce exposición y privilegia sesiones/tokens revocables o broker controlado. | Guardar contraseñas en el centro de mando o pasarlas en briefs. | Usuario/root | Conversación previa |
 | Analítica inicial se llama Estadísticas y se basa en consumos registrados; no se promete ventas/POS sin ledger de pedidos. | Evita métricas falsas y confundir puntos con facturación. | Presentar ticket como venta completa desde el MVP. | Usuario/root; brief en revisión | 2026-08-24 |
@@ -206,6 +258,11 @@
 | El despliegue oficial sigue una secuencia recuperable: commit aprobado → importación Vercel en root `.` con Vite/`npm run build`/`dist` → variables Preview/Production → preview y logs → dominio y DNS exactos → validación producción. | Reduce el riesgo de publicar el commit o destino equivocado y deja una puerta de rollback. | Cambiar DNS o retirar Lovable antes del preview. | Root/usuario | 2026-08-24 |
 | Vercel sólo recibe `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` y `VITE_PUBLIC_APP_URL` por entorno; nunca `service-role` ni secretos equivalentes. | Mantiene privilegio mínimo y evita exponer credenciales en el bundle. | Copiar `.env` local o usar una service-role en frontend. | Root/usuario | 2026-08-24 |
 | `sumi.business` se conecta usando únicamente los registros exactos mostrados por Vercel; se reduce TTL antes del cambio y Lovable se conserva hasta confirmación destructiva final. | Evita mutar DNS incorrecto y conserva recuperación. | Adivinar registros o retirar Lovable durante el cutover. | Root/usuario | 2026-08-24 |
+| Registrar la auditoría UI/UX y rendimiento del 2026-08-28 como un frente separado, con propiedad del documenter sobre el contexto y del root sobre la integración/aprobaciones. | Permite preservar el cierre operativo anterior sin mezclar propuestas nuevas con hechos de despliegue. | Reescribir el checkpoint anterior o declarar terminada una implementación no verificada. | Documenter/root | 2026-08-28 |
+| Tomar del Banco de piezas como candidatas Skeleton tipo shadcn adaptado sin React, Filter Pills accesibles y `Sumi Masonry Gallery`, sujeto a compatibilidad y revisión. | Reutiliza patrones consistentes y mantiene la identidad de Sumi sin imponer un runtime React. | Añadir una librería React completa o crear cada patrón sin consultar el catálogo. | Usuario/root + especialista UI/UX | 2026-08-28 |
+| Los skeletons deben reservar la geometría del contenido y respetar estados accesibles, incluida la preferencia de movimiento reducido, antes de sustituirse por contenido real. | Reduce layout shift y comunica carga sin bloquear a lectores de pantalla. | Spinners genéricos o placeholders que no reflejan el layout. | Root + implementador UI (por asignar) | 2026-08-28 |
+| Priorizar lazy loading y dynamic imports sólo donde la evidencia de bundle/carga inicial muestre beneficio; no introducir optimizaciones especulativas. | Evita convertir una optimización en más requests, parpadeos o complejidad. | Cargar todo al inicio o dividir indiscriminadamente. | Root + especialista de rendimiento (por asignar) | 2026-08-28 |
+| No ejecutar build/browser/recompresión masiva ni sobrescribir assets hasta contar con manifiesto y aprobación explícita; cualquier compresión debe conservar originales y rollback. | La recompresión es una escritura masiva y las otras acciones producen artefactos/procesos que requieren control. | Ejecutar validaciones o reescrituras automáticamente con el cambio documental. | Usuario/root | 2026-08-28 |
 
 ## Criterios de aceptación
 
@@ -225,6 +282,15 @@
 - [x] El centro de mando tiene brief/contexto por cliente, onboarding y referencias de credenciales sin secretos en texto plano.
 - [x] El centro de mando documenta mínimo privilegio, rotación/revocación, auditoría e intervención del root/usuario.
 - [x] Las pruebas ejecutadas tienen manifiesto, límites, limpieza, aprobación y resultado; lo no autorizado figura como no ejecutado.
+- [x] La auditoría estática UI/UX documenta hallazgos priorizados y reemplazos del Banco de piezas, con justificación y compatibilidad estática evidenciadas; la validación runtime queda en criterios separados.
+- [ ] Los skeletons cubren los estados de carga relevantes sin salto de layout, no anuncian contenido falso a tecnologías de asistencia y respetan `prefers-reduced-motion`.
+- [x] El Skeleton reportado se integra sin React ni un runtime/dependencia pesada nueva y mantiene los tokens visuales de Sumi en la revisión estática; falta validar runtime/visual.
+- [ ] Las Filter Pills son navegables por teclado, tienen foco visible, estado activo/inactivo perceptible, semántica ARIA adecuada y una forma clara de limpiar filtros.
+- [ ] La `Sumi Masonry Gallery` funciona en los breakpoints soportados, reserva dimensiones, ofrece fallback de imagen y difiere imágenes no visibles mediante lazy loading.
+- [ ] Lazy loading y dynamic imports reducen el trabajo/chunk inicial sin regresiones de navegación, accesibilidad, errores de carga o rendimiento medido.
+- [ ] Build y revisión browser/responsive se ejecutan sólo con aprobación y manifiesto; sus resultados y artefactos quedan registrados antes de declarar aceptación.
+- [ ] Cualquier recompresión masiva se limita a un conjunto allowlisted, conserva originales/rollback, cumple umbrales de calidad/peso y sólo se realiza tras aprobación explícita.
+- [ ] El frente no modifica `app.js`, `styles.css` ni `index.html` desde la propiedad documental del ledger; los cambios de producto posteriores tienen dueño, revisión y evidencia separados.
 
 ## Estado de trabajo
 
@@ -235,7 +301,8 @@
 | Auditoría de seguridad y datos | Especialistas de seguridad/datos + root | Revisión precommit sin P0/P1; el riesgo remoto quedó cerrado por apply/postflight | Reportes de revisión y árbol local corregido | Validación funcional desde el despliegue |
 | Auditoría estática nueva de canjes | Root | Completada: 16 invariantes PASS | `scripts/audit-redemptions.mjs`, `package.json`; salida del 2026-08-24 | Reejecutar sólo si cambia el contrato y existe nueva aprobación |
 | Arquitectura del centro freelance | `freelance_stack_architect` + `documenter` | Arquitectura reusable creada y registrada; implementación del MVP aún pendiente | `docs/FREELANCE_COMMAND_CENTER.md` | Brief/ledger y decisión MVP |
-| UI/UX y responsive admin/empleado | Especialistas globales / root | Flujo de empleado validado localmente; visor `dev-preview.html` terminado para Teléfono/Tablet/Escritorio; aceptación de producción pendiente | `app.js`, `index.html`, `styles.css`, `dev-preview.html` | Validación remota y revisión final de despliegue |
+| UI/UX y responsive admin/empleado | Especialistas globales / root | Flujo de empleado validado localmente; visor `dev-preview.html` terminado para Teléfono/Tablet/Escritorio; la aceptación de producción del despliegue quedó cerrada el 2026-08-25 | `app.js`, `index.html`, `styles.css`, `dev-preview.html` | Nuevo frente UI/UX/rendimiento del 2026-08-28, con piezas y gates separados |
+| Auditoría UI/UX, Banco de piezas y optimización — 2026-08-28 | `documenter` (contexto/ledger); root (aprobación/integración); especialista UI/UX/rendimiento | Auditoría estática/consulta completadas con evidencia; implementación integrada no validada por build/browser; backlog P1 imágenes ~48,2 MB y P2 modularización admin; gate de recompresión pendiente | `PROJECT_LEDGER.md` para este frente; implementación reportada en `app.js`, `styles.css`, `index.html`, `scripts/build.mjs` | Aprobación y manifiesto de build/browser/recompresión; evidencia runtime |
 | Supabase/RLS/migraciones | Root + especialista de datos | Migración aplicada a Sumi mediante Management API dentro de `BEGIN/COMMIT`; postflight confirma cobertura completa, RLS/RPC y cero grants inseguros | `supabase/migrations/**`, `supabase/config.toml`, `supabase/verification/**` | Validación funcional desde el build desplegado |
 | Runbook de despliegue recuperable | `documenter` + root | Ejecutado y cerrado; rollback preservado | `docs/DEPLOYMENT_RUNBOOK.md`, este ledger y evidencia externa | Ninguna |
 | Graphify | Graphify/Documenter | Grafo local generado y diagnosticado; posible actualización posterior si cambia el código | `graphify-out/**` | Decidir si actualizar después del merge; requiere registrar costo |
@@ -254,6 +321,9 @@
 | `npm run audit:ui` | Local; análisis estático | Una ejecución | Concedida | PASS: 153 botones/controlados |
 | `npm run smoke:ui` | Servidor aislado `127.0.0.1:4178`, navegador local y `VITE_DISABLE_REMOTE=true`; comprueba `remoteDisabled`/`hasSupabase` | Ejecución acotada; listener cerrado al finalizar; sin red externa ni datos reales | Manifiesto local aprobado | PASS completo; la inicialización sin Supabase marca `loaded=true` y no entra en el bucle de microtareas |
 | `npm run check:supabase` y comprobaciones de onboarding/cliente/live-sync | Local; algunas pueden consultar o escribir según script, por confirmar antes de ejecutar | Leer el script y declarar servicios/volumen/limpieza; detener al primer fallo | **No concedida** | No ejecutadas |
+| **Gate UI/UX pendiente — build de validación** | Entorno local/Vite; una ejecución; puede regenerar/escribir `dist/` y `dist-onboarding/`; no se autoriza asumir llamadas API/DB | Preservar o registrar los artefactos previos; una iteración acotada; detener ante error de compilación/configuración; limpiar sólo artefactos temporales conforme a la aprobación | **Pendiente de aprobación explícita del usuario/root** | **No ejecutado en este frente** |
+| **Gate UI/UX pendiente — revisión browser/responsive** | Navegador y servidor local aislado; una sesión para Teléfono/Tablet/Escritorio; sin credenciales, APIs externas ni escrituras remotas previstas | Cerrar listener al terminar; registrar consola, layout shift, foco/teclado y estados skeleton; detener ante error crítico; capturas/notas sólo si se aprueban | **Pendiente de aprobación explícita del usuario/root** | **No ejecutado en este frente** |
+| **Gate UI/UX pendiente — recompresión masiva de assets** | Escrituras locales sobre imágenes con peso agregado reportado de ~48,2 MB; conjunto allowlisted, volumen de archivos, formatos y destino aún por determinar; sin Storage/red externa | Preservar originales o snapshot recuperable; una pasada, concurrencia 1; definir umbrales de calidad/peso; detener ante pérdida visual/decode/error; eliminar temporales sólo después de verificar rollback | **Pendiente de aprobación explícita y manifiesto de escritura masiva** | **No ejecutado en este frente** |
 | Aplicar migración auditada en Supabase | Escritura de esquema, funciones y RLS; sin Storage | Proyecto Sumi verificado; una ejecución mediante Management API; transacción `BEGIN/COMMIT`; postflight sólo lectura | Concedida por el usuario para continuar sin reconfirmaciones rutinarias | PASS: 2 canjes y 2 eventos, cobertura completa; 0 grants inseguros, duplicados, estados inválidos, cruces de tenant o claves reservadas |
 | Actualizar Graphify | Escritura local de grafo/cache; costo de tokens | Declarar archivos incluidos, temporales, retención y costo estimado; no indexar secretos | Requiere manifiesto si vuelve a ejecutarse | Estado actual preservado; no relanzado |
 | Deploy Vercel / conectar DNS Hostinger | Mutaciones externas y publicación | Proyecto `sumi`, root `.`, Vite/build `dist`, cuatro variables públicas; no borrar Lovable | Usuario autorizó los cuatro cambios DNS exactos; retirada permanece separada | PASS: DNS propagado, HTTPS/certificados/HSTS y bundle actual verificados en apex y `www`; registros no web preservados |
@@ -266,5 +336,57 @@
 - **Grafo y salud:** `graphify-out/graph.json`, `graphify-out/GRAPH_HEALTH.json`, `graphify-out/manifest.json`, `graphify-out/cost.json`, `graphify-out/graph.html`.
 - **Supabase:** proyecto remoto Sumi confirmado por CLI. `20260824000100_audited_reward_redemptions.sql` se aplicó transaccionalmente mediante Management API. El resultado persistido en `supabase/verification/20260824000100_audited_reward_redemptions_postflight.result.json` confirma cuatro columnas, constraints, índices, triggers, RLS y RPC; 2/2 canjes tienen evento de auditoría y no existen grants directos inseguros.
 - **Pruebas:** `audit:ui` (153) y `audit:redemptions` (16) pasan; build principal/onboarding pasa; smoke aislado completo pasa con Supabase desactivado. Identidad, preflight, apply transaccional y postflight remoto de Supabase están verificados.
+- **[Superseded por el estado integrado 2026-08-28] Frente UI/UX:** el checkpoint documental inicial registraba sólo alcance/propuesta y no evidencia de implementación; se conserva como historial.
+- **Evidencia UI/UX integrada:** la auditoría estática y la consulta al Banco de piezas se completaron con evidencia; se reportan skeletons de menú/admin/contenido/biblioteca, Filter Pills `aria-pressed`, masonry 1:1/9:16, lazy images con fallback, imports dinámicos de QR/scanner y exclusión de `assets/products` en `scripts/build.mjs`. La validación runtime aún no está cerrada.
+- **Evidencia pendiente:** build/chunks, capturas browser, resultados de accesibilidad, CLS y comparación final de peso/calidad de assets. El especialista/root debe aportar estas evidencias antes de marcar criterios runtime como aceptados.
+- **Pruebas no ejecutadas en este frente:** build de validación, revisión browser/responsive y recompresión masiva de assets. Permanecen bloqueadas por el gate de aprobación y manifiesto; no se infieren resultados a partir de los checkpoints históricos.
 - **Riesgos residuales:** los dos eventos históricos tienen rol `unknown` porque preceden al nuevo registro de identidad; los eventos futuros capturan actor/rol. La caché intermedia observada agotó su TTL y la resolución normal de este equipo ya devuelve las dos IP de Vercel. Persisten cambios ajenos de skills/`graphify-out/` que deben quedar fuera del commit.
-- **Entrega:** publicar este cierre documental sin incluir cambios ajenos y conservar como rollback los valores DNS anteriores y el deployment estable. La auditoría requisito por requisito quedó completada.
+- **Riesgos nuevos:** imágenes (~48,2 MB) pueden penalizar carga; dynamic imports pueden aumentar requests o fallar en navegación; skeletons/masonry sin validación pueden empeorar CLS; recompresión sin allowlist/originales puede degradar o hacer irrecuperables assets; modularización admin sigue como P2.
+- **Entrega de este frente:** sólo se actualizó `PROJECT_LEDGER.md`; se conserva el checkpoint documental y se registra el estado integrado. La implementación de producto existe según la auditoría estática, pero build/browser/recompresión siguen sin aprobación y sin resultados declarados.
+
+## Checkpoint UI/UX de componentes — 2026-08-29
+
+- El usuario autorizo continuar con el gate local anunciado: remoto/Supabase desactivado, sin API/DB/Storage, hasta dos builds y recorrido browser responsive; la recompresion y el deploy continuaron fuera de alcance.
+- Se adapto una capa vanilla basada en piezas locales del Banco: `shadcn-button`, `origin-ui-button`, `shadcn-badge`, `origin-ui-filter-pills`, `discovered-shadcn-ui-input-group`, `origin-ui-input`, `discovered-shadcn-ui-native-select`, `discovered-shadcn-ui-table`, `shadcn-card`, `shadcn-tabs`, `origin-ui-tabs`, `discovered-shadcn-ui-empty`, `shadcn-skeleton` y el contrato live-region de `shadcn-toast`.
+- No se importaron React, Base UI, Radix, CVA ni nuevas dependencias. Dialog, Select y Sidebar se usaron solo como referencia o se rechazaron como runtime por costo innecesario.
+- Implementacion: controles de 44 px, variantes y estados comunes; pills de tono/biblioteca con `aria-pressed`; busquedas con nombre accesible; tablas con roles; tabs con roving tabindex y flechas/Home/End; `aria-current` solo en la ruta activa; toast atomico; empty states y superficies unificadas.
+- Correcciones browser: pills de tono de 36 a 44 px, tooltip de 20 a 44 px, label de checkbox con objetivo de 44 px y eliminacion de overflow publico por `100vw` en navegador con scrollbar clasico.
+- Evidencia: `npm run audit:ui` PASS (154); dos `npm run build` PASS; admin sin overflow y sin controles visibles sub-44 en 390 x 844, 768 x 1024 y 1440 x 900; nueve secciones recorridas; tabs de idioma verificados por teclado; consola sin errores/warnings.
+- Bundle del ultimo build aprobado: JS principal 429,27 kB / 116,10 kB gzip; CSS 158,94 kB / 29,56 kB gzip; QR scanner/worker y QR permanecen diferidos.
+- Riesgo P1 vigente: 43 PNG de menu suman ~48,2 MB. No se recomprimieron; WebP/AVIF + `srcset` requiere manifiesto separado, allowlist, originales y rollback.
+- Documento de evidencia: `docs/ui-component-audit.md`.
+
+## Checkpoint de pipeline de imágenes — 2026-08-29
+
+Este checkpoint supersede, para el pipeline de imágenes, las referencias
+anteriores que dejaban pendiente la validación local; no autoriza ni declara
+ejecutadas operaciones remotas o una conversión masiva de assets.
+
+- **Alcance implementado:** toda nueva imagen importada desde el editor se
+  genera para el menú como WebP, con límite de 1400 px, calidad `0.78` y
+  protección de entrada hasta 36 MP. La copia original local se conserva en
+  IndexedDB; el campo legacy `photo` continúa siendo compatible como fallback.
+- **Descarga:** el editor del panel admin expone la descarga de la imagen
+  original con la mayor calidad disponible, separada del derivado WebP usado
+  en el menú.
+- **Contrato remoto diseñado, no ejecutado:** `menu-images-public` contendría
+  los derivados WebP públicos y `menu-images-originals` los originales
+  privados, accesibles para admin mediante signed URL. La migración local del
+  contrato fue creada, pero **no fue aplicada**; no se escribieron API, DB ni
+  Supabase Storage y no hubo deploy.
+- **Compatibilidad y alcance de assets:** los 43 PNG existentes no se
+  convirtieron en esta iteración; conservan el fallback legacy hasta contar con
+  un manifiesto separado, allowlist, originales y rollback.
+- **Evidencia local reportada:** `npm run audit:ui` PASS con 155 controles,
+  `node --check` PASS y dos builds PASS. Se revisó la vista local del editor
+  `/admin/menu/hummus/edit`.
+- **Archivos integrados:** `app.js`, `index.html`, `styles.css`,
+  `scripts/build.mjs`, `docs/ui-component-audit.md`, este ledger y la migración
+  local `20260829000100_menu_images_storage.sql`.
+
+**Riesgos pendientes:** IndexedDB es local al navegador y requiere una
+  estrategia de recuperación/sincronización cuando se habilite persistencia
+  remota; los originales privados necesitarán políticas de bucket y signed
+  URLs auditadas; los PNG legacy siguen aportando peso; y la migración todavía
+  debe pasar por revisión, aprobación y postflight antes de cualquier escritura
+  remota.
