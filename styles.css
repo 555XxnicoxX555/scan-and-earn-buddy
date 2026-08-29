@@ -7610,7 +7610,8 @@ body.photo-ai-open {
   scroll-padding-inline: 18px;
   scroll-snap-type: x proximity;
   overscroll-behavior-inline: contain;
-  touch-action: pan-x pinch-zoom;
+  touch-action: pan-x pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
   cursor: grab;
   user-select: none;
   scrollbar-width: none;
@@ -7704,6 +7705,18 @@ body.photo-ai-open {
 
 .category-strip .category-pill:active {
   transform: translateY(0) scale(0.97);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .category-strip {
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+    cursor: auto;
+  }
+
+  .category-strip .category-pill {
+    scroll-snap-align: none;
+  }
 }
 
 .loyalty-card {
