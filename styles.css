@@ -7608,7 +7608,7 @@ body.photo-ai-open {
   gap: 9px;
   overflow-x: auto;
   scroll-padding-inline: 18px;
-  scroll-snap-type: x proximity;
+  scroll-snap-type: none;
   overscroll-behavior-inline: contain;
   touch-action: pan-x pan-y pinch-zoom;
   -webkit-overflow-scrolling: touch;
@@ -7635,7 +7635,6 @@ body.photo-ai-open {
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  scroll-snap-align: center;
   border: 1px solid rgba(255, 223, 165, 0.22);
   border-radius: 999px;
   background: rgba(255, 249, 236, 0.025);
@@ -7709,13 +7708,8 @@ body.photo-ai-open {
 
 @media (hover: none) and (pointer: coarse) {
   .category-strip {
-    scroll-snap-type: none;
     scroll-behavior: auto;
     cursor: auto;
-  }
-
-  .category-strip .category-pill {
-    scroll-snap-align: none;
   }
 }
 

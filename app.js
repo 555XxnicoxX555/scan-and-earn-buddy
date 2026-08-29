@@ -10441,6 +10441,38 @@ function bindBrandButtons() {
 
 let categoryDragState = null;
 let suppressCategoryClickUntil = 0;
+let categoryMomentumFrame = 0;
+
+function stopCategoryMomentum() {
+  if (!categoryMomentumFrame) return;
+  window.cancelAnimationFrame(categoryMomentumFrame);
+  categoryMomentumFrame = 0;
+}
+
+function startCategoryMomentum(initialVelocity) {
+  stopCategoryMomentum();
+  if (Math.abs(initialVelocity) < 0.03 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  let velocity = Math.max(-2.4, Math.min(2.4, initialVelocity));
+  let previousTime = performance.now();
+
+  const advance = (time) => {
+    const elapsed = Math.min(32, time - previousTime);
+    previousTime = time;
+    const previousScroll = categoryStrip.scrollLeft;
+    categoryStrip.scrollLeft += velocity * elapsed;
+    const reachedEdge = categoryStrip.scrollLeft === previousScroll;
+    velocity *= Math.pow(0.92, elapsed / 16.67);
+
+    if (reachedEdge || Math.abs(velocity) < 0.025) {
+      categoryMomentumFrame = 0;
+      return;
+    }
+    categoryMomentumFrame = window.requestAnimationFrame(advance);
+  };
+
+  categoryMomentumFrame = window.requestAnimationFrame(advance);
+}
 
 categoryStrip.addEventListener("click", (event) => {
   const button = event.target.closest("[data-category]");
@@ -10472,16 +10504,20 @@ categoryStrip.addEventListener("keydown", (event) => {
 
 categoryStrip.addEventListener("pointerdown", (event) => {
   if (event.pointerType !== "mouse" || event.button !== 0) return;
+  stopCategoryMomentum();
   categoryDragState = {
     pointerId: event.pointerId,
     startX: event.clientX,
-    startScrollLeft: categoryStrip.scrollLeft,
+    lastX: event.clientX,
+    lastTime: performance.now(),
+    velocity: 0,
     moved: false,
   };
 });
 
 categoryStrip.addEventListener("pointermove", (event) => {
   if (!categoryDragState || event.pointerId !== categoryDragState.pointerId) return;
+  const now = performance.now();
   const distance = event.clientX - categoryDragState.startX;
   if (!categoryDragState.moved && Math.abs(distance) > 8) {
     categoryDragState.moved = true;
@@ -10490,12 +10526,23 @@ categoryStrip.addEventListener("pointermove", (event) => {
   }
   if (!categoryDragState.moved) return;
   event.preventDefault();
-  categoryStrip.scrollLeft = categoryDragState.startScrollLeft - distance;
+  const delta = event.clientX - categoryDragState.lastX;
+  const elapsed = Math.max(8, now - categoryDragState.lastTime);
+  const instantaneousVelocity = -delta / elapsed;
+  categoryStrip.scrollLeft -= delta;
+  categoryDragState.velocity = categoryDragState.velocity * 0.62 + instantaneousVelocity * 0.38;
+  categoryDragState.lastX = event.clientX;
+  categoryDragState.lastTime = now;
 });
 
 function endCategoryDrag(event) {
   if (!categoryDragState || event.pointerId !== categoryDragState.pointerId) return;
-  if (categoryDragState.moved) suppressCategoryClickUntil = performance.now() + 180;
+  const dragState = categoryDragState;
+  if (dragState.moved) {
+    suppressCategoryClickUntil = performance.now() + 180;
+    const releaseVelocity = performance.now() - dragState.lastTime > 90 ? 0 : dragState.velocity;
+    if (event.type === "pointerup") startCategoryMomentum(releaseVelocity);
+  }
   categoryDragState = null;
   categoryStrip.classList.remove("is-dragging");
   if (categoryStrip.hasPointerCapture(event.pointerId)) categoryStrip.releasePointerCapture(event.pointerId);
