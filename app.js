@@ -4628,11 +4628,50 @@ function renderCategories() {
   const items = currentItems();
   const categories = categoryOrder[currentBrand] || [];
   categoryStrip.innerHTML = categories
-    .map((category) => {
+    .map((category, index) => {
       const count = items.filter((dish) => dish.category === category).length;
-      return `<button class="${category === currentCategory ? "active" : ""}" data-category="${escapeAttribute(category)}" type="button" aria-pressed="${category === currentCategory}">${escapeHtml(localCategory(category))} &middot; ${count}</button>`;
+      const active = category === currentCategory;
+      const localizedCategory = localCategory(category);
+      return `
+        <button
+          class="category-pill ${active ? "active" : ""}"
+          data-category="${escapeAttribute(category)}"
+          type="button"
+          aria-label="${escapeAttribute(`${localizedCategory}, ${count} ${labels[currentLang].dishes}`)}"
+          aria-pressed="${active}"
+          aria-controls="publicMenuProducts"
+          tabindex="${active || (!currentCategory && index === 0) ? "0" : "-1"}"
+        >
+          <span class="category-pill-label">${escapeHtml(localizedCategory)}</span>
+          <span class="category-pill-count" aria-hidden="true">${count}</span>
+        </button>
+      `;
     })
     .join("");
+}
+
+function activateCategory(category, { focus = false } = {}) {
+  if (!category) return;
+  const hasSearchQuery = Boolean(searchInput.value.trim());
+  if (category === currentCategory && !hasSearchQuery) {
+    if (focus) {
+      categoryStrip.querySelectorAll("[data-category]").forEach((button) => {
+        if (button.dataset.category === category) button.focus({ preventScroll: true });
+      });
+    }
+    return;
+  }
+
+  currentCategory = category;
+  searchInput.value = "";
+  renderList();
+
+  window.requestAnimationFrame(() => {
+    const selectedButton = [...categoryStrip.querySelectorAll("[data-category]")]
+      .find((button) => button.dataset.category === category);
+    selectedButton?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    if (focus) selectedButton?.focus({ preventScroll: true });
+  });
 }
 
 function renderRecommendation() {
@@ -10401,18 +10440,34 @@ function bindBrandButtons() {
 }
 
 let categoryDragState = null;
-let suppressCategoryClick = false;
+let suppressCategoryClickUntil = 0;
 
 categoryStrip.addEventListener("click", (event) => {
-  if (suppressCategoryClick) {
-    suppressCategoryClick = false;
-    return;
-  }
   const button = event.target.closest("[data-category]");
-  if (!button) return;
-  currentCategory = button.dataset.category;
-  searchInput.value = "";
-  renderList();
+  if (!button || !categoryStrip.contains(button)) return;
+  if (performance.now() < suppressCategoryClickUntil) return;
+  activateCategory(button.dataset.category);
+});
+
+categoryStrip.addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const buttons = [...categoryStrip.querySelectorAll("[data-category]")];
+  if (!buttons.length) return;
+
+  const currentButton = event.target.closest("[data-category]");
+  const currentIndex = Math.max(0, buttons.indexOf(currentButton));
+  const isRtl = document.body.dir === "rtl";
+  let nextIndex = currentIndex;
+
+  if (event.key === "Home") nextIndex = 0;
+  else if (event.key === "End") nextIndex = buttons.length - 1;
+  else {
+    const visualStep = event.key === "ArrowRight" ? 1 : -1;
+    nextIndex = (currentIndex + (isRtl ? -visualStep : visualStep) + buttons.length) % buttons.length;
+  }
+
+  event.preventDefault();
+  activateCategory(buttons[nextIndex].dataset.category, { focus: true });
 });
 
 categoryStrip.addEventListener("pointerdown", (event) => {
@@ -10423,20 +10478,24 @@ categoryStrip.addEventListener("pointerdown", (event) => {
     startScrollLeft: categoryStrip.scrollLeft,
     moved: false,
   };
-  categoryStrip.setPointerCapture(event.pointerId);
-  categoryStrip.classList.add("is-dragging");
 });
 
 categoryStrip.addEventListener("pointermove", (event) => {
   if (!categoryDragState || event.pointerId !== categoryDragState.pointerId) return;
   const distance = event.clientX - categoryDragState.startX;
-  if (Math.abs(distance) > 4) categoryDragState.moved = true;
+  if (!categoryDragState.moved && Math.abs(distance) > 8) {
+    categoryDragState.moved = true;
+    categoryStrip.setPointerCapture(event.pointerId);
+    categoryStrip.classList.add("is-dragging");
+  }
+  if (!categoryDragState.moved) return;
+  event.preventDefault();
   categoryStrip.scrollLeft = categoryDragState.startScrollLeft - distance;
 });
 
 function endCategoryDrag(event) {
   if (!categoryDragState || event.pointerId !== categoryDragState.pointerId) return;
-  suppressCategoryClick = categoryDragState.moved;
+  if (categoryDragState.moved) suppressCategoryClickUntil = performance.now() + 180;
   categoryDragState = null;
   categoryStrip.classList.remove("is-dragging");
   if (categoryStrip.hasPointerCapture(event.pointerId)) categoryStrip.releasePointerCapture(event.pointerId);
