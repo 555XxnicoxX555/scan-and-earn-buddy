@@ -108,6 +108,22 @@ let aiCreditEvents = [];
 
 applyBusinessTheme();
 
+function clampNumber(value, min, max, fallback) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? Math.min(max, Math.max(min, numericValue)) : fallback;
+}
+
+function normalizedFeaturedImage(dish = {}) {
+  const framing = dish?.featuredImage && typeof dish.featuredImage === "object"
+    ? dish.featuredImage
+    : {};
+  return {
+    x: clampNumber(framing.x, 0, 100, 50),
+    y: clampNumber(framing.y, 0, 100, 50),
+    zoom: clampNumber(framing.zoom, 1, 1.4, 1)
+  };
+}
+
 function serializedMenuItems() {
   return menuItems.map((dish) => ({
     id: dish.id,
@@ -123,6 +139,7 @@ function serializedMenuItems() {
     photoOriginalStorageKey: dish.photoOriginalStorageKey || "",
     photoStoragePath: dish.photoStoragePath || "",
     photoOriginalStoragePath: dish.photoOriginalStoragePath || "",
+    featuredImage: normalizedFeaturedImage(dish),
     visible: dish.visible !== false,
     soldOut: Boolean(dish.soldOut),
     lastEditedAt: dish.lastEditedAt || "",
@@ -161,6 +178,7 @@ function applyMenuItemsState(items) {
       item.photoOriginalStorageKey = savedItem.photoOriginalStorageKey || item.photoOriginalStorageKey || "";
       item.photoStoragePath = savedItem.photoStoragePath || item.photoStoragePath || "";
       item.photoOriginalStoragePath = savedItem.photoOriginalStoragePath || item.photoOriginalStoragePath || "";
+      item.featuredImage = normalizedFeaturedImage(savedItem.featuredImage ? savedItem : item);
       item.visible = savedItem.visible !== false;
       item.soldOut = Boolean(savedItem.soldOut);
       item.lastEditedAt = savedItem.lastEditedAt || item.lastEditedAt || "";
@@ -664,6 +682,19 @@ const dishPhotoInput = document.querySelector("#dishPhotoInput");
 const improvePhotoButton = document.querySelector("#improvePhotoButton");
 const downloadOriginalPhotoButton = document.querySelector("#downloadOriginalPhotoButton");
 const dishPhotoFormatStatus = document.querySelector("#dishPhotoFormatStatus");
+const featuredFramingPreview = document.querySelector("#featuredFramingPreview");
+const featuredFramingImage = document.querySelector("#featuredFramingImage");
+const featuredFramingName = document.querySelector("#featuredFramingName");
+const featuredFramingDescription = document.querySelector("#featuredFramingDescription");
+const featuredFramingPrices = document.querySelector("#featuredFramingPrices");
+const featuredImageOverview = document.querySelector("#featuredImageOverview");
+const featuredImageOverviewPhoto = document.querySelector("#featuredImageOverviewPhoto");
+const featuredFocusMarker = document.querySelector("#featuredFocusMarker");
+const featuredFocusXInput = document.querySelector("#featuredFocusX");
+const featuredFocusYInput = document.querySelector("#featuredFocusY");
+const featuredZoomInput = document.querySelector("#featuredZoom");
+const featuredZoomValue = document.querySelector("#featuredZoomValue");
+const resetFeaturedFramingButton = document.querySelector("#resetFeaturedFraming");
 const addPresentationButton = document.querySelector("#addPresentationButton");
 const presentations = document.querySelector("#presentations");
 const brandSelect = document.querySelector("#brandSelect");
@@ -4682,6 +4713,8 @@ function renderRecommendation() {
     recommendedCard.disabled = true;
     recommendedCard.classList.add("is-empty");
     recommendedCard.style.backgroundImage = "";
+    recommendedCard.style.removeProperty("--hero-parallax-x");
+    recommendedCard.style.removeProperty("--hero-parallax-y");
     recommendedCard.innerHTML = `
       <span class="badge">Sin productos</span>
       <strong>Menu en pausa</strong>
@@ -4691,13 +4724,20 @@ function renderRecommendation() {
   }
   const soldOut = isSoldOut(dish);
   const prices = presentationBadges(dish, { limit: 4 });
+  const framing = normalizedFeaturedImage(dish);
   document.querySelector(".recommendation p").textContent = labels[currentLang].recommended;
   recommendedCard.dataset.id = dish.id;
   recommendedCard.disabled = false;
   recommendedCard.classList.remove("is-empty");
   recommendedCard.classList.toggle("is-hot", dish.id === effectivePopularDishId(dish.brand));
-  recommendedCard.style.backgroundImage = `linear-gradient(to bottom, rgba(0,0,0,0.05), rgba(0,0,0,0.75)), url('${dish.photo}')`;
+  recommendedCard.style.backgroundImage = "";
+  recommendedCard.style.setProperty("--hero-parallax-x", "0px");
+  recommendedCard.style.setProperty("--hero-parallax-y", "0px");
   recommendedCard.innerHTML = `
+    <span class="hero-media" aria-hidden="true">
+      <img src="${escapeAttribute(dish.photo)}" alt="" draggable="false" decoding="async" fetchpriority="high" style="object-position:${framing.x}% ${framing.y}%;--hero-image-zoom:${framing.zoom}" />
+    </span>
+    <span class="hero-shade" aria-hidden="true"></span>
     <span class="badge">${escapeHtml(soldOut ? "Agotado" : labels[currentLang].badge)}</span>
     <strong>${escapeHtml(localName(dish))}</strong>
     <small>${escapeHtml(localDescription(dish))}</small>
@@ -8520,7 +8560,8 @@ async function applyImprovedEditorPhoto() {
       photoOriginalSize: dish.photoOriginalSize,
       photoOriginalStorageKey: dish.photoOriginalStorageKey,
       photoStoragePath: dish.photoStoragePath,
-      photoOriginalStoragePath: dish.photoOriginalStoragePath
+      photoOriginalStoragePath: dish.photoOriginalStoragePath,
+      featuredImage: normalizedFeaturedImage(dish)
     };
     dish.photo = remoteVariant.photo;
     dish.photoOriginal = remoteVariant.photoOriginal;
@@ -8531,6 +8572,7 @@ async function applyImprovedEditorPhoto() {
     dish.photoOriginalStorageKey = "";
     dish.photoStoragePath = remoteVariant.photoStoragePath;
     dish.photoOriginalStoragePath = remoteVariant.photoOriginalStoragePath;
+    dish.featuredImage = normalizedFeaturedImage();
     try {
       await publishMenuCatalog();
     } catch (error) {
@@ -8555,10 +8597,12 @@ async function applyImprovedEditorPhoto() {
     draft.photoOriginalStorageKey = "";
     draft.photoStoragePath = remoteVariant.photoStoragePath;
     draft.photoOriginalStoragePath = remoteVariant.photoOriginalStoragePath;
+    draft.featuredImage = normalizedFeaturedImage();
     clearPendingEditorPhoto();
     editorDraft = cloneDishForEditor(draft);
     dishPhoto.style.backgroundImage = `url('${remoteVariant.photo}')`;
     renderEditorPhotoState(editorDraft);
+    renderFeaturedFramingEditor(editorDraft);
     renderAdminMenu();
     renderAdminContent();
     renderAdminLibrary();
@@ -8582,6 +8626,7 @@ async function applyImprovedEditorPhoto() {
 function cloneDishForEditor(dish) {
   return {
     ...dish,
+    featuredImage: normalizedFeaturedImage(dish),
     translations: dish.translations
       ? JSON.parse(JSON.stringify(dish.translations))
       : undefined,
@@ -8615,6 +8660,7 @@ function newDishDraft() {
     description: "",
     presentations: [{ name: "", price: "", note: "" }],
     photo,
+    featuredImage: normalizedFeaturedImage(),
     visible: true,
     soldOut: false,
     translations: emptyTranslations,
@@ -8653,7 +8699,9 @@ async function updateEditorPhoto(file) {
     dish.photoOriginalStorageKey = "";
     dish.photoStoragePath = "";
     dish.photoOriginalStoragePath = "";
+    dish.featuredImage = normalizedFeaturedImage();
     dishPhoto.style.backgroundImage = `url('${menuVariant.dataUrl}')`;
+    renderFeaturedFramingEditor(dish);
     renderEditorPhotoState(dish);
     showToast("WebP listo para el menu. El original se conserva para descargar.");
   } catch (error) {
@@ -8836,6 +8884,65 @@ function updateEditorActionState(dish = editorDish()) {
   renderEditorMeta(dish);
 }
 
+let featuredFramingDragState = null;
+
+function containedImageRect(container, image) {
+  const bounds = container?.getBoundingClientRect();
+  if (!bounds?.width || !bounds?.height || !image?.naturalWidth || !image?.naturalHeight) {
+    return { left: 0, top: 0, width: bounds?.width || 1, height: bounds?.height || 1 };
+  }
+  const boxRatio = bounds.width / bounds.height;
+  const imageRatio = image.naturalWidth / image.naturalHeight;
+  if (imageRatio > boxRatio) {
+    const height = bounds.width / imageRatio;
+    return { left: 0, top: (bounds.height - height) / 2, width: bounds.width, height };
+  }
+  const width = bounds.height * imageRatio;
+  return { left: (bounds.width - width) / 2, top: 0, width, height: bounds.height };
+}
+
+function positionFeaturedFocusMarker(dish = editorDish()) {
+  if (!featuredFocusMarker || !featuredImageOverview || !featuredImageOverviewPhoto || !dish) return;
+  const framing = normalizedFeaturedImage(dish);
+  const imageRect = containedImageRect(featuredImageOverview, featuredImageOverviewPhoto);
+  featuredFocusMarker.style.left = `${imageRect.left + (framing.x / 100) * imageRect.width}px`;
+  featuredFocusMarker.style.top = `${imageRect.top + (framing.y / 100) * imageRect.height}px`;
+}
+
+function setFeaturedImageFraming(nextFraming, { syncControls = true } = {}) {
+  const dish = editorDish();
+  if (!dish) return;
+  dish.featuredImage = normalizedFeaturedImage({
+    featuredImage: { ...normalizedFeaturedImage(dish), ...nextFraming }
+  });
+  const framing = dish.featuredImage;
+  if (featuredFramingImage) {
+    featuredFramingImage.style.objectPosition = `${framing.x}% ${framing.y}%`;
+    featuredFramingImage.style.setProperty("--hero-image-zoom", String(framing.zoom));
+  }
+  if (syncControls) {
+    if (featuredFocusXInput) featuredFocusXInput.value = String(Math.round(framing.x));
+    if (featuredFocusYInput) featuredFocusYInput.value = String(Math.round(framing.y));
+    if (featuredZoomInput) featuredZoomInput.value = String(Math.round(framing.zoom * 100));
+  }
+  if (featuredZoomValue) featuredZoomValue.textContent = `${Math.round(framing.zoom * 100)}%`;
+  positionFeaturedFocusMarker(dish);
+}
+
+function renderFeaturedFramingEditor(dish = editorDish()) {
+  if (!dish || !featuredFramingPreview || !featuredFramingImage) return;
+  const framing = normalizedFeaturedImage(dish);
+  dish.featuredImage = framing;
+  const nextPhoto = String(dish.photo || "");
+  if (featuredFramingImage.getAttribute("src") !== nextPhoto) featuredFramingImage.src = nextPhoto;
+  if (featuredImageOverviewPhoto?.getAttribute("src") !== nextPhoto) featuredImageOverviewPhoto.src = nextPhoto;
+  if (featuredFramingName) featuredFramingName.textContent = dishNameInput?.value.trim() || dish.name || "Nombre del platillo";
+  if (featuredFramingDescription) featuredFramingDescription.textContent = dishDescriptionInput?.value.trim() || dish.description || "Descripcion corta del producto.";
+  if (featuredFramingPrices) featuredFramingPrices.innerHTML = presentationBadges(dish, { limit: 3 });
+  featuredFramingPreview.setAttribute("aria-label", `Encuadre del producto destacado para ${dish.name || "este platillo"}. Arrastra la imagen o usa las flechas.`);
+  setFeaturedImageFraming(framing);
+}
+
 function renderEditorForm() {
   const dish = editorDish();
   if (!dish) return;
@@ -8855,6 +8962,7 @@ function renderEditorForm() {
     .map((presentation) => presentationRowTemplate(presentation))
     .join("");
   renderEditorPhotoState(dish);
+  renderFeaturedFramingEditor(dish);
 }
 
 async function preparePendingEditorPhotoAssets(dishId, draft) {
@@ -8949,6 +9057,7 @@ async function saveEditorDish({ silent = false } = {}) {
       photoOriginalStorageKey: draft.photoOriginalStorageKey || "",
       photoStoragePath: draft.photoStoragePath || "",
       photoOriginalStoragePath: draft.photoOriginalStoragePath || "",
+      featuredImage: normalizedFeaturedImage(draft),
       visible: Boolean(draft.visible),
       soldOut: Boolean(draft.soldOut),
       lastEditedAt: "",
@@ -8974,6 +9083,7 @@ async function saveEditorDish({ silent = false } = {}) {
   dish.photoOriginalStorageKey = draft.photoOriginalStorageKey || "";
   dish.photoStoragePath = draft.photoStoragePath || "";
   dish.photoOriginalStoragePath = draft.photoOriginalStoragePath || "";
+  dish.featuredImage = normalizedFeaturedImage(draft);
   dish.visible = Boolean(draft.visible);
   dish.soldOut = Boolean(draft.soldOut);
   dish.lastEditedAt = new Date().toISOString();
@@ -9023,6 +9133,7 @@ async function saveEditorDish({ silent = false } = {}) {
   descCount.textContent = dishDescriptionInput.value.length;
   updateEditorActionState(editorDraft);
   renderEditorPhotoState(editorDraft);
+  renderFeaturedFramingEditor(editorDraft);
   renderAdminMenu();
   renderAdminContent();
   renderAdminLibrary();
@@ -10225,11 +10336,13 @@ backButton.addEventListener("click", () => {
 
 dishNameInput.addEventListener("input", () => {
   lastEditedEditorLang = currentEditorLang;
+  renderFeaturedFramingEditor();
 });
 
 dishDescriptionInput.addEventListener("input", () => {
   lastEditedEditorLang = currentEditorLang;
   descCount.textContent = dishDescriptionInput.value.length;
+  renderFeaturedFramingEditor();
 });
 
 visibleToggle.addEventListener("change", () => {
@@ -10262,6 +10375,19 @@ presentations.addEventListener("click", (event) => {
     return;
   }
   deleteButton.closest(".presentation-row")?.remove();
+  const dish = editorDish();
+  if (dish) {
+    dish.presentations = editorPresentations();
+    renderFeaturedFramingEditor(dish);
+  }
+});
+
+presentations.addEventListener("input", () => {
+  const dish = editorDish();
+  if (!dish) return;
+  const nextPresentations = editorPresentations();
+  if (nextPresentations.length) dish.presentations = nextPresentations;
+  renderFeaturedFramingEditor(dish);
 });
 
 previewDishButton.addEventListener("click", () => {
@@ -10326,6 +10452,94 @@ dishPhoto.addEventListener("drop", (event) => {
   event.preventDefault();
   updateEditorPhoto(event.dataTransfer?.files?.[0]);
 });
+
+[featuredFocusXInput, featuredFocusYInput, featuredZoomInput].forEach((input) => {
+  input?.addEventListener("input", () => {
+    setFeaturedImageFraming({
+      x: featuredFocusXInput?.value,
+      y: featuredFocusYInput?.value,
+      zoom: Number(featuredZoomInput?.value || 100) / 100
+    }, { syncControls: false });
+  });
+});
+
+resetFeaturedFramingButton?.addEventListener("click", () => {
+  setFeaturedImageFraming({ x: 50, y: 50, zoom: 1 });
+  featuredFramingPreview?.focus({ preventScroll: true });
+});
+
+featuredFramingPreview?.addEventListener("pointerdown", (event) => {
+  if (event.button !== undefined && event.button !== 0) return;
+  featuredFramingDragState = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
+  featuredFramingPreview.setPointerCapture(event.pointerId);
+  featuredFramingPreview.classList.add("is-dragging");
+  event.preventDefault();
+});
+
+featuredFramingPreview?.addEventListener("pointermove", (event) => {
+  if (!featuredFramingDragState || event.pointerId !== featuredFramingDragState.pointerId) return;
+  const dish = editorDish();
+  if (!dish) return;
+  const bounds = featuredFramingPreview.getBoundingClientRect();
+  const framing = normalizedFeaturedImage(dish);
+  const deltaX = event.clientX - featuredFramingDragState.lastX;
+  const deltaY = event.clientY - featuredFramingDragState.lastY;
+  featuredFramingDragState.lastX = event.clientX;
+  featuredFramingDragState.lastY = event.clientY;
+  setFeaturedImageFraming({
+    x: framing.x - (deltaX / Math.max(1, bounds.width)) * (100 / framing.zoom),
+    y: framing.y - (deltaY / Math.max(1, bounds.height)) * (100 / framing.zoom)
+  });
+});
+
+function endFeaturedFramingDrag(event) {
+  if (!featuredFramingDragState || event.pointerId !== featuredFramingDragState.pointerId) return;
+  featuredFramingDragState = null;
+  featuredFramingPreview?.classList.remove("is-dragging");
+  if (featuredFramingPreview?.hasPointerCapture(event.pointerId)) featuredFramingPreview.releasePointerCapture(event.pointerId);
+}
+
+featuredFramingPreview?.addEventListener("pointerup", endFeaturedFramingDrag);
+featuredFramingPreview?.addEventListener("pointercancel", endFeaturedFramingDrag);
+
+function nudgeFeaturedFraming(event) {
+  const directions = {
+    ArrowLeft: { x: -1 },
+    ArrowRight: { x: 1 },
+    ArrowUp: { y: -1 },
+    ArrowDown: { y: 1 }
+  };
+  const direction = directions[event.key];
+  if (!direction) return false;
+  const framing = normalizedFeaturedImage(editorDish());
+  const step = event.shiftKey ? 5 : 1;
+  setFeaturedImageFraming({
+    x: framing.x + Number(direction.x || 0) * step,
+    y: framing.y + Number(direction.y || 0) * step
+  });
+  event.preventDefault();
+  return true;
+}
+
+featuredFramingPreview?.addEventListener("keydown", nudgeFeaturedFraming);
+
+function chooseFeaturedFocusFromPoint(clientX, clientY) {
+  const bounds = featuredImageOverview?.getBoundingClientRect();
+  if (!bounds || !featuredImageOverviewPhoto) return;
+  const imageRect = containedImageRect(featuredImageOverview, featuredImageOverviewPhoto);
+  setFeaturedImageFraming({
+    x: ((clientX - bounds.left - imageRect.left) / imageRect.width) * 100,
+    y: ((clientY - bounds.top - imageRect.top) / imageRect.height) * 100
+  });
+}
+
+featuredImageOverview?.addEventListener("pointerdown", (event) => {
+  chooseFeaturedFocusFromPoint(event.clientX, event.clientY);
+  featuredImageOverview.focus({ preventScroll: true });
+});
+featuredImageOverview?.addEventListener("keydown", nudgeFeaturedFraming);
+featuredImageOverviewPhoto?.addEventListener("load", () => positionFeaturedFocusMarker());
+window.addEventListener("resize", () => positionFeaturedFocusMarker(), { passive: true });
 
 profileLogoutButton.addEventListener("click", async () => {
   if (!supabase) return;
@@ -10439,45 +10653,109 @@ function bindBrandButtons() {
   });
 }
 
-let categoryDragState = null;
-let suppressCategoryClickUntil = 0;
-let categoryMomentumFrame = 0;
+function bindHorizontalDragScroller(scroller, { threshold = 8 } = {}) {
+  let dragState = null;
+  let suppressClickUntil = 0;
+  let momentumFrame = 0;
 
-function stopCategoryMomentum() {
-  if (!categoryMomentumFrame) return;
-  window.cancelAnimationFrame(categoryMomentumFrame);
-  categoryMomentumFrame = 0;
-}
-
-function startCategoryMomentum(initialVelocity) {
-  stopCategoryMomentum();
-  if (Math.abs(initialVelocity) < 0.03 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-  let velocity = Math.max(-2.4, Math.min(2.4, initialVelocity));
-  let previousTime = performance.now();
-
-  const advance = (time) => {
-    const elapsed = Math.min(32, time - previousTime);
-    previousTime = time;
-    const previousScroll = categoryStrip.scrollLeft;
-    categoryStrip.scrollLeft += velocity * elapsed;
-    const reachedEdge = categoryStrip.scrollLeft === previousScroll;
-    velocity *= Math.pow(0.92, elapsed / 16.67);
-
-    if (reachedEdge || Math.abs(velocity) < 0.025) {
-      categoryMomentumFrame = 0;
-      return;
-    }
-    categoryMomentumFrame = window.requestAnimationFrame(advance);
+  const stopMomentum = () => {
+    if (!momentumFrame) return;
+    window.cancelAnimationFrame(momentumFrame);
+    momentumFrame = 0;
   };
 
-  categoryMomentumFrame = window.requestAnimationFrame(advance);
+  const startMomentum = (initialVelocity) => {
+    stopMomentum();
+    if (Math.abs(initialVelocity) < 0.03 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let velocity = Math.max(-2.4, Math.min(2.4, initialVelocity));
+    let previousTime = performance.now();
+
+    const advance = (time) => {
+      const elapsed = Math.min(32, time - previousTime);
+      previousTime = time;
+      const previousScroll = scroller.scrollLeft;
+      scroller.scrollLeft += velocity * elapsed;
+      const reachedEdge = scroller.scrollLeft === previousScroll;
+      velocity *= Math.pow(0.92, elapsed / 16.67);
+
+      if (reachedEdge || Math.abs(velocity) < 0.025) {
+        momentumFrame = 0;
+        return;
+      }
+      momentumFrame = window.requestAnimationFrame(advance);
+    };
+
+    momentumFrame = window.requestAnimationFrame(advance);
+  };
+
+  scroller.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+    stopMomentum();
+    const now = performance.now();
+    dragState = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startTime: now,
+      lastX: event.clientX,
+      lastTime: now,
+      velocity: 0,
+      moved: false
+    };
+  });
+
+  scroller.addEventListener("pointermove", (event) => {
+    if (!dragState || event.pointerId !== dragState.pointerId) return;
+    const now = performance.now();
+    const distance = event.clientX - dragState.startX;
+    if (!dragState.moved && Math.abs(distance) > threshold) {
+      dragState.moved = true;
+      scroller.setPointerCapture(event.pointerId);
+      scroller.classList.add("is-dragging");
+    }
+    if (!dragState.moved) return;
+    event.preventDefault();
+    const delta = event.clientX - dragState.lastX;
+    const elapsed = Math.max(8, now - dragState.lastTime);
+    const instantaneousVelocity = -delta / elapsed;
+    scroller.scrollLeft -= delta;
+    dragState.velocity = dragState.velocity * 0.62 + instantaneousVelocity * 0.38;
+    dragState.lastX = event.clientX;
+    dragState.lastTime = now;
+  });
+
+  const endDrag = (event) => {
+    if (!dragState || event.pointerId !== dragState.pointerId) return;
+    const completedDrag = dragState;
+    if (completedDrag.moved) {
+      const releaseTime = performance.now();
+      suppressClickUntil = releaseTime + 180;
+      const idleTime = releaseTime - completedDrag.lastTime;
+      const averageVelocity = -(event.clientX - completedDrag.startX) / Math.max(16, releaseTime - completedDrag.startTime);
+      const velocityBlend = completedDrag.velocity * 0.72 + averageVelocity * 0.28;
+      const releaseVelocity = velocityBlend * Math.max(0, 1 - idleTime / 260);
+      if (event.type === "pointerup") startMomentum(releaseVelocity);
+    }
+    dragState = null;
+    scroller.classList.remove("is-dragging");
+    if (scroller.hasPointerCapture(event.pointerId)) scroller.releasePointerCapture(event.pointerId);
+  };
+
+  scroller.addEventListener("pointerup", endDrag);
+  scroller.addEventListener("pointercancel", endDrag);
+
+  return {
+    shouldSuppressClick: () => performance.now() < suppressClickUntil,
+    stopMomentum
+  };
 }
+
+const categoryDragController = bindHorizontalDragScroller(categoryStrip);
+const pairingsDragController = bindHorizontalDragScroller(pairings);
 
 categoryStrip.addEventListener("click", (event) => {
   const button = event.target.closest("[data-category]");
   if (!button || !categoryStrip.contains(button)) return;
-  if (performance.now() < suppressCategoryClickUntil) return;
+  if (categoryDragController.shouldSuppressClick()) return;
   activateCategory(button.dataset.category);
 });
 
@@ -10502,60 +10780,6 @@ categoryStrip.addEventListener("keydown", (event) => {
   activateCategory(buttons[nextIndex].dataset.category, { focus: true });
 });
 
-categoryStrip.addEventListener("pointerdown", (event) => {
-  if (event.pointerType !== "mouse" || event.button !== 0) return;
-  stopCategoryMomentum();
-  categoryDragState = {
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startTime: performance.now(),
-    lastX: event.clientX,
-    lastTime: performance.now(),
-    velocity: 0,
-    moved: false,
-  };
-});
-
-categoryStrip.addEventListener("pointermove", (event) => {
-  if (!categoryDragState || event.pointerId !== categoryDragState.pointerId) return;
-  const now = performance.now();
-  const distance = event.clientX - categoryDragState.startX;
-  if (!categoryDragState.moved && Math.abs(distance) > 8) {
-    categoryDragState.moved = true;
-    categoryStrip.setPointerCapture(event.pointerId);
-    categoryStrip.classList.add("is-dragging");
-  }
-  if (!categoryDragState.moved) return;
-  event.preventDefault();
-  const delta = event.clientX - categoryDragState.lastX;
-  const elapsed = Math.max(8, now - categoryDragState.lastTime);
-  const instantaneousVelocity = -delta / elapsed;
-  categoryStrip.scrollLeft -= delta;
-  categoryDragState.velocity = categoryDragState.velocity * 0.62 + instantaneousVelocity * 0.38;
-  categoryDragState.lastX = event.clientX;
-  categoryDragState.lastTime = now;
-});
-
-function endCategoryDrag(event) {
-  if (!categoryDragState || event.pointerId !== categoryDragState.pointerId) return;
-  const dragState = categoryDragState;
-  if (dragState.moved) {
-    const releaseTime = performance.now();
-    suppressCategoryClickUntil = releaseTime + 180;
-    const idleTime = releaseTime - dragState.lastTime;
-    const averageVelocity = -(event.clientX - dragState.startX) / Math.max(16, releaseTime - dragState.startTime);
-    const velocityBlend = dragState.velocity * 0.72 + averageVelocity * 0.28;
-    const releaseVelocity = velocityBlend * Math.max(0, 1 - idleTime / 260);
-    if (event.type === "pointerup") startCategoryMomentum(releaseVelocity);
-  }
-  categoryDragState = null;
-  categoryStrip.classList.remove("is-dragging");
-  if (categoryStrip.hasPointerCapture(event.pointerId)) categoryStrip.releasePointerCapture(event.pointerId);
-}
-
-categoryStrip.addEventListener("pointerup", endCategoryDrag);
-categoryStrip.addEventListener("pointercancel", endCategoryDrag);
-
 dishList.addEventListener("click", (event) => {
   const card = event.target.closest(".customer-dish-card");
   if (!card) return;
@@ -10565,6 +10789,30 @@ dishList.addEventListener("click", (event) => {
 recommendedCard.addEventListener("click", () => {
   if (!recommendedCard.dataset.id) return;
   navigate("menu-detail", { dishId: recommendedCard.dataset.id });
+});
+
+let recommendedParallaxFrame = 0;
+let recommendedParallaxPoint = null;
+
+recommendedCard.addEventListener("pointermove", (event) => {
+  if (event.pointerType === "touch" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const bounds = recommendedCard.getBoundingClientRect();
+  recommendedParallaxPoint = {
+    x: ((event.clientX - bounds.left) / Math.max(1, bounds.width) - 0.5) * -12,
+    y: ((event.clientY - bounds.top) / Math.max(1, bounds.height) - 0.5) * -9
+  };
+  if (recommendedParallaxFrame) return;
+  recommendedParallaxFrame = window.requestAnimationFrame(() => {
+    recommendedCard.style.setProperty("--hero-parallax-x", `${recommendedParallaxPoint?.x || 0}px`);
+    recommendedCard.style.setProperty("--hero-parallax-y", `${recommendedParallaxPoint?.y || 0}px`);
+    recommendedParallaxFrame = 0;
+  });
+});
+
+recommendedCard.addEventListener("pointerleave", () => {
+  recommendedParallaxPoint = null;
+  recommendedCard.style.setProperty("--hero-parallax-x", "0px");
+  recommendedCard.style.setProperty("--hero-parallax-y", "0px");
 });
 
 detailOptions.addEventListener("click", (event) => {
@@ -10760,6 +11008,7 @@ favoriteButton.addEventListener("click", async () => {
 pairings.addEventListener("click", (event) => {
   const card = event.target.closest(".pairing-card");
   if (!card) return;
+  if (pairingsDragController.shouldSuppressClick()) return;
   if (!card.dataset.id) return;
   navigate("menu-detail", { dishId: card.dataset.id });
 });

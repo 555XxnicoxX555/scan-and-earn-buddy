@@ -1400,6 +1400,62 @@
               <p class="photo-format-status" id="dishPhotoFormatStatus">Las nuevas cargas se sirven en WebP y conservan el original para descargar.</p>
             </section>
 
+            <section class="featured-framing-card" aria-labelledby="featuredFramingTitle">
+              <div class="featured-framing-heading">
+                <div>
+                  <span class="featured-framing-kicker">Producto destacado</span>
+                  <h3 id="featuredFramingTitle">Encuadre de portada</h3>
+                  <p>Arrastra la foto para elegir el foco. La vista replica el menu.</p>
+                </div>
+                <button class="outline featured-framing-reset" id="resetFeaturedFraming" type="button">Centrar</button>
+              </div>
+
+              <div
+                class="hero-card featured-framing-preview"
+                id="featuredFramingPreview"
+                role="application"
+                tabindex="0"
+                aria-describedby="featuredFramingHelp"
+              >
+                <span class="hero-media" aria-hidden="true">
+                  <img id="featuredFramingImage" src="" alt="" draggable="false" />
+                </span>
+                <span class="hero-shade" aria-hidden="true"></span>
+                <span class="badge">Mas pedido</span>
+                <strong id="featuredFramingName">Nombre del platillo</strong>
+                <small id="featuredFramingDescription">Descripcion corta del producto.</small>
+                <span class="hero-prices" id="featuredFramingPrices"></span>
+                <span class="featured-drag-cue" aria-hidden="true">Arrastra para mover</span>
+              </div>
+              <p class="featured-framing-help" id="featuredFramingHelp">Tambien puedes usar las flechas del teclado. Mantén Shift para ajustes amplios.</p>
+
+              <div class="featured-overview-block">
+                <div class="featured-overview-copy">
+                  <strong>Imagen completa</strong>
+                  <span>Toca cualquier punto para llevar ahi el foco.</span>
+                </div>
+                <div class="featured-image-overview" id="featuredImageOverview" role="button" tabindex="0" aria-label="Elegir punto focal sobre la imagen completa">
+                  <img id="featuredImageOverviewPhoto" src="" alt="" draggable="false" />
+                  <span class="featured-focus-marker" id="featuredFocusMarker" aria-hidden="true"></span>
+                </div>
+              </div>
+
+              <div class="featured-framing-controls">
+                <label>
+                  <span>Horizontal</span>
+                  <input id="featuredFocusX" type="range" min="0" max="100" step="1" value="50" />
+                </label>
+                <label>
+                  <span>Vertical</span>
+                  <input id="featuredFocusY" type="range" min="0" max="100" step="1" value="50" />
+                </label>
+                <label>
+                  <span>Zoom <output id="featuredZoomValue">100%</output></span>
+                  <input id="featuredZoom" type="range" min="100" max="140" step="1" value="100" />
+                </label>
+              </div>
+            </section>
+
             <section class="panel compact">
               <h3>Clasificacion</h3>
               <label class="field">
